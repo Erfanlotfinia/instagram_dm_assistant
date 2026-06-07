@@ -3,11 +3,13 @@ from decimal import Decimal
 import pytest
 
 from app.domain.enums import MessageChannel, TriggerSourceType
-from app.domain.models import InstagramAccount, Product, ProductVariant, TriggerEvent, UnavailableDemand
+from app.domain.models import Conversation, InstagramAccount, Product, ProductVariant, TriggerEvent, UnavailableDemand
 from app.integrations.instagram.channel_provider import InstagramChannelProvider
+from app.schemas.agent import ExtractionConfidence
 from app.schemas.agent_settings import AutoSendDecisionRequest, ShopAgentStudioSettingsUpdate
 from app.schemas.triggers import TriggerMatchRequest, TriggerRuleCreate
 from app.services.agent_settings_service import AgentSettingsService
+from app.services.conversation_orchestrator import ConversationOrchestrator
 from app.services.trigger_service import TriggerService
 from app.services.variant_resolver import VariantResolver
 
@@ -48,7 +50,44 @@ def test_agent_settings_preview_rules_and_discount_safety(db_session, demo_shop,
     service = AgentSettingsService(db_session)
     settings = service.update(demo_shop.id, ShopAgentStudioSettingsUpdate(discount_policy_json={"allowed_discounts": [{"code": "VIP10"}], "llm_may_create_discount": True}, high_value_order_threshold=Decimal("100")), admin_user)
     assert settings.discount_policy_json["llm_may_create_discount"] is False
+    assert demo_shop.agent_settings["high_value_order_threshold"] == 100.0
+    assert demo_shop.agent_settings["variant_confidence_threshold"] == 0.85
     decision = service.decide_auto_send(demo_shop.id, AutoSendDecisionRequest(variant_confidence=0.1, order_total=Decimal("150")), admin_user)
     assert decision.preview_required is True
     assert any("Variant confidence" in reason for reason in decision.reasons)
     assert any("High-value" in reason for reason in decision.reasons)
+
+
+def test_orchestrator_preview_uses_agent_studio_settings(db_session, demo_shop, admin_user):
+    service = AgentSettingsService(db_session)
+    service.update(
+        demo_shop.id,
+        ShopAgentStudioSettingsUpdate(auto_send_enabled=False, confidence_threshold_intent=Decimal("0.95")),
+        admin_user,
+    )
+    conversation = Conversation(shop_id=demo_shop.id, shop=demo_shop)
+    db_session.add(conversation)
+    db_session.flush()
+
+    preview_required, reason = ConversationOrchestrator(db_session)._preview_decision(
+        conversation,
+        ExtractionConfidence(intent=1.0, product=1.0, slots=1.0, address=1.0),
+        handoff_required=False,
+    )
+
+    assert preview_required is True
+    assert reason == "auto_send_disabled"
+
+    service.update(
+        demo_shop.id,
+        ShopAgentStudioSettingsUpdate(auto_send_enabled=True, confidence_threshold_intent=Decimal("0.95")),
+        admin_user,
+    )
+    preview_required, reason = ConversationOrchestrator(db_session)._preview_decision(
+        conversation,
+        ExtractionConfidence(intent=0.94, product=1.0, slots=1.0, address=1.0),
+        handoff_required=False,
+    )
+
+    assert preview_required is True
+    assert reason == "low_intent_confidence:0.94"

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.models import ShopAgentSettings, User
 from app.schemas.agent_settings import AutoSendDecisionRead, AutoSendDecisionRequest, ShopAgentStudioSettingsUpdate
+from app.services.agent_settings_live import studio_settings_to_live_overrides
 from app.services.shop_service import ShopService
 
 
@@ -31,6 +32,11 @@ class AgentSettingsService:
             if field == "discount_policy_json" and value:
                 value = self._sanitize_discount_policy(value)
             setattr(settings, field, value)
+        if settings.shop is not None:
+            settings.shop.agent_settings = {
+                **(settings.shop.agent_settings or {}),
+                **studio_settings_to_live_overrides(settings),
+            }
         self.db.commit()
         self.db.refresh(settings)
         return settings
