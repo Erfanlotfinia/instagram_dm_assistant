@@ -9,11 +9,13 @@ import { ShopProvider } from '../contexts/ShopContext';
 import { ToastProvider } from '../contexts/ToastContext';
 import { OrderDetailPage } from './OrderDetailPage';
 
-const markPaid = vi.fn().mockResolvedValue({
-  id: 'o1',
-  status: 'paid',
-  payment_status: 'paid',
-});
+const mocks = vi.hoisted(() => ({
+  markPaid: vi.fn().mockResolvedValue({
+    id: 'o1',
+    status: 'paid',
+    payment_status: 'paid',
+  }),
+}));
 
 vi.mock('../services/apiClient', () => ({
   apiClient: {
@@ -30,8 +32,10 @@ vi.mock('../services/apiClient', () => ({
       customer_name: 'Ali Rezaei',
       timeline: [],
       items: [],
+      payments: [],
+      shipments: [],
     }),
-    markOrderPaid: markPaid,
+    markOrderPaid: mocks.markPaid,
   },
 }));
 
@@ -66,13 +70,13 @@ describe('OrderDetailPage', () => {
       </QueryClientProvider>,
     );
 
-    const markPaidButton = await screen.findByRole('button', { name: /mark paid/i });
+    const markPaidButton = await screen.findByRole('button', { name: /mark as paid/i });
     await user.click(markPaidButton);
     const confirmButton = await screen.findByRole('button', { name: /confirm paid/i });
     await user.click(confirmButton);
 
     await waitFor(() => {
-      expect(markPaid).toHaveBeenCalledWith('s1', 'o1');
+      expect(mocks.markPaid).toHaveBeenCalledWith('s1', 'o1');
     });
   });
 });
