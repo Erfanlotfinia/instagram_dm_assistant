@@ -365,6 +365,7 @@ class ConversationOrchestrator:
         if product is None:
             return None, None, None
         result = self.variant_resolver.resolve(
+            shop_id=product.shop_id,
             product_id=product.id,
             raw_color=slots.color,
             raw_size=slots.size,

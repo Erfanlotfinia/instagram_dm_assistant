@@ -23,15 +23,37 @@ class VariantResolver:
         self.products = ProductRepository(db)
         self.variants = VariantRepository(db)
 
-    def resolve(self, *, product_id: UUID, raw_color: str | None, raw_size: str | None, quantity: int = 1) -> VariantResolverResult:
-        product = self.products.get_by_id(product_id)
-        variants = self.variants.list_for_product(product_id)
-        category = None
-        size_chart = None
-        if product is not None:
-            settings = getattr(product, "metadata_json", None) or {}
-            category = settings.get("category") if isinstance(settings, dict) else None
-            size_chart = settings.get("size_chart") if isinstance(settings, dict) else None
+    def resolve(
+        self,
+        *,
+        product_id: UUID,
+        raw_color: str | None,
+        raw_size: str | None,
+        quantity: int = 1,
+        shop_id: UUID | None = None,
+    ) -> VariantResolverResult:
+        product = (
+            self.products.get_for_shop(shop_id, product_id)
+            if shop_id is not None
+            else self.products.get_by_id(product_id)
+        )
+
+        if product is None:
+            color = normalize_color(raw_color)
+            size = normalize_size(raw_size)
+            return VariantResolverResult(
+                normalized_color=color.normalized,
+                normalized_size=size.normalized,
+                color_confidence=color.confidence,
+                size_confidence=size.confidence,
+                confidence=0.0,
+                mismatch_reasons=["product_not_found"],
+                available_alternatives=[],
+            )
+
+        variants = self.variants.list_for_product(product.id)
+        category = product.category
+        size_chart = product.size_chart
 
         color = normalize_color(raw_color)
         size = normalize_size(raw_size, category=category, size_chart=size_chart)

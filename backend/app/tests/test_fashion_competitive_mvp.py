@@ -1,4 +1,5 @@
 from decimal import Decimal
+from uuid import uuid4
 
 from app.domain.enums import ConfidenceSource, UserRole
 from app.domain.models import InstagramAccount, InstagramProductMap, Product, ProductVariant, ShopMember
@@ -38,6 +39,41 @@ def test_variant_resolver_exact_and_alternatives(db_session, demo_shop):
     missing = VariantResolver(db_session).resolve(product_id=product.id, raw_color="زغالی", raw_size="L", quantity=1)
     assert "color_unavailable" in missing.mismatch_reasons
     assert missing.available_alternatives
+
+
+def test_variant_resolver_does_not_leak_cross_shop_variants():
+    shop_id = uuid4()
+    other_product_id = uuid4()
+    resolver = VariantResolver(None)
+
+    class FakeProducts:
+        def get_for_shop(self, requested_shop_id, requested_product_id):
+            assert requested_shop_id == shop_id
+            assert requested_product_id == other_product_id
+            return None
+
+        def get_by_id(self, product_id):
+            raise AssertionError("shop-scoped resolution must not fall back to unscoped lookup")
+
+    class FakeVariants:
+        def list_for_product(self, product_id):
+            raise AssertionError("variants must not be listed when the product is outside the shop")
+
+    resolver.products = FakeProducts()
+    resolver.variants = FakeVariants()
+
+    result = resolver.resolve(
+        shop_id=shop_id,
+        product_id=other_product_id,
+        raw_color="مشکی",
+        raw_size="L",
+        quantity=1,
+    )
+
+    assert result.variant_id is None
+    assert result.sku is None
+    assert result.available_alternatives == []
+    assert result.mismatch_reasons == ["product_not_found"]
 
 
 def test_multi_product_post_mapping_requires_selection(db_session, demo_shop, admin_user):

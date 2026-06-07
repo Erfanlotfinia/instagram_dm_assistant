@@ -26,4 +26,4 @@ def normalize_size_endpoint(shop_id: UUID, payload: NormalizeSizeRequest, _user:
 
 @router.post("/resolve-variant", response_model=VariantResolverResult)
 def resolve_variant_endpoint(shop_id: UUID, payload: VariantResolverRequest, _user: Annotated[User, Depends(get_current_user)], _membership: Annotated[ShopMember, Depends(get_shop_membership)], db: Annotated[Session, Depends(get_db_session)]) -> VariantResolverResult:
-    return VariantResolver(db).resolve(product_id=payload.product_id, raw_color=payload.raw_color, raw_size=payload.raw_size, quantity=payload.quantity)
+    return VariantResolver(db).resolve(shop_id=shop_id, product_id=payload.product_id, raw_color=payload.raw_color, raw_size=payload.raw_size, quantity=payload.quantity)
