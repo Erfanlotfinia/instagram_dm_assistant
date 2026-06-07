@@ -14,6 +14,7 @@ import type { AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, Funn
 import type { SemanticSearchResponse } from '../types/semanticSearch';
 import type { LoginRequest, TokenResponse, User } from '../types/auth';
 import type { HealthResponse } from '../types/health';
+import type { ColorAlias, SizeAlias, UnavailableDemandLog, VariantResolverResult } from '../types/fashion';
 import type { InstagramAccount, InstagramAccountCreate } from '../types/instagramAccount';
 import type {
   Order,
@@ -161,6 +162,24 @@ export const apiClient = {
     request<ResponseTimeAnalytics>(`/api/v1/shops/${shopId}/analytics/response-time${buildQuery({ start, end })}`),
   getAnalyticsHandoff: (shopId: string, start?: string, end?: string) =>
     request<HandoffAnalyticsRow[]>(`/api/v1/shops/${shopId}/analytics/handoff${buildQuery({ start, end })}`),
+
+  listColorAliases: (shopId: string) => request<ColorAlias[]>(`/api/v1/shops/${shopId}/color-aliases`),
+  createColorAlias: (shopId: string, payload: Pick<ColorAlias, 'raw_value' | 'normalized_value' | 'language'>) =>
+    request<ColorAlias>(`/api/v1/shops/${shopId}/color-aliases`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateColorAlias: (shopId: string, aliasId: string, payload: Partial<ColorAlias>) =>
+    request<ColorAlias>(`/api/v1/shops/${shopId}/color-aliases/${aliasId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteColorAlias: (shopId: string, aliasId: string) =>
+    request<void>(`/api/v1/shops/${shopId}/color-aliases/${aliasId}`, { method: 'DELETE' }),
+  listSizeAliases: (shopId: string) => request<SizeAlias[]>(`/api/v1/shops/${shopId}/size-aliases`),
+  createSizeAlias: (shopId: string, payload: Pick<SizeAlias, 'raw_value' | 'normalized_value' | 'category'>) =>
+    request<SizeAlias>(`/api/v1/shops/${shopId}/size-aliases`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateSizeAlias: (shopId: string, aliasId: string, payload: Partial<SizeAlias>) =>
+    request<SizeAlias>(`/api/v1/shops/${shopId}/size-aliases/${aliasId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteSizeAlias: (shopId: string, aliasId: string) =>
+    request<void>(`/api/v1/shops/${shopId}/size-aliases/${aliasId}`, { method: 'DELETE' }),
+  testVariantResolver: (shopId: string, payload: { product_id: string; raw_color?: string; raw_size?: string; quantity: number }) =>
+    request<VariantResolverResult>(`/api/v1/shops/${shopId}/variant-resolver/test`, { method: 'POST', body: JSON.stringify(payload) }),
+  listUnavailableDemand: (shopId: string) => request<UnavailableDemandLog[]>(`/api/v1/shops/${shopId}/unavailable-demand`),
   listShopMembers: (shopId: string) => request<ShopMember[]>(`/api/v1/shops/${shopId}/members`),
   listInstagramAccounts: (shopId: string) =>
     request<InstagramAccount[]>(`/api/v1/shops/${shopId}/instagram-accounts`),

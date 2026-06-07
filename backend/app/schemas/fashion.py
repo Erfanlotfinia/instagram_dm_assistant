@@ -8,7 +8,11 @@ from pydantic import BaseModel, Field
 class NormalizedValueRead(BaseModel):
     raw: str | None = None
     normalized: str | None = None
+    raw_value: str | None = None
+    normalized_value: str | None = None
+    matched: bool | None = None
     confidence: float
+    source: str | None = None
     reason: str | None = None
 
 
@@ -31,6 +35,7 @@ class VariantResolverRequest(BaseModel):
 
 
 class VariantResolverResult(BaseModel):
+    matched: bool = False
     variant_id: UUID | None = None
     sku: str | None = None
     normalized_color: str | None = None
@@ -40,6 +45,7 @@ class VariantResolverResult(BaseModel):
     confidence: float = 0.0
     mismatch_reasons: list[str] = Field(default_factory=list)
     available_alternatives: list[VariantAlternative] = Field(default_factory=list)
+    alternatives: list[VariantAlternative] = Field(default_factory=list)
     available_stock: int | None = None
 
 
@@ -87,4 +93,34 @@ class SizeChartCreate(BaseModel):
 class SizeChartRead(SizeChartCreate):
     id: UUID
     shop_id: UUID
+    model_config = {"from_attributes": True}
+
+
+class ColorAliasUpdate(BaseModel):
+    raw_value: str | None = None
+    normalized_value: str | None = None
+    language: str | None = None
+    is_active: bool | None = None
+
+
+class SizeAliasUpdate(BaseModel):
+    raw_value: str | None = None
+    normalized_value: str | None = None
+    category: str | None = None
+    is_active: bool | None = None
+
+
+class UnavailableDemandRead(BaseModel):
+    id: UUID
+    shop_id: UUID
+    product_id: UUID | None = None
+    requested_color_raw: str | None = None
+    requested_color_normalized: str | None = None
+    requested_size_raw: str | None = None
+    requested_size_normalized: str | None = None
+    requested_quantity: int
+    reason: str
+    conversation_id: UUID | None = None
+    customer_id: UUID | None = None
+    estimated_lost_revenue: float | None = None
     model_config = {"from_attributes": True}
