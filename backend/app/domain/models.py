@@ -89,7 +89,6 @@ class Shop(Base, TimestampMixin):
         back_populates="shop", cascade="all, delete-orphan"
     )
     orders: Mapped[list[Order]] = relationship(back_populates="shop", cascade="all, delete-orphan")
-    orders: Mapped[list[Order]] = relationship(back_populates="shop", cascade="all, delete-orphan")
 
 
 class ShopMember(Base):

@@ -16,10 +16,10 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 @router.get("/instagram")
 def verify_instagram_webhook(
+    settings: Annotated[Settings, Depends(get_settings)],
     hub_mode: Annotated[str | None, Query(alias="hub.mode")] = None,
     hub_verify_token: Annotated[str | None, Query(alias="hub.verify_token")] = None,
     hub_challenge: Annotated[str | None, Query(alias="hub.challenge")] = None,
-    settings: Annotated[Settings, Depends(get_settings)],
 ) -> Response:
     if hub_mode == "subscribe" and hub_verify_token == settings.instagram_webhook_verify_token:
         return Response(content=hub_challenge or "", media_type="text/plain")
@@ -37,17 +37,26 @@ async def receive_instagram_webhook(
     if settings.instagram_app_secret:
         signature = request.headers.get("X-Hub-Signature-256")
         if not verify_meta_signature(body, signature, settings.instagram_app_secret):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid webhook signature")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid webhook signature",
+            )
 
     try:
         import json
 
         payload: dict[str, Any] = json.loads(body.decode("utf-8"))
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload") from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid JSON payload",
+        ) from exc
 
     if not isinstance(payload, dict):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payload must be a JSON object")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Payload must be a JSON object",
+        )
 
     INBOUND_MESSAGES.inc()
     return WebhookIngestionService(db).handle_instagram_payload(payload)

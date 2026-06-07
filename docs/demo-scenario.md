@@ -11,13 +11,13 @@ docker compose exec backend alembic upgrade head
 docker compose exec backend python -m app.scripts.seed
 ```
 
-Sign in with seeded admin credentials from `app/scripts/seed.py`.
+Sign in with `admin@example.com` / `changeme123`. The seed creates the demo shop, Instagram account `17841400000000001`, product mapping `https://www.instagram.com/p/ABC123/`, and a black size L variant with stock.
 
 ## Scenario steps
 
 | Step | Actor | Action | Expected result |
 |------|-------|--------|-----------------|
-| 1 | Customer | Sends Instagram post share + text `مشکی سایز L` | Webhook ingests message; job queued |
+| 1 | Customer | Sends Instagram post share + text `مشکی سایز L یک عدد` | Webhook ingests message; job queued |
 | 2 | Agent | Resolves product from post URL mapping | Slots updated with product + variant |
 | 3 | Agent | Detects missing customer info | Outbound asks for name, phone, address |
 | 4 | Customer | Sends complete info | Slots merged; draft order created |

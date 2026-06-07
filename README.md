@@ -1,6 +1,6 @@
 # Instagram DM Assistant
 
-Sprint 0 establishes the production-ready foundation for an advanced Instagram DM ordering agent. This repository intentionally contains only infrastructure, application skeletons, health checks, and testing scaffolding. Instagram, ordering, and LLM workflows will be implemented in later sprints.
+This repository is an advanced MVP for an Instagram DM ordering agent. It includes a FastAPI backend, PostgreSQL schema and Alembic migrations, RabbitMQ/Redis/Qdrant integrations, an OpenAI-powered conversation orchestrator, background workers, and a React TypeScript admin panel for shops, products, conversations, and orders.
 
 ## Architecture
 
@@ -36,7 +36,7 @@ Sprint 0 establishes the production-ready foundation for an advanced Instagram D
 
 Docker Compose starts the following services:
 
-- `backend`: FastAPI API server on <http://localhost:8000>
+- `backend`: FastAPI API server on <http://localhost:8000> (runs Alembic migrations before startup)
 - `frontend`: Vite admin app on <http://localhost:5173>
 - `postgres`: PostgreSQL database on `localhost:5432`
 - `redis`: Redis cache/broker support on `localhost:6379`
@@ -55,14 +55,15 @@ cp .env.example .env
 
 Required backend variables:
 
-- `DATABASE_URL`
-- `REDIS_URL`
-- `RABBITMQ_URL`
-- `QDRANT_URL`
-- `OPENAI_API_KEY`
-- `APP_ENV`
-- `LOG_LEVEL`
-- `JWT_SECRET_KEY`
+- `DATABASE_URL` — PostgreSQL connection string.
+- `REDIS_URL` — Redis connection string for locks, rate limits, and state support.
+- `RABBITMQ_URL` — RabbitMQ AMQP URL for inbound message jobs.
+- `QDRANT_URL` — Qdrant API URL for product semantic search.
+- `OPENAI_API_KEY` — OpenAI API key used by the LLM and embedding integrations.
+- `APP_ENV` / `LOG_LEVEL` — runtime environment and logging level.
+- `JWT_SECRET_KEY` — at least 32 random bytes recommended in production.
+- `TOKEN_ENCRYPTION_KEY` — secret used to derive the Fernet key for Instagram token encryption.
+- `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` / `INSTAGRAM_APP_SECRET` — Meta webhook verification and optional signature validation.
 
 Frontend uses `VITE_API_BASE_URL` to target the backend from the browser.
 
@@ -78,6 +79,8 @@ Useful commands:
 ```bash
 docker compose ps
 docker compose logs -f backend
+docker compose logs -f worker
+docker compose exec backend python -m app.scripts.seed
 docker compose down
 docker compose down -v
 ```
@@ -86,7 +89,9 @@ Health endpoints:
 
 ```bash
 curl http://localhost:8000/health
+curl http://localhost:8000/ready
 curl http://localhost:8000/api/v1/health
+curl http://localhost:8000/api/v1/ready
 ```
 
 ## Backend development
@@ -97,6 +102,8 @@ From the `backend/` directory:
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
+alembic upgrade head
+python -m app.scripts.seed
 uvicorn app.main:app --reload
 ```
 
@@ -122,6 +129,8 @@ Apply migrations inside the backend container:
 
 ```bash
 docker compose exec backend alembic upgrade head
+docker compose exec backend alembic downgrade -1  # only when safe for your local data
+docker compose exec backend alembic upgrade head
 ```
 
 Create a future migration after adding SQLAlchemy models:
@@ -146,17 +155,13 @@ npm install
 npm run dev
 ```
 
-Run frontend tests:
+Run frontend checks:
 
 ```bash
 cd frontend
+npm run typecheck
+npm run lint
 npm test
-```
-
-Build the frontend:
-
-```bash
-cd frontend
 npm run build
 ```
 
@@ -167,7 +172,10 @@ npm run build
 - Structured JSON logging is configured at application startup for container-friendly log ingestion.
 - Global exception handlers normalize API error responses.
 - CORS allows the local Vite frontend origin by default.
-- Sprint 2 adds Instagram webhook ingestion, message persistence, RabbitMQ queue publishing, a background worker, and Redis conversation locks.
+- Instagram webhook ingestion stores raw payloads and uses message IDs for idempotency.
+- RabbitMQ workers serialize conversation processing with Redis locks.
+- The LLM only extracts structured intent/slots; services validate products, variants, prices, inventory, payments, and state transitions.
+- Orders require explicit customer confirmation before payment and cannot be marked paid by the LLM.
 
 ## Meta Instagram webhook setup
 
@@ -198,12 +206,18 @@ Webhook endpoints exposed by the API:
 2. Matching `instagram_accounts` are resolved by recipient Instagram user ID.
 3. Customers, conversations, and inbound messages are created or updated.
 4. A job is published to RabbitMQ queue `instagram.message.received`.
-5. The `worker` service consumes jobs, acquires a Redis lock per conversation, logs readiness for agent processing, and marks the webhook event processed.
+5. The `worker` service consumes jobs, acquires a Redis lock per conversation, runs orchestration, logs agent decisions/actions, stores outbound messages, and marks the webhook event processed.
 
 Run the worker locally:
 
 ```bash
 docker compose up worker
+```
+
+Run the scheduler locally:
+
+```bash
+docker compose up scheduler
 ```
 
 Or outside Docker:

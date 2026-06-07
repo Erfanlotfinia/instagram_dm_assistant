@@ -45,7 +45,8 @@ describe('ConversationsPage', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Ali|Hello|conversation/i)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Ali' })).toBeInTheDocument();
+      expect(screen.getByText('Hello')).toBeInTheDocument();
     });
   });
 });

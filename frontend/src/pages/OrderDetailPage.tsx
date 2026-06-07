@@ -96,8 +96,8 @@ export function OrderDetailPage() {
     );
   }
 
-  const latestPayment = order.payments[0];
-  const latestShipment = order.shipments[0];
+  const latestPayment = order.payments?.[0];
+  const latestShipment = order.shipments?.[0];
 
   return (
     <div className="page-stack page-stack--wide">

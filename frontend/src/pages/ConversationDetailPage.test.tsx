@@ -6,9 +6,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AuthProvider } from '../contexts/AuthContext';
 import { ShopProvider } from '../contexts/ShopContext';
+import { ToastProvider } from '../contexts/ToastContext';
 import { ConversationDetailPage } from './ConversationDetailPage';
 
-const takeOver = vi.fn().mockResolvedValue({ conversation_id: 'c1', handoff_required: true });
+const mocks = vi.hoisted(() => ({
+  takeOver: vi.fn().mockResolvedValue({ conversation_id: 'c1', handoff_required: true }),
+}));
 
 vi.mock('../services/apiClient', () => ({
   apiClient: {
@@ -23,7 +26,7 @@ vi.mock('../services/apiClient', () => ({
       agent_runs: [],
       agent_actions: [],
     }),
-    takeOverConversation: takeOver,
+    takeOverConversation: mocks.takeOver,
   },
 }));
 
@@ -36,11 +39,13 @@ describe('ConversationDetailPage', () => {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <ShopProvider>
-            <MemoryRouter initialEntries={['/conversations/c1?shopId=s1']}>
-              <Routes>
-                <Route path="/conversations/:conversationId" element={<ConversationDetailPage />} />
-              </Routes>
-            </MemoryRouter>
+            <ToastProvider>
+              <MemoryRouter initialEntries={['/conversations/c1?shopId=s1']}>
+                <Routes>
+                  <Route path="/conversations/:conversationId" element={<ConversationDetailPage />} />
+                </Routes>
+              </MemoryRouter>
+            </ToastProvider>
           </ShopProvider>
         </AuthProvider>
       </QueryClientProvider>,
@@ -50,7 +55,7 @@ describe('ConversationDetailPage', () => {
     await user.click(button);
 
     await waitFor(() => {
-      expect(takeOver).toHaveBeenCalledWith('s1', 'c1');
+      expect(mocks.takeOver).toHaveBeenCalledWith('s1', 'c1');
     });
   });
 });
