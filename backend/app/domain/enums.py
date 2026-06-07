@@ -68,6 +68,9 @@ class MessageDirection(str, enum.Enum):
 
 class MessageChannel(str, enum.Enum):
     INSTAGRAM = "instagram"
+    WHATSAPP = "whatsapp"
+    TELEGRAM = "telegram"
+    WEB_CHAT = "web_chat"
 
 
 class MessageType(str, enum.Enum):
@@ -84,6 +87,9 @@ class AgentActionStatus(str, enum.Enum):
 
 class WebhookProvider(str, enum.Enum):
     INSTAGRAM = "instagram"
+    WHATSAPP = "whatsapp"
+    TELEGRAM = "telegram"
+    WEB_CHAT = "web_chat"
 
 
 class WebhookProcessingStatus(str, enum.Enum):
@@ -171,3 +177,17 @@ class ShipmentStatus(str, enum.Enum):
     SHIPPED = "shipped"
     DELIVERED = "delivered"
     FAILED = "failed"
+
+
+class TriggerSourceType(str, enum.Enum):
+    COMMENT = "comment"
+    STORY_REPLY = "story_reply"
+    REEL_COMMENT = "reel_comment"
+    DIRECT_DM = "direct_dm"
+    AD_COMMENT = "ad_comment"
+
+
+class SellingStyle(str, enum.Enum):
+    EDUCATIONAL = "educational"
+    BALANCED = "balanced"
+    PROMOTIONAL = "promotional"

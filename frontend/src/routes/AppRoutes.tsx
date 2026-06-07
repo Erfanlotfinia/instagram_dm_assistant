@@ -5,6 +5,7 @@ import { AppLayout } from '../components/AppLayout';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { ConversationDetailPage } from '../pages/ConversationDetailPage';
 import { ConversationsPage } from '../pages/ConversationsPage';
+import { AgentStudioSettingsPage } from '../pages/AgentStudioSettingsPage';
 import { AnalyticsPage } from '../pages/AnalyticsPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { DMSimulatorPage } from '../pages/DMSimulatorPage';
@@ -21,6 +22,7 @@ import { ProductDetailPage } from '../pages/ProductDetailPage';
 import { ProductsPage } from '../pages/ProductsPage';
 import { SemanticSearchPage } from '../pages/SemanticSearchPage';
 import { SettingsPage } from '../pages/SettingsPage';
+import { TriggerRulesPage } from '../pages/TriggerRulesPage';
 import { ShopsPage } from '../pages/ShopsPage';
 
 function AuthenticatedShell({ children }: { children: ReactNode }) {
@@ -57,6 +59,23 @@ export function AppRoutes() {
         element={
           <AuthenticatedShell>
             <DMSimulatorPage />
+          </AuthenticatedShell>
+        }
+      />
+
+      <Route
+        path="/triggers"
+        element={
+          <AuthenticatedShell>
+            <TriggerRulesPage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/agent-studio"
+        element={
+          <AuthenticatedShell>
+            <AgentStudioSettingsPage />
           </AuthenticatedShell>
         }
       />

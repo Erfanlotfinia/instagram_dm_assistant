@@ -9,9 +9,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.domain.enums import MessageDirection, OrderPaymentStatus, OrderStatus
-from app.domain.models import AgentDecisionAudit, Conversation, ConversationSlots, Message, Order, OrderItem
+from app.domain.models import AgentDecisionAudit, Conversation, ConversationSlots, Message, Order, OrderItem, UnavailableDemand
 from app.domain.models import User
-from app.schemas.analytics import FunnelAnalytics, HandoffAnalyticsRow, PostPerformanceRow, StockDemandRow
+from app.schemas.analytics import FunnelAnalytics, HandoffAnalyticsRow, PostPerformanceRow, ResponseTimeAnalytics, StockDemandRow, UnavailableDemandRow
 from app.services.shop_service import ShopService
 
 
@@ -33,6 +33,11 @@ class AnalyticsService:
         reasons = Counter(self.db.scalars(self._range(select(Conversation.handoff_reason).where(Conversation.shop_id == shop_id, Conversation.handoff_reason.is_not(None)), Conversation.created_at, start, end)).all())
         return FunnelAnalytics(
             inbound_messages=inbound,
+            product_resolved_count=resolved_products,
+            variant_resolved_count=resolved_variants,
+            draft_orders=drafts,
+            confirmed_orders=self._count_orders(shop_id, Order.status == OrderStatus.CONFIRMED, start, end),
+            waiting_for_payment=self._count_orders(shop_id, Order.status == OrderStatus.WAITING_FOR_PAYMENT, start, end),
             resolved_product_rate=self._rate(resolved_products, inbound),
             variant_resolved_rate=self._rate(resolved_variants, inbound),
             draft_order_rate=self._rate(drafts, inbound),
@@ -83,6 +88,31 @@ class AnalyticsService:
         total = self._count_conversations(shop_id, start, end) or 1
         reasons = Counter(self.db.scalars(self._range(select(Conversation.handoff_reason).where(Conversation.shop_id == shop_id, Conversation.handoff_required.is_(True)), Conversation.created_at, start, end)).all())
         return [HandoffAnalyticsRow(reason=reason or "unknown", count=count, rate=self._rate(count, total)) for reason, count in reasons.most_common()]
+
+
+
+    def unavailable_demand(self, shop_id: UUID, user: User, start: datetime | None = None, end: datetime | None = None) -> list[UnavailableDemandRow]:
+        self.shop_service.get_shop(shop_id, user)
+        rows = self.db.execute(self._range(
+            select(
+                UnavailableDemand.requested_color,
+                UnavailableDemand.requested_size,
+                UnavailableDemand.product_id,
+                func.count(UnavailableDemand.id),
+                func.coalesce(func.sum(UnavailableDemand.lost_revenue_estimate), 0),
+            ).where(UnavailableDemand.shop_id == shop_id).group_by(UnavailableDemand.requested_color, UnavailableDemand.requested_size, UnavailableDemand.product_id),
+            UnavailableDemand.created_at, start, end,
+        )).all()
+        return [UnavailableDemandRow(requested_color=color, requested_size=size, product_id=product_id, count=count, lost_revenue_estimate=lost) for color, size, product_id, count, lost in rows]
+
+    def response_time(self, shop_id: UUID, user: User, start: datetime | None = None, end: datetime | None = None) -> ResponseTimeAnalytics:
+        self.shop_service.get_shop(shop_id, user)
+        # Conservative placeholders until event timestamps are fully normalized across channels.
+        return ResponseTimeAnalytics(
+            average_first_response_time_seconds=self.funnel(shop_id, user, start, end).average_time_to_first_response_seconds,
+            average_time_to_draft_order_seconds=None,
+            average_time_to_payment_seconds=self.funnel(shop_id, user, start, end).average_time_to_payment_seconds,
+        )
 
     def _range(self, stmt, column, start, end):
         if start:

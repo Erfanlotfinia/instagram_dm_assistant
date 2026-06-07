@@ -10,7 +10,7 @@ import type {
   MessageCreate,
 } from '../types/conversation';
 import type { DashboardMetrics } from '../types/dashboard';
-import type { DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PostPerformanceRow, StockDemandRow } from '../types/competitive';
+import type { AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PostPerformanceRow, ResponseTimeAnalytics, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
 import type { SemanticSearchResponse } from '../types/semanticSearch';
 import type { LoginRequest, TokenResponse, User } from '../types/auth';
 import type { HealthResponse } from '../types/health';
@@ -122,7 +122,7 @@ export const apiClient = {
       body: JSON.stringify(payload),
     }),
   getShopSettings: (shopId: string) => request<ShopSettings>(`/api/v1/shops/${shopId}/settings`),
-  updateAgentSettings: (shopId: string, payload: ShopAgentSettings) =>
+  updateAgentSettings: (shopId: string, payload: Partial<ShopAgentSettings>) =>
     request<Shop>(`/api/v1/shops/${shopId}/agent-settings`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
@@ -131,6 +131,17 @@ export const apiClient = {
     request<DashboardMetrics>(`/api/v1/shops/${shopId}/dashboard/metrics`),
   getOnboardingStatus: (shopId: string) =>
     request<OnboardingStatus>(`/api/v1/shops/${shopId}/onboarding-status`),
+
+  listTriggerRules: (shopId: string) =>
+    request<TriggerRule[]>(`/api/v1/shops/${shopId}/triggers`),
+  createTriggerRule: (shopId: string, payload: Partial<TriggerRule>) =>
+    request<TriggerRule>(`/api/v1/shops/${shopId}/triggers`, { method: 'POST', body: JSON.stringify(payload) }),
+  getTriggerPerformance: (shopId: string) =>
+    request<TriggerPerformance[]>(`/api/v1/shops/${shopId}/triggers/performance`),
+  getAgentStudioSettings: (shopId: string) =>
+    request<AgentStudioSettings>(`/api/v1/shops/${shopId}/agent-studio-settings`),
+  updateAgentStudioSettings: (shopId: string, payload: Partial<AgentStudioSettings>) =>
+    request<AgentStudioSettings>(`/api/v1/shops/${shopId}/agent-studio-settings`, { method: 'PATCH', body: JSON.stringify(payload) }),
   runDMSimulator: (shopId: string, payload: DMSimulatorRequest) =>
     request<DMSimulatorResponse>(`/api/v1/shops/${shopId}/simulator/dm`, {
       method: 'POST',
@@ -144,6 +155,10 @@ export const apiClient = {
     request<PostPerformanceRow[]>(`/api/v1/shops/${shopId}/analytics/posts${buildQuery({ start, end })}`),
   getAnalyticsStockDemand: (shopId: string, start?: string, end?: string) =>
     request<StockDemandRow[]>(`/api/v1/shops/${shopId}/analytics/stock-demand${buildQuery({ start, end })}`),
+  getAnalyticsUnavailableDemand: (shopId: string, start?: string, end?: string) =>
+    request<UnavailableDemandRow[]>(`/api/v1/shops/${shopId}/analytics/unavailable-demand${buildQuery({ start, end })}`),
+  getAnalyticsResponseTime: (shopId: string, start?: string, end?: string) =>
+    request<ResponseTimeAnalytics>(`/api/v1/shops/${shopId}/analytics/response-time${buildQuery({ start, end })}`),
   getAnalyticsHandoff: (shopId: string, start?: string, end?: string) =>
     request<HandoffAnalyticsRow[]>(`/api/v1/shops/${shopId}/analytics/handoff${buildQuery({ start, end })}`),
   listShopMembers: (shopId: string) => request<ShopMember[]>(`/api/v1/shops/${shopId}/members`),

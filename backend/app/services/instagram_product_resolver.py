@@ -56,6 +56,9 @@ class InstagramProductResolver:
             is_active=payload.is_active,
             display_order=payload.display_order,
             admin_label=payload.admin_label,
+            visual_hint=payload.visual_hint,
+            caption_hint=payload.caption_hint,
+            is_primary=payload.is_primary,
         )
         created = self.maps.create(mapping)
         self.maps.commit()
@@ -106,7 +109,7 @@ class InstagramProductResolver:
             normalized_url = normalize_instagram_post_url(payload.instagram_post_url)
             mappings = self.maps.list_active_by_post_url(shop_id, normalized_url)
 
-        mappings = [m for m in mappings if m.product is not None]
+        mappings = sorted([m for m in mappings if m.product is not None], key=lambda m: (not m.is_primary, m.display_order, m.created_at))
         if not mappings:
             return ResolveInstagramProductResponse(product=None)
 
@@ -116,6 +119,9 @@ class InstagramProductResolver:
                 map_id=mapping.id,
                 confidence_source=mapping.confidence_source,
                 admin_label=mapping.admin_label,
+                visual_hint=mapping.visual_hint,
+                caption_hint=mapping.caption_hint,
+                is_primary=mapping.is_primary,
             )
             for mapping in mappings
         ]

@@ -71,7 +71,7 @@ export function SettingsPage() {
   });
 
   const updateAgentMutation = useMutation({
-    mutationFn: (values: ShopAgentSettings) => apiClient.updateAgentSettings(selectedShopId, values),
+    mutationFn: (values: Partial<ShopAgentSettings>) => apiClient.updateAgentSettings(selectedShopId, values),
     onSuccess: () => {
       showToast('Agent settings saved.', 'success');
       queryClient.invalidateQueries({ queryKey: queryKeys.shopSettings(selectedShopId) });

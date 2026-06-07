@@ -40,6 +40,8 @@ from app.domain.enums import (
     ShipmentProvider,
     ShipmentStatus,
     ShopStatus,
+    SellingStyle,
+    TriggerSourceType,
     UserRole,
     WebhookProcessingStatus,
     WebhookProvider,
@@ -90,6 +92,8 @@ class Shop(Base, TimestampMixin):
         back_populates="shop", cascade="all, delete-orphan"
     )
     orders: Mapped[list[Order]] = relationship(back_populates="shop", cascade="all, delete-orphan")
+    trigger_rules: Mapped[list[CommentToDmTrigger]] = relationship(back_populates="shop", cascade="all, delete-orphan")
+    agent_studio_settings: Mapped[ShopAgentSettings | None] = relationship(back_populates="shop", cascade="all, delete-orphan", uselist=False)
 
 
 class ShopMember(Base):
@@ -172,6 +176,10 @@ class Conversation(Base, TimestampMixin):
         nullable=False,
         index=True,
     )
+    channel_provider: Mapped[str] = mapped_column(String(32), nullable=False, default="instagram", index=True)
+    channel_conversation_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    channel_customer_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    trigger_rule_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("comment_to_dm_triggers.id", ondelete="SET NULL"), nullable=True, index=True)
     customer_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -267,6 +275,8 @@ class Message(Base):
         Enum(MessageChannel, name="message_channel"), nullable=False, default=MessageChannel.INSTAGRAM
     )
     instagram_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    channel_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    raw_channel_payload_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("raw_channel_payloads.id", ondelete="SET NULL"), nullable=True, index=True)
     message_type: Mapped[MessageType] = mapped_column(Enum(MessageType, name="message_type"), nullable=False)
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
@@ -454,10 +464,110 @@ class InstagramProductMap(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     admin_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    visual_hint: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    caption_hint: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     shop: Mapped[Shop] = relationship(back_populates="instagram_product_maps")
     instagram_account: Mapped[InstagramAccount] = relationship()
     product: Mapped[Product] = relationship(back_populates="instagram_maps")
+
+
+class RawChannelPayload(Base):
+    __tablename__ = "raw_channel_payloads"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=True, index=True)
+    provider: Mapped[MessageChannel] = mapped_column(Enum(MessageChannel, name="message_channel"), nullable=False, index=True)
+    external_event_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class CommentToDmTrigger(Base, TimestampMixin):
+    __tablename__ = "comment_to_dm_triggers"
+    __table_args__ = (
+        UniqueConstraint("shop_id", "instagram_account_id", "instagram_media_id", "source_type", "keyword", name="uq_comment_to_dm_trigger_keyword"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    instagram_account_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("instagram_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    instagram_media_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    source_type: Mapped[TriggerSourceType] = mapped_column(Enum(TriggerSourceType, name="trigger_source_type"), nullable=False, default=TriggerSourceType.COMMENT, index=True)
+    keyword: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    response_template: Mapped[str] = mapped_column(Text, nullable=False)
+    target_product_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+
+    shop: Mapped[Shop] = relationship(back_populates="trigger_rules")
+    instagram_account: Mapped[InstagramAccount] = relationship()
+    target_product: Mapped[Product | None] = relationship()
+    events: Mapped[list[TriggerEvent]] = relationship(back_populates="trigger", cascade="all, delete-orphan")
+
+
+class TriggerEvent(Base):
+    __tablename__ = "trigger_events"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    trigger_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("comment_to_dm_triggers.id", ondelete="CASCADE"), nullable=False, index=True)
+    conversation_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True)
+    customer_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
+    matched_keyword: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_type: Mapped[TriggerSourceType] = mapped_column(Enum(TriggerSourceType, name="trigger_source_type"), nullable=False)
+    dm_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    paid_order_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    revenue_amount: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+    trigger: Mapped[CommentToDmTrigger] = relationship(back_populates="events")
+
+
+class ColorAlias(Base):
+    __tablename__ = "color_aliases"
+    __table_args__ = (UniqueConstraint("shop_id", "raw_value", "language", name="uq_color_alias_shop_raw_language"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=True, index=True)
+    raw_value: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    normalized_value: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    language: Mapped[str] = mapped_column(String(16), nullable=False, default="und")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+
+
+class SizeAlias(Base):
+    __tablename__ = "size_aliases"
+    __table_args__ = (UniqueConstraint("shop_id", "raw_value", "category", name="uq_size_alias_shop_raw_category"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=True, index=True)
+    raw_value: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    normalized_value: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    category: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+
+
+class ProductSizeChart(Base, TimestampMixin):
+    __tablename__ = "product_size_charts"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=True, index=True)
+    category: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    chart_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+
+class UnavailableDemand(Base):
+    __tablename__ = "unavailable_demand"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
+    requested_color: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    requested_size: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    lost_revenue_estimate: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
 
 class InventoryMovement(Base):
@@ -618,6 +728,51 @@ class Shipment(Base, TimestampMixin):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     order: Mapped[Order] = relationship(back_populates="shipments")
+
+
+class AgentDecisionTrace(Base):
+    __tablename__ = "agent_decision_traces"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    conversation_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    message_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True)
+    agent_run_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("agent_runs.id", ondelete="SET NULL"), nullable=True, index=True)
+    intent: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    extracted_slots: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    product_candidates: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    selected_product_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
+    variant_resolution: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    inventory_result: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    order_action: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    next_state: Mapped[str] = mapped_column(String(128), nullable=False)
+    outbound_message_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True)
+    auto_send_allowed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    human_handoff_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reasoning_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class ShopAgentSettings(Base):
+    __tablename__ = "shop_agent_settings"
+
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), primary_key=True)
+    auto_send_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    preview_required_for_low_confidence: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    preview_required_for_first_order: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    preview_required_for_high_value_order: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    confidence_threshold_intent: Mapped[Any] = mapped_column(Numeric(5, 4), nullable=False, default=0.75)
+    confidence_threshold_product: Mapped[Any] = mapped_column(Numeric(5, 4), nullable=False, default=0.80)
+    confidence_threshold_variant: Mapped[Any] = mapped_column(Numeric(5, 4), nullable=False, default=0.85)
+    confidence_threshold_address: Mapped[Any] = mapped_column(Numeric(5, 4), nullable=False, default=0.80)
+    high_value_order_threshold: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    brand_voice: Mapped[str | None] = mapped_column(Text, nullable=True)
+    selling_style: Mapped[SellingStyle] = mapped_column(Enum(SellingStyle, name="selling_style"), nullable=False, default=SellingStyle.BALANCED)
+    discount_policy_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    handoff_policy_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    shop: Mapped[Shop] = relationship(back_populates="agent_studio_settings")
 
 
 class AgentDecisionAudit(Base):
