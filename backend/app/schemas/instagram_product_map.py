@@ -14,6 +14,8 @@ class InstagramProductMapCreate(BaseModel):
     product_id: UUID
     confidence_source: ConfidenceSource = ConfidenceSource.MANUAL
     is_active: bool = True
+    display_order: int = 0
+    admin_label: str | None = Field(default=None, max_length=255)
 
 
 class InstagramProductMapUpdate(BaseModel):
@@ -22,6 +24,8 @@ class InstagramProductMapUpdate(BaseModel):
     product_id: UUID | None = None
     confidence_source: ConfidenceSource | None = None
     is_active: bool | None = None
+    display_order: int | None = None
+    admin_label: str | None = Field(default=None, max_length=255)
 
 
 class InstagramProductMapRead(BaseModel):
@@ -35,6 +39,8 @@ class InstagramProductMapRead(BaseModel):
     product_id: UUID
     confidence_source: ConfidenceSource
     is_active: bool
+    display_order: int
+    admin_label: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -54,7 +60,16 @@ class ResolveInstagramProductRequest(BaseModel):
         return self
 
 
+class ProductCandidate(BaseModel):
+    product: ProductRead
+    map_id: UUID
+    confidence_source: ConfidenceSource
+    admin_label: str | None = None
+
+
 class ResolveInstagramProductResponse(BaseModel):
     product: ProductRead | None = None
     map_id: UUID | None = None
     confidence_source: ConfidenceSource | None = None
+    candidates: list[ProductCandidate] = Field(default_factory=list)
+    requires_product_selection: bool = False

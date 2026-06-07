@@ -10,7 +10,7 @@ from app.domain.enums import UserRole
 from app.domain.models import ShopMember, User
 from app.schemas.dashboard import DashboardMetrics
 from app.schemas.instagram_account import InstagramAccountCreate, InstagramAccountRead
-from app.schemas.shop import ShopAgentSettings, ShopCreate, ShopMemberRead, ShopRead, ShopSettingsRead, ShopUpdate
+from app.schemas.shop import OnboardingStatusRead, ShopAgentSettings, ShopCreate, ShopMemberRead, ShopRead, ShopSettingsRead, ShopUpdate
 from app.services.dashboard_service import DashboardService
 from app.services.instagram_account_service import InstagramAccountService
 from app.services.shop_service import ShopService
@@ -82,6 +82,15 @@ def get_dashboard_metrics(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> DashboardMetrics:
     return DashboardService(db).get_metrics(shop_id, current_user)
+
+
+@router.get("/{shop_id}/onboarding-status", response_model=OnboardingStatusRead)
+def get_onboarding_status(
+    shop_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> OnboardingStatusRead:
+    return ShopService(db).get_onboarding_status(shop_id, current_user)
 
 
 @router.get("/{shop_id}/members", response_model=list[ShopMemberRead])

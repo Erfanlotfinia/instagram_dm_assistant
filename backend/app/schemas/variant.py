@@ -7,7 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class VariantCreate(BaseModel):
     color: str | None = Field(default=None, max_length=64)
+    normalized_color: str | None = Field(default=None, max_length=64)
     size: str | None = Field(default=None, max_length=64)
+    normalized_size: str | None = Field(default=None, max_length=64)
     sku: str = Field(min_length=1, max_length=128)
     price: Decimal = Field(gt=Decimal("0"))
     stock_quantity: int = Field(default=0, ge=0)
@@ -16,7 +18,9 @@ class VariantCreate(BaseModel):
 
 class VariantUpdate(BaseModel):
     color: str | None = Field(default=None, max_length=64)
+    normalized_color: str | None = Field(default=None, max_length=64)
     size: str | None = Field(default=None, max_length=64)
+    normalized_size: str | None = Field(default=None, max_length=64)
     sku: str | None = Field(default=None, min_length=1, max_length=128)
     price: Decimal | None = Field(default=None, gt=Decimal("0"))
     stock_quantity: int | None = Field(default=None, ge=0)
@@ -29,7 +33,9 @@ class VariantRead(BaseModel):
     id: UUID
     product_id: UUID
     color: str | None
+    normalized_color: str | None
     size: str | None
+    normalized_size: str | None
     sku: str
     price: Decimal
     stock_quantity: int

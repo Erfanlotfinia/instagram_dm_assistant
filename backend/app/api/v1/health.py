@@ -69,11 +69,13 @@ def health() -> dict[str, str]:
 
 @router.get("/ready")
 def ready(response: Response) -> dict[str, Any]:
+    settings = get_settings()
     checks = {
         "postgres": _check_postgres(),
         "redis": _check_redis(),
         "rabbitmq": _check_rabbitmq(),
         "qdrant": _check_qdrant(),
+        "openai_config": {"status": "ok" if bool(settings.openai_api_key) else "error", "detail": None if settings.openai_api_key else "OPENAI_API_KEY is not configured"},
     }
     all_ok = all(check["status"] == "ok" for check in checks.values())
     if not all_ok:

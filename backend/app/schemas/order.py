@@ -84,6 +84,9 @@ class OrderRead(BaseModel):
     address: str
     postal_code: str
     notes: str | None
+    risk_flags: list[str] = Field(default_factory=list)
+    approval_source: str | None = None
+    payment_callback_status: str | None = None
     expires_at: datetime | None
     created_at: datetime
     updated_at: datetime

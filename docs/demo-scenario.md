@@ -47,3 +47,20 @@ SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD  # Text message
 - Stock unavailable on confirmation
 - Duplicate webhook `instagram_message_id`
 - Duplicate payment callback reference
+
+
+## Competitive fashion demo scenario
+
+Customer message: `این کارو مشکی سایز L می‌خوام`
+
+Expected specialized fashion flow:
+
+1. The shared Instagram post URL is resolved through post-to-product mappings; if the post has multiple products, the agent asks which item the customer means and stores the selection in conversation slots.
+2. Raw color `مشکی` is normalized to canonical `black`, separate from the raw customer text.
+3. Raw size `L` is normalized to canonical `L`; numeric, free-size, shoe, and category size charts are resolved deterministically.
+4. The backend `VariantResolver` selects and validates the SKU. The LLM never chooses price, inventory, SKU, payment state, or shipment state directly.
+5. Inventory is checked against available stock and alternatives are suggested for mismatches or unavailable demand.
+6. Missing customer information is requested before creating a draft order.
+7. The order is not finalized until explicit customer confirmation.
+8. A payment link is generated only after confirmation; idempotent callbacks mark the order paid once.
+9. Operators can see normalized slots, product candidates, variant alternatives, confidence, suggested reply, handoff state, and the audit trail.

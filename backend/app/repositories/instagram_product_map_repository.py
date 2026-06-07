@@ -41,6 +41,33 @@ class InstagramProductMapRepository:
         )
         return self.db.scalar(stmt)
 
+
+    def list_active_by_post_url(self, shop_id: UUID, post_url: str) -> list[InstagramProductMap]:
+        stmt = (
+            select(InstagramProductMap)
+            .options(joinedload(InstagramProductMap.product))
+            .where(
+                InstagramProductMap.shop_id == shop_id,
+                InstagramProductMap.instagram_post_url == post_url,
+                InstagramProductMap.is_active.is_(True),
+            )
+            .order_by(InstagramProductMap.display_order, InstagramProductMap.created_at)
+        )
+        return list(self.db.scalars(stmt).unique().all())
+
+    def list_active_by_media_id(self, shop_id: UUID, media_id: str) -> list[InstagramProductMap]:
+        stmt = (
+            select(InstagramProductMap)
+            .options(joinedload(InstagramProductMap.product))
+            .where(
+                InstagramProductMap.shop_id == shop_id,
+                InstagramProductMap.instagram_media_id == media_id,
+                InstagramProductMap.is_active.is_(True),
+            )
+            .order_by(InstagramProductMap.display_order, InstagramProductMap.created_at)
+        )
+        return list(self.db.scalars(stmt).unique().all())
+
     def find_active_by_media_id(self, shop_id: UUID, media_id: str) -> InstagramProductMap | None:
         stmt = (
             select(InstagramProductMap)

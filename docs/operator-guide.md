@@ -36,3 +36,24 @@ If the agent repeatedly fails:
 2. Verify variant stock in **Products**.
 3. Review conversation slots in conversation detail.
 4. Contact admin if Instagram token or webhook is disconnected.
+
+
+## Fashion order operator guide
+
+### Mapping posts
+Use **Post Mapping** to connect one Instagram post URL to one or more products. Multi-product posts are supported by adding multiple mappings with the same normalized post URL and optional admin labels/display order.
+
+### Managing variants
+Add variants with raw colors and sizes. The backend stores normalized color/size fields so Persian names, English names, informal spellings, numeric sizes, free-size phrases, shoe sizes, and category size charts can resolve consistently.
+
+### Testing in the DM Simulator
+Open **DM Simulator**, choose an Instagram account, enter a fake customer message and optional shared post URL, then run. The simulator creates a test conversation marked `is_simulation=true`, runs the same orchestrator, shows intent, slots, product/variant resolution, inventory, next state, suggested reply, and preview/handoff decision, but never sends real Instagram messages.
+
+### Approving low-confidence replies
+When confidence is below the shop auto-send threshold or preview mode is enabled, the conversation stores `suggested_outbound` and `preview_required=true`. Operators can edit and send the reply from the conversation detail page.
+
+### Taking over conversations
+Use **Take over** to pause the agent and route the conversation to an operator. Use **Release to agent** only after the ambiguity, complaint, payment issue, high-value risk, or variant mismatch has been resolved.
+
+### Reviewing failed jobs
+Use the failed job viewer endpoint `GET /api/v1/jobs/failed` to inspect retry/DLQ payloads and error messages. RabbitMQ declares a main queue, retry queue, and DLQ with max retry settings.

@@ -8,6 +8,7 @@ from app.domain.models import ProductVariant, User
 from app.repositories.product_repository import ProductRepository
 from app.repositories.variant_repository import VariantRepository
 from app.schemas.variant import VariantCreate, VariantRead, VariantUpdate
+from app.services.fashion_normalization import normalize_color, normalize_size
 from app.services.shop_service import ShopService
 
 
@@ -30,12 +31,14 @@ class VariantService:
         payload: VariantCreate,
         user: User,
     ) -> VariantRead:
-        self._require_product(shop_id, product_id, user)
+        product = self._require_product(shop_id, product_id, user)
         self._ensure_unique_sku(shop_id, payload.sku)
         variant = ProductVariant(
             product_id=product_id,
             color=payload.color,
+            normalized_color=payload.normalized_color or normalize_color(payload.color).normalized,
             size=payload.size,
+            normalized_size=payload.normalized_size or normalize_size(payload.size, category=product.category, size_chart=product.size_chart).normalized,
             sku=payload.sku,
             price=payload.price,
             stock_quantity=payload.stock_quantity,
@@ -76,6 +79,11 @@ class VariantService:
                     detail="Stock quantity cannot be less than reserved quantity",
                 )
 
+        if "color" in updates and "normalized_color" not in updates:
+            updates["normalized_color"] = normalize_color(updates.get("color")).normalized
+        if "size" in updates and "normalized_size" not in updates:
+            updates["normalized_size"] = normalize_size(updates.get("size"), category=variant.product.category, size_chart=variant.product.size_chart).normalized
+
         for field, value in updates.items():
             setattr(variant, field, value)
 
@@ -90,11 +98,12 @@ class VariantService:
             ) from exc
         return VariantRead.from_variant(variant)
 
-    def _require_product(self, shop_id: UUID, product_id: UUID, user: User) -> None:
+    def _require_product(self, shop_id: UUID, product_id: UUID, user: User):
         self.shop_service.get_shop(shop_id, user)
         product = self.products.get_for_shop(shop_id, product_id)
         if product is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+        return product
 
     def _get_variant_for_shop_or_404(self, shop_id: UUID, variant_id: UUID) -> ProductVariant:
         variant = self.variants.get_for_shop(shop_id, variant_id)

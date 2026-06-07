@@ -37,7 +37,8 @@ Schema:
   "confidence": {
     "intent": 0.0,
     "slots": 0.0,
-    "product": 0.0
+    "product": 0.0,
+    "address": 1.0
   },
   "needs_human": false,
   "human_reason": "string|null",
@@ -48,6 +49,7 @@ Rules:
 - Use Persian-friendly slot values when the customer writes in Persian.
 - Set needs_human=true for angry complaints, payment disputes, or unsupported requests.
 - Do not guess product identity; only use provided references.
+- Do not choose SKU, variant, price, inventory, discount, shipment cost, payment state, or order finalization. The backend resolves and validates those deterministically.
 """
 
 

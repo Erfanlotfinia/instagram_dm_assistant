@@ -67,7 +67,10 @@ export interface ConversationSlots {
   product_variant_id: string | null;
   instagram_post_url: string | null;
   color: string | null;
+  normalized_color?: string | null;
   size: string | null;
+  normalized_size?: string | null;
+  variant_alternatives?: Array<Record<string, unknown>>;
   quantity: number | null;
   customer_name: string | null;
   phone: string | null;
@@ -112,6 +115,9 @@ export interface Conversation {
   state: ConversationState;
   workflow_state: AgentWorkflowState;
   agent_paused: boolean;
+  suggested_outbound?: string | null;
+  preview_required?: boolean;
+  preview_reason?: string | null;
   last_intent: string | null;
   assigned_operator_id: string | null;
   handoff_required: boolean;
@@ -155,6 +161,9 @@ export interface ConversationHandoffResponse {
   handoff_required: boolean;
   handoff_reason: string | null;
   agent_paused: boolean;
+  suggested_outbound?: string | null;
+  preview_required?: boolean;
+  preview_reason?: string | null;
   assigned_operator_id: string | null;
 }
 

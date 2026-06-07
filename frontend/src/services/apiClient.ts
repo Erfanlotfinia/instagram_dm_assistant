@@ -10,6 +10,7 @@ import type {
   MessageCreate,
 } from '../types/conversation';
 import type { DashboardMetrics } from '../types/dashboard';
+import type { DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PostPerformanceRow, StockDemandRow } from '../types/competitive';
 import type { SemanticSearchResponse } from '../types/semanticSearch';
 import type { LoginRequest, TokenResponse, User } from '../types/auth';
 import type { HealthResponse } from '../types/health';
@@ -128,6 +129,23 @@ export const apiClient = {
     }),
   getDashboardMetrics: (shopId: string) =>
     request<DashboardMetrics>(`/api/v1/shops/${shopId}/dashboard/metrics`),
+  getOnboardingStatus: (shopId: string) =>
+    request<OnboardingStatus>(`/api/v1/shops/${shopId}/onboarding-status`),
+  runDMSimulator: (shopId: string, payload: DMSimulatorRequest) =>
+    request<DMSimulatorResponse>(`/api/v1/shops/${shopId}/simulator/dm`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  resetDMSimulator: (shopId: string) =>
+    request<{ deleted_conversations: number }>(`/api/v1/shops/${shopId}/simulator/dm`, { method: 'DELETE' }),
+  getAnalyticsFunnel: (shopId: string, start?: string, end?: string) =>
+    request<FunnelAnalytics>(`/api/v1/shops/${shopId}/analytics/funnel${buildQuery({ start, end })}`),
+  getAnalyticsPosts: (shopId: string, start?: string, end?: string) =>
+    request<PostPerformanceRow[]>(`/api/v1/shops/${shopId}/analytics/posts${buildQuery({ start, end })}`),
+  getAnalyticsStockDemand: (shopId: string, start?: string, end?: string) =>
+    request<StockDemandRow[]>(`/api/v1/shops/${shopId}/analytics/stock-demand${buildQuery({ start, end })}`),
+  getAnalyticsHandoff: (shopId: string, start?: string, end?: string) =>
+    request<HandoffAnalyticsRow[]>(`/api/v1/shops/${shopId}/analytics/handoff${buildQuery({ start, end })}`),
   listShopMembers: (shopId: string) => request<ShopMember[]>(`/api/v1/shops/${shopId}/members`),
   listInstagramAccounts: (shopId: string) =>
     request<InstagramAccount[]>(`/api/v1/shops/${shopId}/instagram-accounts`),

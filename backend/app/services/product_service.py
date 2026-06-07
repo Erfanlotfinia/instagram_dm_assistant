@@ -36,6 +36,8 @@ class ProductService:
             base_price=payload.base_price,
             currency=currency,
             main_image_url=payload.main_image_url,
+            category=payload.category,
+            size_chart=payload.size_chart,
         )
         self.products.create(product)
         AuditService(self.db).log(

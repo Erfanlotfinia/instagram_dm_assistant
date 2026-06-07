@@ -5,13 +5,16 @@ import { AppLayout } from '../components/AppLayout';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { ConversationDetailPage } from '../pages/ConversationDetailPage';
 import { ConversationsPage } from '../pages/ConversationsPage';
+import { AnalyticsPage } from '../pages/AnalyticsPage';
 import { DashboardPage } from '../pages/DashboardPage';
+import { DMSimulatorPage } from '../pages/DMSimulatorPage';
 import { InstagramAccountsPage } from '../pages/InstagramAccountsPage';
 import {
   InstagramProductMappingPage,
   ProductResolverPage,
 } from '../pages/InstagramProductMappingPage';
 import { LoginPage } from '../pages/LoginPage';
+import { OnboardingPage } from '../pages/OnboardingPage';
 import { OrderDetailPage } from '../pages/OrderDetailPage';
 import { OrdersPage } from '../pages/OrdersPage';
 import { ProductDetailPage } from '../pages/ProductDetailPage';
@@ -37,6 +40,31 @@ export function AppRoutes() {
         element={
           <AuthenticatedShell>
             <DashboardPage />
+          </AuthenticatedShell>
+        }
+      />
+
+      <Route
+        path="/onboarding"
+        element={
+          <AuthenticatedShell>
+            <OnboardingPage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/simulator"
+        element={
+          <AuthenticatedShell>
+            <DMSimulatorPage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/analytics"
+        element={
+          <AuthenticatedShell>
+            <AnalyticsPage />
           </AuthenticatedShell>
         }
       />
