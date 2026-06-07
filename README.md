@@ -167,4 +167,150 @@ npm run build
 - Structured JSON logging is configured at application startup for container-friendly log ingestion.
 - Global exception handlers normalize API error responses.
 - CORS allows the local Vite frontend origin by default.
-- OpenAI, Instagram, order management, and agent logic are intentionally represented only by environment placeholders and empty extension directories.
+- Sprint 2 adds Instagram webhook ingestion, message persistence, RabbitMQ queue publishing, a background worker, and Redis conversation locks.
+
+## Meta Instagram webhook setup
+
+Configure these backend environment variables:
+
+- `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` — shared secret used during Meta webhook verification
+- `ENABLE_REAL_INSTAGRAM_SEND` — keep `false` locally unless you are ready to call the real Graph API
+- `CONVERSATION_LOCK_TTL_SECONDS` — Redis lock TTL for per-conversation worker serialization
+
+Webhook endpoints exposed by the API:
+
+- `GET /api/v1/webhooks/instagram` — Meta challenge verification
+- `POST /api/v1/webhooks/instagram` — inbound Instagram messaging events
+
+### Local development with ngrok
+
+1. Start the stack: `docker compose up --build`
+2. Expose the backend: `ngrok http 8000`
+3. In the Meta developer dashboard, create a webhook subscription for your Instagram app:
+   - Callback URL: `https://<your-ngrok-host>/api/v1/webhooks/instagram`
+   - Verify token: same value as `INSTAGRAM_WEBHOOK_VERIFY_TOKEN`
+4. Subscribe to `messages` (and related messaging fields you need).
+5. Connect an Instagram business account in the admin UI and ensure its `ig_user_id` matches the webhook `recipient.id`.
+
+### Processing pipeline
+
+1. Webhook stores the full raw payload in `webhook_events`.
+2. Matching `instagram_accounts` are resolved by recipient Instagram user ID.
+3. Customers, conversations, and inbound messages are created or updated.
+4. A job is published to RabbitMQ queue `instagram.message.received`.
+5. The `worker` service consumes jobs, acquires a Redis lock per conversation, logs readiness for agent processing, and marks the webhook event processed.
+
+Run the worker locally:
+
+```bash
+docker compose up worker
+```
+
+Or outside Docker:
+
+```bash
+cd backend
+python -m app.workers.main
+```
+
+## Sprint 6 manual QA checklist
+
+Use this checklist after `docker compose up --build` and seeding a demo shop.
+
+### Authentication & shell
+
+- [ ] Sign in with email/password; invalid input shows field-level validation errors
+- [ ] JWT persists across page refresh; sign out clears session
+- [ ] Sidebar shows selected shop name; shop selection persists across pages
+
+### Dashboard
+
+- [ ] Metrics load for selected shop: today orders, paid, waiting for payment, handoffs
+- [ ] Conversion funnel shows inbound → product resolved → draft → paid counts
+- [ ] Low-stock variants list links to product detail
+
+### Conversations
+
+- [ ] List filters by state, handoff, date, and customer search
+- [ ] Detail shows message timeline, slots, linked product/order, agent actions
+- [ ] Take over → send manual message → release to agent workflow works
+- [ ] Mark resolved closes conversation; customer details can be edited
+- [ ] Create order from conversation when slots are complete
+
+### Products & mapping
+
+- [ ] Product list supports search and pagination; low-stock products are flagged
+- [ ] Product detail shows variant stock with low-stock warnings
+- [ ] Instagram mapping: paste URL, select product, save manual map
+- [ ] Test resolve shows match; confirm semantic match creates mapping
+
+### Orders
+
+- [ ] Order list filters and pagination work
+- [ ] Order detail: confirm, mark paid, ship (with tracking), cancel use confirmation dialogs
+- [ ] Toast notifications appear for success and error actions
+
+### Settings
+
+- [ ] Shop profile can be updated (name, currency)
+- [ ] Instagram account and webhook status display correctly
+- [ ] Agent settings save: auto reply, confidence thresholds, handoff mode, Persian default language
+
+### RTL & responsive
+
+- [ ] Layout remains usable on mobile viewport (< 900px)
+- [ ] Setting `dir="rtl"` on `<html>` mirrors message bubbles and table alignment
+
+## Sprint 7: Security, observability, and production readiness
+
+### Security
+
+- Redis rate limiting on login, webhook, and outbound message endpoints
+- Request ID middleware (`X-Request-ID`) and secure response headers
+- Audit logging for login, product CRUD, inventory changes, order status, manual payment, handoff take/release
+- Instagram access tokens encrypted at rest (Fernet)
+- Sensitive data masked in structured JSON logs
+- Shop membership checks on shop-scoped API routes
+- Optional Meta webhook signature verification (`INSTAGRAM_APP_SECRET`)
+- Production CORS configuration via `CORS_ORIGINS`
+
+### Observability
+
+- Structured JSON logs with `request_id` correlation
+- Prometheus metrics at `GET /api/v1/metrics`
+- Readiness probe at `GET /api/v1/ready` (postgres, redis, rabbitmq, qdrant)
+
+### Reliability
+
+- RabbitMQ retry queue + DLQ with configurable max retries
+- Idempotency: webhook message ID, payment callback reference, order confirmation
+- Background scheduler: expire unpaid orders, refresh product embeddings
+- Graceful worker shutdown on SIGINT/SIGTERM
+
+### Documentation
+
+See the `docs/` folder:
+
+- [Production deployment](docs/production-deployment.md)
+- [Environment variables](docs/environment-variables.md)
+- [Meta webhook setup](docs/meta-webhook-setup.md)
+- [Operator guide](docs/operator-guide.md)
+- [Admin guide](docs/admin-guide.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [API reference](docs/api.md)
+- [Demo scenario](docs/demo-scenario.md)
+
+### Run tests
+
+```bash
+cd backend && pytest
+cd frontend && npm test
+```
+
+### Health and metrics
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/api/v1/ready
+curl http://localhost:8000/api/v1/metrics
+```

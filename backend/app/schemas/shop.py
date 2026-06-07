@@ -1,0 +1,65 @@
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.domain.enums import HandoffMode, ShopStatus, UserRole
+
+
+class ShopCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    slug: str | None = Field(default=None, min_length=1, max_length=255)
+    default_currency: str = Field(default="USD", min_length=3, max_length=3)
+
+
+class ShopUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    default_currency: str | None = Field(default=None, min_length=3, max_length=3)
+
+
+class ShopAgentSettings(BaseModel):
+    auto_reply_enabled: bool = True
+    intent_confidence_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    slots_confidence_threshold: float = Field(default=0.60, ge=0.0, le=1.0)
+    handoff_mode: HandoffMode = HandoffMode.AUTOMATIC
+    default_language: str = Field(default="fa", min_length=2, max_length=8)
+    low_stock_threshold: int = Field(default=5, ge=0)
+
+
+class ShopRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    slug: str
+    status: ShopStatus
+    default_currency: str
+    agent_settings: ShopAgentSettings = Field(default_factory=ShopAgentSettings)
+    created_at: datetime
+    updated_at: datetime
+
+
+class ShopMemberRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    shop_id: UUID
+    user_id: UUID
+    role: UserRole
+    created_at: datetime
+    full_name: str
+    email: str
+
+
+class InstagramAccountStatusSummary(BaseModel):
+    id: UUID
+    username: str
+    status: str
+    webhook_enabled: bool
+    token_expires_at: datetime | None = None
+
+
+class ShopSettingsRead(BaseModel):
+    shop: ShopRead
+    instagram_accounts: list[InstagramAccountStatusSummary] = Field(default_factory=list)
+    webhook_active: bool = False

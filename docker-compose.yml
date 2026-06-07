@@ -11,6 +11,10 @@ services:
       APP_ENV: ${APP_ENV:-local}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-local-development}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-local-dev-token-encryption-key-32b!}
+      INSTAGRAM_WEBHOOK_VERIFY_TOKEN: ${INSTAGRAM_WEBHOOK_VERIFY_TOKEN:-local-instagram-verify-token}
+      ENABLE_REAL_INSTAGRAM_SEND: ${ENABLE_REAL_INSTAGRAM_SEND:-false}
+      CONVERSATION_LOCK_TTL_SECONDS: ${CONVERSATION_LOCK_TTL_SECONDS:-120}
     ports:
       - "8000:8000"
     depends_on:
@@ -25,6 +29,50 @@ services:
     volumes:
       - ./backend/app:/app/app
       - ./backend/alembic.ini:/app/alembic.ini
+
+  worker:
+    build:
+      context: ./backend
+    command: ["python", "-m", "app.workers.main"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/instagram_dm_assistant}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CONVERSATION_LOCK_TTL_SECONDS: ${CONVERSATION_LOCK_TTL_SECONDS:-120}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app
+
+  scheduler:
+    build:
+      context: ./backend
+    command: ["python", "-m", "app.workers.scheduler"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/instagram_dm_assistant}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      BACKGROUND_JOB_INTERVAL_SECONDS: ${BACKGROUND_JOB_INTERVAL_SECONDS:-60}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app
 
   frontend:
     build:

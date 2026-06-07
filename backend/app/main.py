@@ -8,6 +8,7 @@ from app.api.v1.router import router as v1_router
 from app.core.config import get_settings
 from app.core.errors import add_exception_handlers
 from app.core.logging import configure_logging
+from app.core.middleware import RequestContextMiddleware, SecureHeadersMiddleware
 
 settings = get_settings()
 configure_logging(settings)
@@ -23,14 +24,18 @@ def create_app() -> FastAPI:
         title="Instagram DM Assistant API",
         version="0.1.0",
         lifespan=lifespan,
+        docs_url=None if settings.is_production else "/docs",
+        redoc_url=None if settings.is_production else "/redoc",
     )
 
+    app.add_middleware(SecureHeadersMiddleware, settings=settings)
+    app.add_middleware(RequestContextMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_credentials=settings.cors_allow_credentials,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Hub-Signature-256"],
     )
 
     add_exception_handlers(app)
@@ -39,6 +44,10 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["health"])
     def root_health_check() -> dict[str, str]:
         return {"status": "ok"}
+
+    from app.api.v1.health import ready as readiness_check
+
+    app.add_api_route("/ready", readiness_check, methods=["GET"], tags=["health"])
 
     return app
 

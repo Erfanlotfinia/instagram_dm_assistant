@@ -1,0 +1,173 @@
+import enum
+
+
+class UserRole(str, enum.Enum):
+    OWNER = "owner"
+    ADMIN = "admin"
+    OPERATOR = "operator"
+
+
+class ShopStatus(str, enum.Enum):
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+
+
+class HandoffMode(str, enum.Enum):
+    AUTOMATIC = "automatic"
+    MANUAL_ONLY = "manual_only"
+
+
+class InstagramAccountStatus(str, enum.Enum):
+    CONNECTED = "connected"
+    DISCONNECTED = "disconnected"
+    EXPIRED = "expired"
+
+
+class ConversationState(str, enum.Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+    PENDING_HANDOFF = "pending_handoff"
+    ARCHIVED = "archived"
+
+
+class AgentWorkflowState(str, enum.Enum):
+    IDLE = "idle"
+    WAITING_FOR_PRODUCT = "waiting_for_product"
+    WAITING_FOR_VARIANT = "waiting_for_variant"
+    WAITING_FOR_CUSTOMER_INFO = "waiting_for_customer_info"
+    WAITING_FOR_CONFIRMATION = "waiting_for_confirmation"
+    WAITING_FOR_PAYMENT = "waiting_for_payment"
+    PAID = "paid"
+    SENT_TO_SHIPPING = "sent_to_shipping"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    HUMAN_HANDOFF = "human_handoff"
+
+
+class AgentRunStatus(str, enum.Enum):
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+class AgentIntent(str, enum.Enum):
+    BUY_PRODUCT = "buy_product"
+    ASK_PRICE = "ask_price"
+    ASK_STOCK = "ask_stock"
+    PROVIDE_INFO = "provide_info"
+    CONFIRM_ORDER = "confirm_order"
+    CANCEL_ORDER = "cancel_order"
+    TRACK_ORDER = "track_order"
+    UNCLEAR = "unclear"
+    HUMAN_HELP = "human_help"
+
+
+class MessageDirection(str, enum.Enum):
+    INBOUND = "inbound"
+    OUTBOUND = "outbound"
+
+
+class MessageChannel(str, enum.Enum):
+    INSTAGRAM = "instagram"
+
+
+class MessageType(str, enum.Enum):
+    TEXT = "text"
+    SHARED_POST = "shared_post"
+    ATTACHMENT = "attachment"
+    SYSTEM = "system"
+
+
+class AgentActionStatus(str, enum.Enum):
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+class WebhookProvider(str, enum.Enum):
+    INSTAGRAM = "instagram"
+
+
+class WebhookProcessingStatus(str, enum.Enum):
+    RECEIVED = "received"
+    QUEUED = "queued"
+    PROCESSED = "processed"
+    FAILED = "failed"
+
+
+class ProductStatus(str, enum.Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    ARCHIVED = "archived"
+
+
+class InventoryMovementType(str, enum.Enum):
+    RESERVE = "reserve"
+    RELEASE = "release"
+    SALE = "sale"
+    ADJUSTMENT = "adjustment"
+
+
+class ConfidenceSource(str, enum.Enum):
+    MANUAL = "manual"
+    CAPTION_MATCH = "caption_match"
+    IMAGE_MATCH = "image_match"
+    ADMIN_CONFIRMED = "admin_confirmed"
+
+
+class OrderStatus(str, enum.Enum):
+    DRAFT = "draft"
+    WAITING_FOR_CONFIRMATION = "waiting_for_confirmation"
+    CONFIRMED = "confirmed"
+    WAITING_FOR_PAYMENT = "waiting_for_payment"
+    PAID = "paid"
+    PREPARING = "preparing"
+    SHIPPED = "shipped"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+
+
+class OrderPaymentStatus(str, enum.Enum):
+    UNPAID = "unpaid"
+    PENDING = "pending"
+    PAID = "paid"
+    FAILED = "failed"
+    REFUNDED = "refunded"
+
+
+class OrderShippingStatus(str, enum.Enum):
+    NOT_STARTED = "not_started"
+    PREPARING = "preparing"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered"
+
+
+class PaymentProvider(str, enum.Enum):
+    MANUAL = "manual"
+    ZARINPAL = "zarinpal"
+    NEXTPAY = "nextpay"
+    IDPAY = "idpay"
+    MOCK = "mock"
+
+
+class PaymentRecordStatus(str, enum.Enum):
+    CREATED = "created"
+    PENDING = "pending"
+    PAID = "paid"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ShipmentProvider(str, enum.Enum):
+    MANUAL = "manual"
+    POST = "post"
+    TIPAX = "tipax"
+    CHAPAR = "chapar"
+    OTHER = "other"
+
+
+class ShipmentStatus(str, enum.Enum):
+    PENDING = "pending"
+    PREPARING = "preparing"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered"
+    FAILED = "failed"
