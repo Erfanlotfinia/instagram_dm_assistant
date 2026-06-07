@@ -9,6 +9,7 @@ import { AgentStudioSettingsPage } from '../pages/AgentStudioSettingsPage';
 import { AnalyticsPage } from '../pages/AnalyticsPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { DMSimulatorPage } from '../pages/DMSimulatorPage';
+import { FashionDictionaryPage } from '../pages/FashionDictionaryPage';
 import { InstagramAccountsPage } from '../pages/InstagramAccountsPage';
 import {
   InstagramProductMappingPage,
@@ -23,6 +24,8 @@ import { ProductsPage } from '../pages/ProductsPage';
 import { SemanticSearchPage } from '../pages/SemanticSearchPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { TriggerRulesPage } from '../pages/TriggerRulesPage';
+import { UnavailableDemandPage } from '../pages/UnavailableDemandPage';
+import { VariantResolverPage } from '../pages/VariantResolverPage';
 import { ShopsPage } from '../pages/ShopsPage';
 
 function AuthenticatedShell({ children }: { children: ReactNode }) {
@@ -63,6 +66,31 @@ export function AppRoutes() {
         }
       />
 
+
+      <Route
+        path="/fashion-dictionary"
+        element={
+          <AuthenticatedShell>
+            <FashionDictionaryPage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/variant-resolver"
+        element={
+          <AuthenticatedShell>
+            <VariantResolverPage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/unavailable-demand"
+        element={
+          <AuthenticatedShell>
+            <UnavailableDemandPage />
+          </AuthenticatedShell>
+        }
+      />
       <Route
         path="/triggers"
         element={

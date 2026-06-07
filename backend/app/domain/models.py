@@ -523,7 +523,7 @@ class TriggerEvent(Base):
     trigger: Mapped[CommentToDmTrigger] = relationship(back_populates="events")
 
 
-class ColorAlias(Base):
+class ColorAlias(Base, TimestampMixin):
     __tablename__ = "color_aliases"
     __table_args__ = (UniqueConstraint("shop_id", "raw_value", "language", name="uq_color_alias_shop_raw_language"),)
 
@@ -535,7 +535,7 @@ class ColorAlias(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
 
 
-class SizeAlias(Base):
+class SizeAlias(Base, TimestampMixin):
     __tablename__ = "size_aliases"
     __table_args__ = (UniqueConstraint("shop_id", "raw_value", "category", name="uq_size_alias_shop_raw_category"),)
 
@@ -567,6 +567,24 @@ class UnavailableDemand(Base):
     requested_size: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     lost_revenue_estimate: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class UnavailableDemandLog(Base):
+    __tablename__ = "unavailable_demand_logs"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
+    requested_color_raw: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    requested_color_normalized: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    requested_size_raw: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    requested_size_normalized: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    requested_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    reason: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    conversation_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True)
+    customer_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
+    estimated_lost_revenue: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
 
