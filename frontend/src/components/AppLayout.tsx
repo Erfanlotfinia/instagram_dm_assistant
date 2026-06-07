@@ -14,6 +14,8 @@ export function AppLayout({ children }: PropsWithChildren) {
     { to: '/onboarding', label: 'Onboarding' },
     { to: '/simulator', label: 'DM Simulator' },
     { to: '/analytics', label: 'Analytics' },
+    { to: '/triggers', label: 'Trigger Rules' },
+    { to: '/agent-studio', label: 'Agent Studio' },
     { to: '/conversations', label: 'Conversations' },
     { to: '/orders', label: 'Orders' },
     { to: '/products', label: 'Products' },

@@ -357,3 +357,20 @@ cd frontend && npm install && npm run dev
 ```
 
 Key admin pages: `/onboarding`, `/simulator`, `/analytics`, `/instagram-mapping`, `/conversations`, `/orders`.
+
+
+## Competitor-informed positioning
+
+This is not a generic chatbot. It is an Instagram-first fashion order agent that turns social interactions into accurate, payable, shippable orders. The architecture now keeps Instagram parsing inside integrations while the order core consumes channel-independent messages, making WhatsApp, Telegram, and Web Chat future-ready.
+
+Key differentiators versus Meta Business Agent, Manychat, Chatfuel, Gorgias, SleekFlow, Inrō, Respond.io, and Tidio:
+
+- Instagram post-to-product/SKU mapping, including multi-product posts.
+- Deterministic color and size normalization for fashion variants.
+- Inventory validation and unavailable-demand tracking before order/payment actions.
+- Comment/story/reel/ad trigger rules that continue into the normal order flow.
+- Agent Studio controls for auto-send, previews, brand voice, selling style, discount policy, and handoff.
+- Safe agent decision traces and a DM Simulator for test conversations.
+- Fashion/order analytics for funnel, post conversion, unavailable demand, handoff, and response time.
+
+See `docs/competitor-research-mvp.md` for the detailed demo scenario and operator guide.

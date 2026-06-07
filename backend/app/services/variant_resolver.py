@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.domain.models import ProductVariant
+from app.domain.models import ProductVariant, UnavailableDemand
 from app.repositories.product_repository import ProductRepository
 from app.repositories.variant_repository import VariantRepository
 from app.schemas.fashion import VariantAlternative, VariantResolverResult
@@ -106,13 +106,18 @@ class VariantResolver:
         ):
             mismatch.append("insufficient_stock")
 
+        unique_mismatch = list(dict.fromkeys(mismatch))
+        if shop_id is not None and {"color_unavailable", "size_unavailable", "variant_combination_unavailable", "insufficient_stock"}.intersection(unique_mismatch):
+            self.db.add(UnavailableDemand(shop_id=shop_id, product_id=product.id, requested_color=normalized_color, requested_size=normalized_size, quantity=requested, lost_revenue_estimate=product.base_price * requested))
+            self.db.commit()
+
         return VariantResolverResult(
             normalized_color=normalized_color,
             normalized_size=normalized_size,
             color_confidence=color.confidence,
             size_confidence=size.confidence,
             confidence=0.0 if mismatch else 0.5,
-            mismatch_reasons=list(dict.fromkeys(mismatch)),
+            mismatch_reasons=unique_mismatch,
             available_alternatives=self._alternatives(variants, normalized_color, normalized_size, requested),
         )
 

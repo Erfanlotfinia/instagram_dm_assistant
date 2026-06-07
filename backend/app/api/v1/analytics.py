@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_shop_membership
 from app.db.session import get_db_session
 from app.domain.models import ShopMember, User
-from app.schemas.analytics import FunnelAnalytics, HandoffAnalyticsRow, PostPerformanceRow, StockDemandRow
+from app.schemas.analytics import FunnelAnalytics, HandoffAnalyticsRow, PostPerformanceRow, ResponseTimeAnalytics, StockDemandRow, UnavailableDemandRow
 from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/shops/{shop_id}/analytics", tags=["analytics"])
@@ -32,3 +32,13 @@ def stock_demand(shop_id: UUID, current_user: Annotated[User, Depends(get_curren
 @router.get("/handoff", response_model=list[HandoffAnalyticsRow])
 def handoff(shop_id: UUID, current_user: Annotated[User, Depends(get_current_user)], _membership: Annotated[ShopMember, Depends(get_shop_membership)], db: Annotated[Session, Depends(get_db_session)], start: datetime | None = None, end: datetime | None = None) -> list[HandoffAnalyticsRow]:
     return AnalyticsService(db).handoff(shop_id, current_user, start, end)
+
+
+@router.get("/unavailable-demand", response_model=list[UnavailableDemandRow])
+def unavailable_demand(shop_id: UUID, current_user: Annotated[User, Depends(get_current_user)], _membership: Annotated[ShopMember, Depends(get_shop_membership)], db: Annotated[Session, Depends(get_db_session)], start: datetime | None = None, end: datetime | None = None) -> list[UnavailableDemandRow]:
+    return AnalyticsService(db).unavailable_demand(shop_id, current_user, start, end)
+
+
+@router.get("/response-time", response_model=ResponseTimeAnalytics)
+def response_time(shop_id: UUID, current_user: Annotated[User, Depends(get_current_user)], _membership: Annotated[ShopMember, Depends(get_shop_membership)], db: Annotated[Session, Depends(get_db_session)], start: datetime | None = None, end: datetime | None = None) -> ResponseTimeAnalytics:
+    return AnalyticsService(db).response_time(shop_id, current_user, start, end)

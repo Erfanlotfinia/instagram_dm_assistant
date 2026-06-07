@@ -16,6 +16,9 @@ class InstagramProductMapCreate(BaseModel):
     is_active: bool = True
     display_order: int = 0
     admin_label: str | None = Field(default=None, max_length=255)
+    visual_hint: str | None = Field(default=None, max_length=255)
+    caption_hint: str | None = Field(default=None, max_length=255)
+    is_primary: bool = False
 
 
 class InstagramProductMapUpdate(BaseModel):
@@ -26,6 +29,9 @@ class InstagramProductMapUpdate(BaseModel):
     is_active: bool | None = None
     display_order: int | None = None
     admin_label: str | None = Field(default=None, max_length=255)
+    visual_hint: str | None = Field(default=None, max_length=255)
+    caption_hint: str | None = Field(default=None, max_length=255)
+    is_primary: bool = False
 
 
 class InstagramProductMapRead(BaseModel):
@@ -41,6 +47,9 @@ class InstagramProductMapRead(BaseModel):
     is_active: bool
     display_order: int
     admin_label: str | None
+    visual_hint: str | None
+    caption_hint: str | None
+    is_primary: bool
     created_at: datetime
     updated_at: datetime
 
@@ -65,6 +74,9 @@ class ProductCandidate(BaseModel):
     map_id: UUID
     confidence_source: ConfidenceSource
     admin_label: str | None = None
+    visual_hint: str | None = None
+    caption_hint: str | None = None
+    is_primary: bool = False
 
 
 class ResolveInstagramProductResponse(BaseModel):

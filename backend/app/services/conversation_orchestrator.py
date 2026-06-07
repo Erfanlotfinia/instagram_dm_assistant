@@ -15,7 +15,7 @@ from app.domain.enums import (
     AgentWorkflowState,
     ConversationState,
 )
-from app.domain.models import AgentAction, AgentDecisionAudit, AgentRun, Conversation, Message, Product, ProductVariant
+from app.domain.models import AgentAction, AgentDecisionAudit, AgentRun, Conversation, Message, Order, Product, ProductVariant
 from app.integrations.openai_client import LiveOpenAIChatClient, OpenAIChatClient
 from app.integrations.qdrant_client import LiveQdrantClient, QdrantClient
 from app.repositories.agent_action_repository import AgentActionRepository
@@ -25,8 +25,9 @@ from app.repositories.conversation_slots_repository import ConversationSlotsRepo
 from app.repositories.message_repository import MessageRepository
 from app.repositories.product_repository import ProductRepository
 from app.repositories.variant_repository import VariantRepository
-from app.schemas.agent import AgentExtractionInput, AgentExtractionResult
+from app.schemas.agent import AgentExtractionInput, AgentExtractionResult, ExtractionConfidence
 from app.schemas.instagram_product_map import ResolveInstagramProductRequest
+from app.services.agent_settings_live import resolve_live_agent_settings
 from app.services.handoff_service import evaluate_handoff
 from app.services.instagram_product_resolver import InstagramProductResolver
 from app.services.instagram_send_service import InstagramSendService
@@ -148,13 +149,14 @@ class ConversationOrchestrator:
         if variant is not None:
             inventory_available = check_inventory(variant, slots.quantity)
 
+        live_agent_settings = resolve_live_agent_settings(conversation.shop)
         handoff = evaluate_handoff(
             extraction,
             failure_count=conversation.agent_failure_count,
             settings=self.settings,
             variant_mismatch=bool(variant_result and variant_result.mismatch_reasons),
             order_total=None,
-            shop_settings=conversation.shop.agent_settings if conversation.shop is not None else {},
+            shop_settings=live_agent_settings,
         )
 
         state_decision = decide_next_state(
@@ -200,8 +202,14 @@ class ConversationOrchestrator:
             )
             if active_order is not None:
                 CREATED_ORDERS.inc()
-                high_value_threshold = float((conversation.shop.agent_settings if conversation.shop else {}).get("high_value_order_threshold", 500.0))
-                if float(active_order.total_amount) >= high_value_threshold and not conversation.handoff_required:
+                high_value_threshold = float(live_agent_settings.get("high_value_order_threshold", 500.0))
+                preview_high_value_orders = live_agent_settings.get("preview_required_for_high_value_order", True)
+                if (
+                    preview_high_value_orders
+                    and high_value_threshold > 0
+                    and float(active_order.total_amount) >= high_value_threshold
+                    and not conversation.handoff_required
+                ):
                     conversation.handoff_required = True
                     conversation.handoff_reason = "High-value order requires approval"
                     conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
@@ -278,7 +286,7 @@ class ConversationOrchestrator:
             confidence=extraction.confidence.slots,
         )
 
-        preview_required, preview_reason = self._preview_decision(conversation, extraction.confidence.intent, handoff.required)
+        preview_required, preview_reason = self._preview_decision(conversation, extraction.confidence, handoff.required)
         conversation.preview_required = preview_required
         conversation.preview_reason = preview_reason
         conversation.suggested_outbound = reply if preview_required else None
@@ -425,20 +433,52 @@ class ConversationOrchestrator:
         return self.agent_runs.create(run)
 
 
-    def _preview_decision(self, conversation: Conversation, confidence: float, handoff_required: bool) -> tuple[bool, str | None]:
-        settings = conversation.shop.agent_settings if conversation.shop is not None else {}
+    def _preview_decision(
+        self,
+        conversation: Conversation,
+        confidence: ExtractionConfidence,
+        handoff_required: bool,
+    ) -> tuple[bool, str | None]:
+        settings = resolve_live_agent_settings(conversation.shop)
         if not settings.get("auto_send_enabled", True):
             return True, "auto_send_disabled"
         if handoff_required:
             return True, "handoff_required"
-        threshold = float(settings.get("auto_send_confidence_threshold", 0.85))
-        if settings.get("preview_required_for_low_confidence", True) and confidence < threshold:
-            return True, f"low_auto_send_confidence:{confidence:.2f}"
+
+        if settings.get("preview_required_for_low_confidence", True):
+            studio_settings = (
+                getattr(conversation.shop, "agent_studio_settings", None)
+                if conversation.shop is not None
+                else None
+            )
+            if studio_settings is not None:
+                low_confidence_checks = (
+                    ("intent", confidence.intent, settings.get("intent_confidence_threshold", 0.75)),
+                    ("product", confidence.product, settings.get("product_confidence_threshold", 0.80)),
+                    ("variant", confidence.slots, settings.get("variant_confidence_threshold", 0.85)),
+                    ("address", confidence.address, settings.get("address_confidence_threshold", 0.80)),
+                )
+                for label, value, threshold in low_confidence_checks:
+                    if float(value) < float(threshold):
+                        return True, f"low_{label}_confidence:{float(value):.2f}"
+            else:
+                threshold = float(settings.get("auto_send_confidence_threshold", 0.85))
+                if confidence.intent < threshold:
+                    return True, f"low_auto_send_confidence:{confidence.intent:.2f}"
+
+        if settings.get("preview_required_for_first_order", False) and self._is_first_customer_order(conversation):
+            return True, "first_order_preview"
         if settings.get("preview_required_for_first_24h", True):
             from datetime import UTC, datetime, timedelta
             if conversation.created_at and conversation.created_at >= datetime.now(UTC) - timedelta(hours=24):
                 return True, "first_24h_preview"
         return False, None
+
+    def _is_first_customer_order(self, conversation: Conversation) -> bool:
+        if conversation.customer_id is None:
+            return True
+        order_count = self.db.query(Order).filter(Order.customer_id == conversation.customer_id).count()
+        return order_count <= 1
 
     def _audit_decision(
         self,

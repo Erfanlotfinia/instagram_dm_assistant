@@ -51,3 +51,40 @@ class NormalizeSizeRequest(BaseModel):
     raw_size: str | None = None
     category: str | None = None
     size_chart: dict | None = None
+
+class ColorAliasCreate(BaseModel):
+    raw_value: str
+    normalized_value: str
+    language: str = "und"
+
+
+class ColorAliasRead(ColorAliasCreate):
+    id: UUID
+    shop_id: UUID | None = None
+    is_active: bool
+    model_config = {"from_attributes": True}
+
+
+class SizeAliasCreate(BaseModel):
+    raw_value: str
+    normalized_value: str
+    category: str | None = None
+
+
+class SizeAliasRead(SizeAliasCreate):
+    id: UUID
+    shop_id: UUID | None = None
+    is_active: bool
+    model_config = {"from_attributes": True}
+
+
+class SizeChartCreate(BaseModel):
+    product_id: UUID | None = None
+    category: str
+    chart_json: dict = Field(default_factory=dict)
+
+
+class SizeChartRead(SizeChartCreate):
+    id: UUID
+    shop_id: UUID
+    model_config = {"from_attributes": True}
