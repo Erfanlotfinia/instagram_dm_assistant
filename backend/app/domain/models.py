@@ -75,6 +75,7 @@ class Shop(Base, TimestampMixin):
     )
     default_currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     agent_settings: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    onboarding_flags: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
     members: Mapped[list[ShopMember]] = relationship(back_populates="shop", cascade="all, delete-orphan")
     instagram_accounts: Mapped[list[InstagramAccount]] = relationship(
@@ -193,6 +194,10 @@ class Conversation(Base, TimestampMixin):
     )
     agent_failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     agent_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_simulation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    suggested_outbound: Mapped[str | None] = mapped_column(Text, nullable=True)
+    preview_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    preview_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     shop: Mapped[Shop] = relationship(back_populates="conversations")
     instagram_account: Mapped[InstagramAccount] = relationship(back_populates="conversations")
@@ -350,8 +355,12 @@ class ConversationSlots(Base):
     )
     instagram_post_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     color: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    normalized_color: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     size: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    normalized_size: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    product_candidates: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    variant_alternatives: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     customer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     city: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -381,6 +390,8 @@ class Product(Base, TimestampMixin):
     base_price: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     main_image_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    size_chart: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
     shop: Mapped[Shop] = relationship(back_populates="products")
     variants: Mapped[list[ProductVariant]] = relationship(
@@ -400,7 +411,9 @@ class ProductVariant(Base, TimestampMixin):
         PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
     )
     color: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    normalized_color: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     size: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    normalized_size: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     sku: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     price: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False)
     stock_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -439,6 +452,8 @@ class InstagramProductMap(Base, TimestampMixin):
         Enum(ConfidenceSource, name="confidence_source"), nullable=False, default=ConfidenceSource.MANUAL
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    admin_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     shop: Mapped[Shop] = relationship(back_populates="instagram_product_maps")
     instagram_account: Mapped[InstagramAccount] = relationship()
@@ -511,6 +526,9 @@ class Order(Base, TimestampMixin):
     address: Mapped[str] = mapped_column(Text, nullable=False)
     postal_code: Mapped[str] = mapped_column(String(32), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    risk_flags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    approval_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    payment_callback_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 
     shop: Mapped[Shop] = relationship(back_populates="orders")
@@ -573,6 +591,7 @@ class Payment(Base, TimestampMixin):
     payment_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     provider_reference: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    callback_processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     order: Mapped[Order] = relationship(back_populates="payments")
 
@@ -599,6 +618,41 @@ class Shipment(Base, TimestampMixin):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     order: Mapped[Order] = relationship(back_populates="shipments")
+
+
+class AgentDecisionAudit(Base):
+    __tablename__ = "agent_decision_audits"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    conversation_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    message_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True)
+    input_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extracted_intent: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    extracted_slots: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    product_candidates: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    chosen_product_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
+    variant_resolver_result: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    inventory_result: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    next_state: Mapped[str] = mapped_column(String(128), nullable=False)
+    outbound_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    decision_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class FailedJob(Base):
+    __tablename__ = "failed_jobs"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    queue_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    job_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    resolved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
 
 class AdminAuditLog(Base):

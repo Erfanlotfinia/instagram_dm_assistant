@@ -12,6 +12,7 @@ from app.schemas.instagram_product_map import (
     InstagramProductMapRead,
     InstagramProductMapUpdate,
     ResolveInstagramProductRequest,
+    ProductCandidate,
     ResolveInstagramProductResponse,
 )
 from app.schemas.product import ProductRead
@@ -53,6 +54,8 @@ class InstagramProductResolver:
             product_id=payload.product_id,
             confidence_source=payload.confidence_source,
             is_active=payload.is_active,
+            display_order=payload.display_order,
+            admin_label=payload.admin_label,
         )
         created = self.maps.create(mapping)
         self.maps.commit()
@@ -96,20 +99,39 @@ class InstagramProductResolver:
         shop_id: UUID,
         payload: ResolveInstagramProductRequest,
     ) -> ResolveInstagramProductResponse:
-        mapping: InstagramProductMap | None = None
+        mappings: list[InstagramProductMap] = []
         if payload.instagram_media_id:
-            mapping = self.maps.find_active_by_media_id(shop_id, payload.instagram_media_id)
-        if mapping is None and payload.instagram_post_url:
+            mappings = self.maps.list_active_by_media_id(shop_id, payload.instagram_media_id)
+        if not mappings and payload.instagram_post_url:
             normalized_url = normalize_instagram_post_url(payload.instagram_post_url)
-            mapping = self.maps.find_active_by_post_url(shop_id, normalized_url)
+            mappings = self.maps.list_active_by_post_url(shop_id, normalized_url)
 
-        if mapping is None or mapping.product is None:
+        mappings = [m for m in mappings if m.product is not None]
+        if not mappings:
             return ResolveInstagramProductResponse(product=None)
 
+        candidates = [
+            ProductCandidate(
+                product=ProductRead.model_validate(mapping.product),
+                map_id=mapping.id,
+                confidence_source=mapping.confidence_source,
+                admin_label=mapping.admin_label,
+            )
+            for mapping in mappings
+        ]
+        if len(candidates) > 1:
+            return ResolveInstagramProductResponse(
+                product=None,
+                candidates=candidates,
+                requires_product_selection=True,
+            )
+        mapping = mappings[0]
         return ResolveInstagramProductResponse(
             product=ProductRead.model_validate(mapping.product),
             map_id=mapping.id,
             confidence_source=mapping.confidence_source,
+            candidates=candidates,
+            requires_product_selection=False,
         )
 
     def _get_map_or_404(self, shop_id: UUID, map_id: UUID) -> InstagramProductMap:

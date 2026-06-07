@@ -328,3 +328,32 @@ curl http://localhost:8000/health
 curl http://localhost:8000/api/v1/ready
 curl http://localhost:8000/api/v1/metrics
 ```
+
+
+## Competitive positioning
+
+This product is not a generic social-media chatbot. It is a specialized Instagram Fashion Order Agent for online fashion shops. The differentiation is deterministic backend control around Instagram post-to-product mapping, Persian/English color normalization, size normalization, SKU/variant resolution, inventory validation, explicit order confirmation, payment callback safety, human handoff, operator preview, decision audit trails, and conversion analytics.
+
+### Demo: Persian fashion DM order
+
+Customer sends: `این کارو مشکی سایز L می‌خوام`
+
+Expected flow:
+
+1. Instagram post maps to product, or a multi-product post asks the customer which item they mean.
+2. Color `مشکی` normalizes to `black`; size `L` normalizes to `L`.
+3. Backend `VariantResolver` resolves SKU and stock; the LLM only extracts raw slots.
+4. Missing customer information is requested, then a draft order is created.
+5. Customer explicitly confirms; only then is payment initiated.
+6. Idempotent payment callback marks the order paid once and inventory is not reduced/reserved twice.
+7. Admin sees current state, slots, selected product/variant, alternatives, confidence, suggested reply, and full audit trail.
+
+### Local development
+
+```bash
+docker compose up -d postgres redis rabbitmq qdrant
+cd backend && alembic upgrade head && uvicorn app.main:create_app --factory --reload
+cd frontend && npm install && npm run dev
+```
+
+Key admin pages: `/onboarding`, `/simulator`, `/analytics`, `/instagram-mapping`, `/conversations`, `/orders`.

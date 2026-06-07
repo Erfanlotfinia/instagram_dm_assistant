@@ -27,6 +27,7 @@ class ExtractionConfidence(BaseModel):
     intent: float = 0.0
     slots: float = 0.0
     product: float = 0.0
+    address: float = 1.0
 
 
 class AgentExtractionResult(BaseModel):
@@ -59,7 +60,10 @@ class ConversationSlotsRead(BaseModel):
     product_variant_id: UUID | None
     instagram_post_url: str | None
     color: str | None
+    normalized_color: str | None = None
     size: str | None
+    normalized_size: str | None = None
+    variant_alternatives: list[dict[str, Any]] = Field(default_factory=list)
     quantity: int | None
     customer_name: str | None
     phone: str | None

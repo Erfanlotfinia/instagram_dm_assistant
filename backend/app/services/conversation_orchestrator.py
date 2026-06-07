@@ -15,7 +15,7 @@ from app.domain.enums import (
     AgentWorkflowState,
     ConversationState,
 )
-from app.domain.models import AgentAction, AgentRun, Conversation, Message, Product, ProductVariant
+from app.domain.models import AgentAction, AgentDecisionAudit, AgentRun, Conversation, Message, Product, ProductVariant
 from app.integrations.openai_client import LiveOpenAIChatClient, OpenAIChatClient
 from app.integrations.qdrant_client import LiveQdrantClient, QdrantClient
 from app.repositories.agent_action_repository import AgentActionRepository
@@ -35,6 +35,7 @@ from app.services.order_service import OrderService
 from app.services.payment_service import PaymentService
 from app.services.product_semantic_search_service import ProductSemanticSearchService
 from app.services.response_generation_service import ReplyFacts, ResponseGenerationService
+from app.services.variant_resolver import VariantResolver
 from app.services.slot_merge_service import compute_missing_fields, merge_extracted_slots, slots_to_dict
 from app.services.state_machine_service import (
     check_inventory,
@@ -66,6 +67,7 @@ class ConversationOrchestrator:
         self.products = ProductRepository(db)
         self.variants = VariantRepository(db)
         self.product_resolver = InstagramProductResolver(db)
+        self.variant_resolver = VariantResolver(db)
         self.send_service = InstagramSendService(db, self.settings)
         self.response_service = ResponseGenerationService()
         self.order_service = OrderService(db, settings=self.settings)
@@ -133,7 +135,10 @@ class ConversationOrchestrator:
         if product is not None:
             slots.product_id = product.id
 
-        variant, variant_match = self._resolve_variant(product, slots)
+        variant, variant_match, variant_result = self._resolve_variant(product, slots)
+        slots.normalized_color = variant_result.normalized_color if variant_result else slots.normalized_color
+        slots.normalized_size = variant_result.normalized_size if variant_result else slots.normalized_size
+        slots.variant_alternatives = [a.model_dump(mode="json") for a in (variant_result.available_alternatives if variant_result else [])]
         if variant is not None:
             slots.product_variant_id = variant.id
         elif variant_match and (variant_match.invalid_color or variant_match.invalid_size):
@@ -147,6 +152,9 @@ class ConversationOrchestrator:
             extraction,
             failure_count=conversation.agent_failure_count,
             settings=self.settings,
+            variant_mismatch=bool(variant_result and variant_result.mismatch_reasons),
+            order_total=None,
+            shop_settings=conversation.shop.agent_settings if conversation.shop is not None else {},
         )
 
         state_decision = decide_next_state(
@@ -192,6 +200,15 @@ class ConversationOrchestrator:
             )
             if active_order is not None:
                 CREATED_ORDERS.inc()
+                high_value_threshold = float((conversation.shop.agent_settings if conversation.shop else {}).get("high_value_order_threshold", 500.0))
+                if float(active_order.total_amount) >= high_value_threshold and not conversation.handoff_required:
+                    conversation.handoff_required = True
+                    conversation.handoff_reason = "High-value order requires approval"
+                    conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
+                    conversation.state = ConversationState.PENDING_HANDOFF
+                    active_order.risk_flags = list({*(active_order.risk_flags or []), "high_value_order"})
+                    active_order.approval_source = "operator_required"
+                    HANDOFF_COUNT.inc()
             if (
                 active_order is not None
                 and conversation.workflow_state == AgentWorkflowState.WAITING_FOR_PAYMENT
@@ -261,13 +278,38 @@ class ConversationOrchestrator:
             confidence=extraction.confidence.slots,
         )
 
-        outbound = self.send_service.send_text_message(conversation_id, reply, commit=False)
-        self._log_action(
-            conversation_id,
-            "send_outbound",
-            {"reply": reply},
-            {"message_id": str(outbound.id)},
-            confidence=None,
+        preview_required, preview_reason = self._preview_decision(conversation, extraction.confidence.intent, handoff.required)
+        conversation.preview_required = preview_required
+        conversation.preview_reason = preview_reason
+        conversation.suggested_outbound = reply if preview_required else None
+        if preview_required or conversation.is_simulation:
+            self._log_action(
+                conversation_id,
+                "preview_outbound",
+                {"reply": reply},
+                {"preview_required": preview_required, "reason": preview_reason, "simulation": conversation.is_simulation},
+                confidence=extraction.confidence.intent,
+            )
+        else:
+            outbound = self.send_service.send_text_message(conversation_id, reply, commit=False)
+            self._log_action(
+                conversation_id,
+                "send_outbound",
+                {"reply": reply},
+                {"message_id": str(outbound.id)},
+                confidence=None,
+            )
+
+        self._audit_decision(
+            conversation=conversation,
+            message=message,
+            extraction=extraction,
+            slots=slots,
+            product=product,
+            variant_result=variant_result,
+            inventory_available=inventory_available,
+            reply=reply,
+            reason=handoff.reason or state_decision.next_state.value,
         )
 
         if not extraction_error and not handoff.required:
@@ -297,8 +339,12 @@ class ConversationOrchestrator:
             instagram_media_id=media_id,
         )
         resolved = self.product_resolver.resolve_internal(conversation.shop_id, request)
+        if resolved.requires_product_selection:
+            slots.product_candidates = [candidate.model_dump(mode="json") for candidate in resolved.candidates]
+            return None, "instagram_map_multi_product"
         if resolved.product is not None:
             product = self.products.get_for_shop(conversation.shop_id, resolved.product.id)
+            slots.product_candidates = [candidate.model_dump(mode="json") for candidate in resolved.candidates]
             return product, "instagram_map"
 
         query = message_text or shared_post_url or ""
@@ -317,10 +363,17 @@ class ConversationOrchestrator:
         slots,
     ):
         if product is None:
-            return None, None
+            return None, None, None
+        result = self.variant_resolver.resolve(
+            product_id=product.id,
+            raw_color=slots.color,
+            raw_size=slots.size,
+            quantity=slots.quantity or 1,
+        )
         variants = self.variants.list_for_product(product.id)
-        variant_match = match_variant(variants, slots.color, slots.size)
-        return variant_match.variant, variant_match
+        variant_match = match_variant(variants, result.normalized_color or slots.color, result.normalized_size or slots.size)
+        variant = self.variants.get_by_id(result.variant_id) if result.variant_id else variant_match.variant
+        return variant, variant_match, result
 
     def _product_context(self, product: Product | None) -> tuple[dict[str, Any] | None, list[str], list[str]]:
         if product is None:
@@ -369,6 +422,52 @@ class ConversationOrchestrator:
         if error_message:
             FAILED_AGENT_RUNS.inc()
         return self.agent_runs.create(run)
+
+
+    def _preview_decision(self, conversation: Conversation, confidence: float, handoff_required: bool) -> tuple[bool, str | None]:
+        settings = conversation.shop.agent_settings if conversation.shop is not None else {}
+        if not settings.get("auto_send_enabled", True):
+            return True, "auto_send_disabled"
+        if handoff_required:
+            return True, "handoff_required"
+        threshold = float(settings.get("auto_send_confidence_threshold", 0.85))
+        if settings.get("preview_required_for_low_confidence", True) and confidence < threshold:
+            return True, f"low_auto_send_confidence:{confidence:.2f}"
+        if settings.get("preview_required_for_first_24h", True):
+            from datetime import UTC, datetime, timedelta
+            if conversation.created_at and conversation.created_at >= datetime.now(UTC) - timedelta(hours=24):
+                return True, "first_24h_preview"
+        return False, None
+
+    def _audit_decision(
+        self,
+        *,
+        conversation: Conversation,
+        message: Message,
+        extraction: AgentExtractionResult,
+        slots,
+        product: Product | None,
+        variant_result,
+        inventory_available: bool | None,
+        reply: str,
+        reason: str,
+    ) -> None:
+        self.db.add(AgentDecisionAudit(
+            shop_id=conversation.shop_id,
+            conversation_id=conversation.id,
+            message_id=message.id,
+            input_message=message.text,
+            extracted_intent=extraction.intent.value,
+            extracted_slots=slots_to_dict(slots),
+            product_candidates=getattr(slots, "product_candidates", []) or [],
+            chosen_product_id=product.id if product is not None else None,
+            variant_resolver_result=variant_result.model_dump(mode="json") if variant_result else {},
+            inventory_result={"available": inventory_available},
+            next_state=conversation.workflow_state.value,
+            outbound_message=reply,
+            confidence=extraction.confidence.intent,
+            decision_reason=reason,
+        ))
 
     def _log_action(
         self,

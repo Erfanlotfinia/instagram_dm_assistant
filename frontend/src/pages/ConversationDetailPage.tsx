@@ -210,6 +210,13 @@ export function ConversationDetailPage() {
           </p>
         </div>
 
+        {conversation.preview_required ? (
+          <div className="empty-state">
+            <strong>Suggested reply requires approval:</strong> {conversation.preview_reason ?? 'preview required'}
+            <p>{conversation.suggested_outbound}</p>
+          </div>
+        ) : null}
+
         <div className="button-row">
           <button
             className="button button--primary"
@@ -316,8 +323,9 @@ export function ConversationDetailPage() {
           <div className="detail-grid">
             <p>Product: {conversation.slots.product_id ?? '—'}</p>
             <p>Variant: {conversation.slots.product_variant_id ?? '—'}</p>
+            <p>Selected variant alternatives: {conversation.slots.variant_alternatives?.length ?? 0}</p>
             <p>
-              Color / Size / Qty: {conversation.slots.color ?? '—'} / {conversation.slots.size ?? '—'}{' '}
+              Color / Size / Qty: {conversation.slots.color ?? '—'} ({conversation.slots.normalized_color ?? '—'}) / {conversation.slots.size ?? '—'} ({conversation.slots.normalized_size ?? '—'}){' '}
               / {conversation.slots.quantity ?? '—'}
             </p>
             <p>Missing: {conversation.slots.missing_fields.join(', ') || 'none'}</p>
@@ -335,7 +343,18 @@ export function ConversationDetailPage() {
       </section>
 
       <section className="dashboard-card dashboard-card--wide">
-        <h2>Agent actions</h2>
+        <h2>Suggested reply approval</h2>
+        <form className="inline-form" onSubmit={messageForm.handleSubmit((values) => sendMessageMutation.mutate(values))}>
+          <label className="form-field">
+            <span>Edit before sending</span>
+            <textarea rows={4} {...messageForm.register('text')} defaultValue={conversation.suggested_outbound ?? ''} />
+          </label>
+          <button className="button button--primary" type="submit">Approve / send edited reply</button>
+        </form>
+      </section>
+
+      <section className="dashboard-card dashboard-card--wide">
+        <h2>Full audit trail</h2>
         <ul className="simple-list">
           {(conversation.agent_actions ?? []).map((action) => (
             <li key={action.id}>

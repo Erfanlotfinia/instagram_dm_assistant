@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -290,6 +291,9 @@ class OrderService:
         order = self.orders.get_by_id(order_id)
         if order is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+        if order.status == OrderStatus.PAID and order.payment_status == OrderPaymentStatus.PAID:
+            logger.info("Duplicate mark paid ignored order=%s", order.id)
+            return order
         if order.status not in {OrderStatus.WAITING_FOR_PAYMENT, OrderStatus.CONFIRMED}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -301,6 +305,7 @@ class OrderService:
         order.expires_at = None
         order.shipping_status = OrderShippingStatus.PREPARING
         self.orders.commit()
+        order.payment_callback_status = payment.status.value if payment else "manual_paid"
         logger.info("Order marked paid order=%s payment=%s", order.id, payment.id if payment else None)
         return order
 
@@ -337,6 +342,10 @@ class OrderService:
                 detail=f"Insufficient available stock: {available} available, {quantity} requested",
             )
 
+        existing = self.db.scalar(select(InventoryMovement).where(InventoryMovement.product_variant_id == variant_id, InventoryMovement.movement_type == InventoryMovementType.RESERVE, InventoryMovement.reference_type == "order", InventoryMovement.reference_id == str(order_id)))
+        if existing is not None:
+            logger.info("Duplicate inventory reservation ignored order=%s variant=%s", order_id, variant_id)
+            return
         locked.reserved_quantity += quantity
         movement = InventoryMovement(
             product_variant_id=locked.id,

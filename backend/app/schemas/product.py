@@ -14,6 +14,8 @@ class ProductCreate(BaseModel):
     base_price: Decimal = Field(gt=Decimal("0"))
     currency: str = Field(default="USD", min_length=3, max_length=3)
     main_image_url: str | None = Field(default=None, max_length=2048)
+    category: str | None = Field(default=None, max_length=128)
+    size_chart: dict = Field(default_factory=dict)
 
     @field_validator("currency")
     @classmethod
@@ -28,6 +30,8 @@ class ProductUpdate(BaseModel):
     base_price: Decimal | None = Field(default=None, gt=Decimal("0"))
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     main_image_url: str | None = Field(default=None, max_length=2048)
+    category: str | None = Field(default=None, max_length=128)
+    size_chart: dict = Field(default_factory=dict)
 
     @field_validator("currency")
     @classmethod
@@ -46,5 +50,7 @@ class ProductRead(BaseModel):
     base_price: Decimal
     currency: str
     main_image_url: str | None
+    category: str | None
+    size_chart: dict
     created_at: datetime
     updated_at: datetime

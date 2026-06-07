@@ -73,6 +73,9 @@ class ConversationRead(BaseModel):
     handoff_reason: str | None
     workflow_state: AgentWorkflowState
     agent_paused: bool
+    suggested_outbound: str | None = None
+    preview_required: bool = False
+    preview_reason: str | None = None
     last_message_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -114,6 +117,9 @@ class ConversationHandoffResponse(BaseModel):
     handoff_required: bool
     handoff_reason: str | None
     agent_paused: bool
+    suggested_outbound: str | None = None
+    preview_required: bool = False
+    preview_reason: str | None = None
     assigned_operator_id: UUID | None
 
 

@@ -168,6 +168,8 @@ export function OrdersPage() {
                 <th>Order</th>
                 <th>Customer</th>
                 <th>Status</th>
+                <th>Risk</th>
+                <th>Approval</th>
                 <th>Payment</th>
                 <th>Shipping</th>
                 <th>Total</th>
@@ -187,7 +189,9 @@ export function OrdersPage() {
                   </td>
                   <td>{order.customer_name}</td>
                   <td>{order.status}</td>
-                  <td>{order.payment_status}</td>
+                  <td>{order.risk_flags?.length ? order.risk_flags.join(', ') : '—'}</td>
+                  <td>{order.approval_source ?? 'auto-approved'}</td>
+                  <td>{order.payment_status}{order.payment_callback_status ? ` · ${order.payment_callback_status}` : ''}</td>
                   <td>{order.shipping_status}</td>
                   <td>
                     {order.total_amount} {order.currency}

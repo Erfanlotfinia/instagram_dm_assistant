@@ -75,6 +75,7 @@ class PaymentService:
                         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
                     return order
             payment.status = PaymentRecordStatus.PAID
+            payment.callback_processed_at = datetime.now(UTC)
             order = self.order_service.mark_paid_internal(payment.order_id, payment=payment)
             from app.core.metrics import PAID_ORDERS
 
@@ -85,6 +86,7 @@ class PaymentService:
 
         if callback_status in {PaymentRecordStatus.FAILED, PaymentRecordStatus.CANCELLED}:
             payment.status = callback_status
+            payment.callback_processed_at = datetime.now(UTC)
             order = self.order_service.get_order_internal(payment.order_id)
             if order:
                 order.payment_status = OrderPaymentStatus.FAILED

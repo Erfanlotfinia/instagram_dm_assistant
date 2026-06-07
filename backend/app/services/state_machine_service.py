@@ -5,6 +5,7 @@ from uuid import UUID
 
 from app.domain.enums import AgentIntent, AgentWorkflowState
 from app.domain.models import ConversationSlots, ProductVariant
+from app.services.fashion_normalization import normalize_color, normalize_size
 from app.services.slot_merge_service import compute_missing_fields, normalize_variant_value
 
 
@@ -27,19 +28,19 @@ def match_variant(
     color: str | None,
     size: str | None,
 ) -> VariantMatchResult:
-    normalized_color = normalize_variant_value(color)
-    normalized_size = normalize_variant_value(size)
+    normalized_color = normalize_color(color).normalized or normalize_variant_value(color)
+    normalized_size = normalize_size(size).normalized or normalize_variant_value(size)
 
     if not normalized_color and not normalized_size:
         return VariantMatchResult(variant=None)
 
     available_colors = {
-        normalize_variant_value(variant.color)
+        normalize_color(variant.normalized_color or variant.color).normalized
         for variant in variants
         if variant.is_active and variant.color
     }
     available_sizes = {
-        normalize_variant_value(variant.size)
+        normalize_size(variant.normalized_size or variant.size).normalized
         for variant in variants
         if variant.is_active and variant.size
     }
@@ -50,8 +51,8 @@ def match_variant(
     for variant in variants:
         if not variant.is_active:
             continue
-        variant_color = normalize_variant_value(variant.color)
-        variant_size = normalize_variant_value(variant.size)
+        variant_color = normalize_color(variant.normalized_color or variant.color).normalized
+        variant_size = normalize_size(variant.normalized_size or variant.size).normalized
         color_ok = normalized_color is None or variant_color == normalized_color
         size_ok = normalized_size is None or variant_size == normalized_size
         if color_ok and size_ok and (normalized_color or normalized_size):

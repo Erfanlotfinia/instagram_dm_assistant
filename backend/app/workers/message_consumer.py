@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.db.session import SessionLocal
 from app.domain.enums import WebhookProcessingStatus
+from app.domain.models import FailedJob
 from app.integrations.redis_lock import ConversationLockService
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
@@ -89,8 +90,13 @@ def handle_delivery(body: bytes) -> bool:
     db = SessionLocal()
     try:
         return MessageConsumer(db).process_job(payload)
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        try:
+            db.add(FailedJob(queue_name=get_settings().rabbitmq_queue_message_received, job_type="message_received", payload=payload, error_message=str(exc), retry_count=int(payload.get("retry_count", 0) or 0), max_retries=get_settings().rabbitmq_max_retries))
+            db.commit()
+        except Exception:  # noqa: BLE001
+            db.rollback()
         logger.exception("Failed to process RabbitMQ job")
         raise
     finally:

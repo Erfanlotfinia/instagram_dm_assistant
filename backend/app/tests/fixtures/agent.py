@@ -71,6 +71,8 @@ def seed_order_flow_data(db_session, demo_shop) -> dict:
         stock_quantity=10,
         reserved_quantity=0,
         is_active=True,
+        normalized_color="black",
+        normalized_size="L",
     )
     db_session.add(variant)
     db_session.flush()
@@ -85,6 +87,7 @@ def seed_order_flow_data(db_session, demo_shop) -> dict:
         confidence_source=ConfidenceSource.MANUAL,
         is_active=True,
     )
+    demo_shop.agent_settings = {**(demo_shop.agent_settings or {}), "preview_required_for_first_24h": False, "auto_send_confidence_threshold": 0.5}
     db_session.add(mapping)
     db_session.commit()
 

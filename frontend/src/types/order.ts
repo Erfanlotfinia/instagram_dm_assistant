@@ -69,6 +69,9 @@ export type Order = {
   address: string;
   postal_code: string;
   notes: string | null;
+  risk_flags?: string[];
+  approval_source?: string | null;
+  payment_callback_status?: string | null;
   expires_at: string | null;
   created_at: string;
   updated_at: string;
