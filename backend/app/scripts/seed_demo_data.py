@@ -730,3 +730,15 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
 
     db.flush()
     logger.info("Rich demo data seeded for shop %s", shop.slug)
+
+
+def main() -> None:
+    """Entry point for `python -m app.scripts.seed_demo_data`."""
+    from app.scripts.seed import seed
+
+    seed()
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    main()

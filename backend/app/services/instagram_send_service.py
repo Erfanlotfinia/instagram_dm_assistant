@@ -19,13 +19,21 @@ class InstagramSendService:
         self.settings = settings or get_settings()
         self.messages = MessageRepository(db)
 
-    def send_text_message(self, conversation_id: UUID, text: str, *, commit: bool = True) -> Message:
+    def send_text_message(
+        self,
+        conversation_id: UUID,
+        text: str,
+        *,
+        commit: bool = True,
+        is_simulation: bool = False,
+    ) -> Message:
         message = Message(
             conversation_id=conversation_id,
             direction=MessageDirection.OUTBOUND,
             channel=MessageChannel.INSTAGRAM,
             message_type=MessageType.TEXT,
             text=text,
+            is_simulation=is_simulation,
             raw_payload={"mode": "placeholder"},
         )
 

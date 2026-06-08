@@ -82,7 +82,9 @@ class OnboardingStepStatus(BaseModel):
 
 class OnboardingStatusRead(BaseModel):
     shop_id: UUID
-    completed_steps: int
-    total_steps: int
+    completed_steps: list[str] = Field(default_factory=list)
+    missing_steps: list[str] = Field(default_factory=list)
     progress_percent: int
-    steps: list[OnboardingStepStatus]
+    next_recommended_action: str
+    steps: list[OnboardingStepStatus] = Field(default_factory=list)
+    total_steps: int = 0

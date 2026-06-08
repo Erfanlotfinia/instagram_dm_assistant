@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ShopSelector } from '../components/ShopSelector';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
@@ -27,6 +29,17 @@ const EXAMPLE_MESSAGES = [
 ] as const;
 
 function SimulationResultPanel({ result }: { result: DMSimulatorResponse }) {
+  const autoSendAllowed = Boolean(result.auto_send_decision?.auto_send_allowed);
+  const requiresPreview = Boolean(result.auto_send_decision?.requires_preview);
+  const requiresHandoff = Boolean(result.auto_send_decision?.requires_handoff);
+
+  async function copyReply() {
+    if (!result.suggested_reply) {
+      return;
+    }
+    await navigator.clipboard.writeText(result.suggested_reply);
+  }
+
   return (
     <section className="dashboard-card dashboard-card--wide">
       <div className="section-header">
@@ -37,7 +50,7 @@ function SimulationResultPanel({ result }: { result: DMSimulatorResponse }) {
       <div className="stats-grid">
         <article className="stat-card">
           <p className="stat-card__label">Intent</p>
-          <p className="stat-card__value">{result.extracted_intent ?? '—'}</p>
+          <p className="stat-card__value">{result.intent ?? '—'}</p>
         </article>
         <article className="stat-card">
           <p className="stat-card__label">Next state</p>
@@ -45,11 +58,11 @@ function SimulationResultPanel({ result }: { result: DMSimulatorResponse }) {
         </article>
         <article className="stat-card">
           <p className="stat-card__label">Preview</p>
-          <p className="stat-card__value">{result.preview_required ? 'Required' : 'No'}</p>
+          <p className="stat-card__value">{requiresPreview ? 'Required' : 'No'}</p>
         </article>
         <article className="stat-card">
           <p className="stat-card__label">Handoff</p>
-          <p className="stat-card__value">{result.handoff_required ? 'Yes' : 'No'}</p>
+          <p className="stat-card__value">{requiresHandoff || result.handoff_reason ? 'Yes' : 'No'}</p>
         </article>
       </div>
 
@@ -59,28 +72,59 @@ function SimulationResultPanel({ result }: { result: DMSimulatorResponse }) {
           <dd>{result.conversation_id}</dd>
         </div>
         <div>
-          <dt>Auto-send</dt>
-          <dd>{result.auto_send ? 'Yes' : 'No'}</dd>
+          <dt>Message ID</dt>
+          <dd>{result.message_id}</dd>
         </div>
+        <div>
+          <dt>Auto-send allowed</dt>
+          <dd>{autoSendAllowed ? 'Yes' : 'No'}</dd>
+        </div>
+        {result.handoff_reason ? (
+          <div>
+            <dt>Handoff reason</dt>
+            <dd>{result.handoff_reason}</dd>
+          </div>
+        ) : null}
       </dl>
 
       <div className="match-panel">
-        <h3>Suggested reply</h3>
+        <div className="section-header">
+          <h3>Suggested reply</h3>
+          {result.suggested_reply ? (
+            <button className="button button--ghost-dark" type="button" onClick={() => void copyReply()}>
+              Copy reply
+            </button>
+          ) : null}
+        </div>
         <p className={result.suggested_reply ? 'simulator-reply' : 'empty-state'}>
           {result.suggested_reply ?? 'No reply generated'}
         </p>
       </div>
 
+      {result.draft_order ? (
+        <div className="match-panel">
+          <h3>Draft order</h3>
+          <pre className="resolver-raw-json">{JSON.stringify(result.draft_order, null, 2)}</pre>
+        </div>
+      ) : null}
+
+      <div className="button-row">
+        <Link className="button button--ghost-dark" to={`/conversations/${result.conversation_id}`}>
+          Open simulation conversation
+        </Link>
+      </div>
+
       <details className="match-panel resolver-raw-details">
-        <summary>Resolution details (JSON)</summary>
+        <summary>Decision trace & resolution details</summary>
         <pre className="resolver-raw-json">
           {JSON.stringify(
             {
+              decision_trace: result.decision_trace,
               slots: result.extracted_slots,
               product: result.product_resolution,
               variant: result.variant_resolution,
               inventory: result.inventory_result,
-              audit: result.audit,
+              auto_send_decision: result.auto_send_decision,
             },
             null,
             2,
@@ -97,10 +141,17 @@ export function DMSimulatorPage() {
   const [instagramAccountId, setInstagramAccountId] = useState('');
   const [messageText, setMessageText] = useState<string>(EXAMPLE_MESSAGES[0].text);
   const [postUrl, setPostUrl] = useState('');
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
 
   const accountsQuery = useQuery({
     queryKey: ['instagram-accounts', selectedShopId],
     queryFn: () => apiClient.listInstagramAccounts(selectedShopId),
+    enabled: Boolean(selectedShopId),
+  });
+
+  const runsQuery = useQuery({
+    queryKey: ['simulator-runs', selectedShopId],
+    queryFn: () => apiClient.listSimulatorRuns(selectedShopId),
     enabled: Boolean(selectedShopId),
   });
 
@@ -114,9 +165,12 @@ export function DMSimulatorPage() {
     mutationFn: () =>
       apiClient.runDMSimulator(selectedShopId, {
         instagram_account_id: instagramAccountId || accountsQuery.data?.[0]?.id || '',
-        message_text: messageText,
+        message_text: messageText.trim(),
         shared_post_url: postUrl || null,
       }),
+    onSuccess: () => {
+      void runsQuery.refetch();
+    },
     onError: (error) =>
       showToast(error instanceof Error ? error.message : 'Simulation failed', 'error'),
   });
@@ -126,6 +180,8 @@ export function DMSimulatorPage() {
     onSuccess: (data) => {
       showToast(`Removed ${data.deleted_conversations} simulation conversation(s).`, 'success');
       runMutation.reset();
+      setResetDialogOpen(false);
+      void runsQuery.refetch();
     },
     onError: (error) =>
       showToast(error instanceof Error ? error.message : 'Reset failed', 'error'),
@@ -133,6 +189,10 @@ export function DMSimulatorPage() {
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    if (!messageText.trim()) {
+      showToast('Enter a customer message before running the simulator.', 'error');
+      return;
+    }
     if (!instagramAccountId && !accountsQuery.data?.length) {
       showToast('Connect an Instagram account before running the simulator.', 'error');
       return;
@@ -246,9 +306,9 @@ export function DMSimulatorPage() {
                 className="button button--ghost-dark"
                 type="button"
                 disabled={resetMutation.isPending || !selectedShopId}
-                onClick={() => resetMutation.mutate()}
+                onClick={() => setResetDialogOpen(true)}
               >
-                {resetMutation.isPending ? 'Resetting…' : 'Reset simulation data'}
+                Reset simulation data
               </button>
             </div>
           </form>
@@ -266,6 +326,48 @@ export function DMSimulatorPage() {
       </section>
 
       {runMutation.data ? <SimulationResultPanel result={runMutation.data} /> : null}
+
+      {selectedShopId && runsQuery.data && runsQuery.data.length > 0 ? (
+        <section className="dashboard-card dashboard-card--wide">
+          <h2>Recent simulation runs</h2>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th scope="col">Message</th>
+                  <th scope="col">Intent</th>
+                  <th scope="col">State</th>
+                  <th scope="col">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {runsQuery.data.map((run) => (
+                  <tr key={run.conversation_id}>
+                    <td>{run.message_preview ?? '—'}</td>
+                    <td>{run.intent ?? '—'}</td>
+                    <td>{run.next_state ?? '—'}</td>
+                    <td>
+                      <Link className="table-link" to={`/conversations/${run.conversation_id}`}>
+                        Open
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
+      <ConfirmDialog
+        open={resetDialogOpen}
+        title="Reset simulation data?"
+        message="This removes all simulation conversations, messages, and related test records for the selected shop. Real customer data is not affected."
+        confirmLabel="Reset simulation data"
+        onConfirm={() => resetMutation.mutate()}
+        onCancel={() => setResetDialogOpen(false)}
+        isLoading={resetMutation.isPending}
+      />
     </div>
   );
 }

@@ -7,10 +7,12 @@ export interface OnboardingStepStatus {
 
 export interface OnboardingStatus {
   shop_id: string;
-  completed_steps: number;
-  total_steps: number;
+  completed_steps: string[];
+  missing_steps: string[];
   progress_percent: number;
+  next_recommended_action: string;
   steps: OnboardingStepStatus[];
+  total_steps: number;
 }
 
 export interface DMSimulatorRequest {
@@ -22,18 +24,29 @@ export interface DMSimulatorRequest {
 
 export interface DMSimulatorResponse {
   conversation_id: string;
+  message_id: string;
   is_simulation: boolean;
-  extracted_intent: string | null;
+  intent: string | null;
   extracted_slots: Record<string, unknown>;
   product_resolution: Record<string, unknown>;
   variant_resolution: Record<string, unknown>;
   inventory_result: Record<string, unknown>;
   next_state: string;
   suggested_reply: string | null;
-  auto_send: boolean;
-  preview_required: boolean;
-  handoff_required: boolean;
-  audit: Array<Record<string, unknown>>;
+  auto_send_decision: Record<string, unknown>;
+  handoff_reason: string | null;
+  draft_order: Record<string, unknown> | null;
+  decision_trace: Record<string, unknown>;
+}
+
+export interface SimulatorRunSummary {
+  conversation_id: string;
+  message_id: string | null;
+  created_at: string;
+  intent: string | null;
+  next_state: string | null;
+  suggested_reply: string | null;
+  message_preview: string | null;
 }
 
 export interface FunnelAnalytics {

@@ -81,6 +81,7 @@ docker compose ps
 docker compose logs -f backend
 docker compose logs -f worker
 docker compose exec backend python -m app.scripts.seed
+docker compose exec backend python -m app.scripts.seed_demo_data
 docker compose down
 docker compose down -v
 ```
@@ -104,8 +105,19 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt
 alembic upgrade head
 python -m app.scripts.seed
+python -m app.scripts.seed_demo_data
 uvicorn app.main:app --reload
 ```
+
+### Demo credentials (local development only)
+
+After seeding:
+
+- Email: `admin@example.com`
+- Password: `changeme123`
+- Demo shop slug: `demo-shop`
+
+Use **Onboarding** and **DM Simulator** in the admin panel to verify setup before enabling auto-replies.
 
 Run backend tests:
 

@@ -3,7 +3,15 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { ShopSelector } from '../components/ShopSelector';
 import { useShop } from '../contexts/ShopContext';
+import { useToast } from '../contexts/ToastContext';
 import { queryKeys } from '../lib/queryClient';
+import {
+  formatConfidence,
+  formatMismatchReason,
+  normalizeResolverResult,
+  stockStatus,
+  uniqueAlternatives,
+} from '../lib/variantResolver';
 import { apiClient } from '../services/apiClient';
 import type { VariantAlternative, VariantResolverResult } from '../types/fashion';
 
@@ -12,6 +20,29 @@ const EXAMPLE_INPUTS = [
   { label: 'Persian black (no size)', rawColor: 'سیاه', rawSize: '', quantity: 1 },
   { label: 'English medium', rawColor: 'black', rawSize: 'M', quantity: 2 },
 ] as const;
+
+function ConfidenceMeter({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string;
+  value: number;
+  tone?: 'default' | 'success' | 'warning';
+}) {
+  const percent = Math.max(0, Math.min(100, Math.round(value * 100)));
+  return (
+    <div className={`resolver-confidence resolver-confidence--${tone}`}>
+      <div className="resolver-confidence__meta">
+        <span>{label}</span>
+        <strong>{percent}%</strong>
+      </div>
+      <div className="resolver-confidence__track" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label={`${label} confidence`}>
+        <div className="resolver-confidence__fill" style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
 
 function AlternativeTable({
   title,
@@ -23,32 +54,41 @@ function AlternativeTable({
   emptyMessage: string;
 }) {
   return (
-    <div className="match-panel">
+    <div className="match-panel resolver-alternatives">
       <h3>{title}</h3>
       {rows.length === 0 ? (
         <p className="empty-state">{emptyMessage}</p>
       ) : (
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table data-table--compact">
             <thead>
               <tr>
-                <th>SKU</th>
-                <th>Color</th>
-                <th>Size</th>
-                <th>Stock</th>
-                <th>Reason</th>
+                <th scope="col">SKU</th>
+                <th scope="col">Color</th>
+                <th scope="col">Size</th>
+                <th scope="col">Stock</th>
+                <th scope="col">Why suggested</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.variant_id}>
-                  <td>{row.sku}</td>
-                  <td>{row.normalized_color ?? row.color ?? '—'}</td>
-                  <td>{row.normalized_size ?? row.size ?? '—'}</td>
-                  <td>{row.available_stock}</td>
-                  <td>{row.reason}</td>
-                </tr>
-              ))}
+              {rows.map((row) => {
+                const stock = stockStatus(row.available_stock);
+                return (
+                  <tr key={row.variant_id}>
+                    <td>
+                      <span className="resolver-alt-sku">{row.sku}</span>
+                    </td>
+                    <td>{row.normalized_color ?? row.color ?? '—'}</td>
+                    <td>{row.normalized_size ?? row.size ?? '—'}</td>
+                    <td>
+                      <span className={`resolver-stock-badge resolver-stock-badge--${stock.tone}`}>
+                        {row.available_stock} · {stock.label}
+                      </span>
+                    </td>
+                    <td>{row.reason.replaceAll('_', ' ')}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -57,81 +97,131 @@ function AlternativeTable({
   );
 }
 
-function ResolverResultPanel({ result }: { result: VariantResolverResult }) {
+function ResolverResultPanel({
+  result,
+  rawColor,
+  rawSize,
+}: {
+  result: VariantResolverResult;
+  rawColor: string;
+  rawSize: string;
+}) {
+  const normalized = normalizeResolverResult(result);
+  const stock = stockStatus(normalized.available_stock);
+  const mismatchReasons = normalized.mismatch_reasons ?? [];
+  const alternatives = uniqueAlternatives(normalized.alternatives ?? [], normalized.available_alternatives ?? []);
+  const showAlternatives = alternatives.length > 0;
+
   return (
-    <section className="dashboard-card dashboard-card--wide">
+    <section className="dashboard-card dashboard-card--wide resolver-result">
       <div className="section-header">
         <h2>Resolver result</h2>
-        <span className={`priority-badge priority-badge--${result.matched ? 'low' : 'urgent'}`}>
-          {result.matched ? 'Matched' : 'No match'}
+        <span className={`priority-badge priority-badge--${normalized.matched ? 'low' : 'urgent'}`}>
+          {normalized.matched ? 'Matched' : 'No match'}
         </span>
       </div>
 
-      <div className="stats-grid">
-        <article className={`stat-card${result.matched ? '' : ' stat-card--warning'}`}>
-          <p className="stat-card__label">Confidence</p>
-          <p className="stat-card__value">{Math.round(result.confidence * 100)}%</p>
-        </article>
-        <article className="stat-card">
-          <p className="stat-card__label">Available stock</p>
-          <p className="stat-card__value">{result.available_stock ?? '—'}</p>
-        </article>
-        <article className="stat-card">
-          <p className="stat-card__label">Alternatives</p>
-          <p className="stat-card__value">{result.alternatives.length}</p>
-        </article>
-        <article className="stat-card">
-          <p className="stat-card__label">In-stock alternatives</p>
-          <p className="stat-card__value">{result.available_alternatives.length}</p>
-        </article>
+      {normalized.matched ? (
+        <div className="resolver-result__hero resolver-result__hero--matched">
+          <div className="resolver-result__hero-main">
+            <p className="resolver-result__eyebrow">Resolved variant</p>
+            <p className="resolver-result__sku">{normalized.sku ?? 'Unknown SKU'}</p>
+            <div className="resolver-result__chips">
+              {normalized.normalized_color ? (
+                <span className="resolver-chip">{normalized.normalized_color}</span>
+              ) : null}
+              {normalized.normalized_size ? (
+                <span className="resolver-chip">{normalized.normalized_size}</span>
+              ) : null}
+            </div>
+          </div>
+          <div className="resolver-result__hero-side">
+            <p className="resolver-result__stock-label">Available stock</p>
+            <p className="resolver-result__stock-value">{normalized.available_stock ?? '—'}</p>
+            <span className={`resolver-stock-badge resolver-stock-badge--${stock.tone}`}>{stock.label}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="resolver-result__hero resolver-result__hero--unmatched">
+          <div>
+            <p className="resolver-result__eyebrow">Resolution failed</p>
+            <p className="resolver-result__headline">No exact variant matched the request.</p>
+            <p className="resolver-result__subcopy">
+              Review normalization and mismatch reasons below, then try aliases or alternatives.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="resolver-result__grid">
+        <div className="match-panel resolver-normalization">
+          <h3>Normalization</h3>
+          <dl className="resolver-normalization__list">
+            <div>
+              <dt>Color input</dt>
+              <dd dir="auto">{rawColor || '—'}</dd>
+            </div>
+            <div>
+              <dt>Normalized color</dt>
+              <dd>{normalized.normalized_color ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Size input</dt>
+              <dd>{rawSize || '—'}</dd>
+            </div>
+            <div>
+              <dt>Normalized size</dt>
+              <dd>{normalized.normalized_size ?? '—'}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="match-panel resolver-confidence-panel">
+          <h3>Confidence</h3>
+          <ConfidenceMeter label="Overall" value={normalized.confidence} tone={normalized.matched ? 'success' : 'warning'} />
+          <ConfidenceMeter label="Color" value={normalized.color_confidence ?? 0} />
+          <ConfidenceMeter label="Size" value={normalized.size_confidence ?? 0} />
+        </div>
       </div>
 
-      {result.matched ? (
-        <dl className="detail-grid">
-          <div>
-            <dt>Variant ID</dt>
-            <dd>{result.variant_id ?? '—'}</dd>
-          </div>
-          <div>
-            <dt>SKU</dt>
-            <dd>{result.sku ?? '—'}</dd>
-          </div>
-          <div>
-            <dt>Normalized color</dt>
-            <dd>{result.normalized_color ?? '—'}</dd>
-          </div>
-          <div>
-            <dt>Normalized size</dt>
-            <dd>{result.normalized_size ?? '—'}</dd>
-          </div>
-        </dl>
-      ) : null}
-
-      {result.mismatch_reasons.length > 0 ? (
-        <div className="match-panel">
+      {mismatchReasons.length > 0 ? (
+        <div className="match-panel resolver-mismatch">
           <h3>Mismatch reasons</h3>
-          <ul className="timeline-list">
-            {result.mismatch_reasons.map((reason) => (
-              <li key={reason}>{reason}</li>
+          <div className="resolver-mismatch__chips">
+            {mismatchReasons.map((reason) => (
+              <span key={reason} className="resolver-mismatch-chip">
+                {formatMismatchReason(reason)}
+              </span>
             ))}
-          </ul>
+          </div>
         </div>
       ) : null}
 
-      <AlternativeTable
-        title="Suggested alternatives"
-        rows={result.alternatives}
-        emptyMessage="No alternative variants returned."
-      />
-      <AlternativeTable
-        title="In-stock alternatives"
-        rows={result.available_alternatives}
-        emptyMessage="No in-stock alternatives available."
-      />
+      {showAlternatives ? (
+        <AlternativeTable
+          title="Suggested alternatives"
+          rows={alternatives}
+          emptyMessage="No alternative variants returned."
+        />
+      ) : null}
 
       <details className="match-panel resolver-raw-details">
-        <summary>Raw JSON response</summary>
-        <pre className="resolver-raw-json">{JSON.stringify(result, null, 2)}</pre>
+        <summary>Technical details</summary>
+        <dl className="detail-grid resolver-tech-details">
+          {normalized.variant_id ? (
+            <div>
+              <dt>Variant ID</dt>
+              <dd>
+                <code>{normalized.variant_id}</code>
+              </dd>
+            </div>
+          ) : null}
+          <div>
+            <dt>Overall confidence</dt>
+            <dd>{formatConfidence(normalized.confidence)}</dd>
+          </div>
+        </dl>
+        <pre className="resolver-raw-json">{JSON.stringify(normalized, null, 2)}</pre>
       </details>
     </section>
   );
@@ -139,6 +229,7 @@ function ResolverResultPanel({ result }: { result: VariantResolverResult }) {
 
 export function VariantResolverPage() {
   const { selectedShopId, selectedShop } = useShop();
+  const { showToast } = useToast();
   const [productId, setProductId] = useState('');
   const [rawColor, setRawColor] = useState('');
   const [rawSize, setRawSize] = useState('');
@@ -158,13 +249,31 @@ export function VariantResolverPage() {
         raw_size: rawSize || undefined,
         quantity,
       }),
+    onSuccess: (data) => {
+      const normalized = normalizeResolverResult(data);
+      showToast(
+        normalized.matched
+          ? `Matched ${normalized.sku ?? 'variant'} with ${formatConfidence(normalized.confidence)} confidence.`
+          : 'No exact variant match. Review mismatch reasons and alternatives.',
+        normalized.matched ? 'success' : 'info',
+      );
+    },
+    onError: (error) => {
+      showToast(error instanceof Error ? error.message : 'Resolver request failed', 'error');
+    },
   });
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (selectedShopId && productId) {
-      resolver.mutate();
+    if (!selectedShopId) {
+      showToast('Select a shop before running the resolver.', 'error');
+      return;
     }
+    if (!productId) {
+      showToast('Select a product to test.', 'error');
+      return;
+    }
+    resolver.mutate();
   }
 
   function applyExample(example: (typeof EXAMPLE_INPUTS)[number]) {
@@ -182,6 +291,7 @@ export function VariantResolverPage() {
   }
 
   const canSubmit = Boolean(selectedShopId && productId && !resolver.isPending);
+  const products = Array.isArray(productsQuery.data) ? productsQuery.data : [];
 
   return (
     <div className="page-stack page-stack--wide">
@@ -218,7 +328,7 @@ export function VariantResolverPage() {
                   <option value="">
                     {productsQuery.isLoading ? 'Loading products…' : 'Select a product'}
                   </option>
-                  {productsQuery.data?.map((product) => (
+                  {products.map((product) => (
                     <option key={product.id} value={product.id}>
                       {product.title}
                     </option>
@@ -283,22 +393,49 @@ export function VariantResolverPage() {
           </form>
         )}
 
-        {productsQuery.error ? (
-          <p className="form-error">
-            {productsQuery.error instanceof Error
-              ? productsQuery.error.message
-              : 'Failed to load products'}
-          </p>
+        {productsQuery.isError ? (
+          <div className="resolver-error-card">
+            <p className="form-error">
+              {productsQuery.error instanceof Error
+                ? productsQuery.error.message
+                : 'Failed to load products'}
+            </p>
+            <button
+              className="button button--ghost-dark"
+              type="button"
+              onClick={() => void productsQuery.refetch()}
+            >
+              Retry loading products
+            </button>
+          </div>
         ) : null}
 
-        {resolver.error ? (
-          <p className="form-error">
-            {resolver.error instanceof Error ? resolver.error.message : 'Resolver request failed'}
-          </p>
+        {resolver.isError ? (
+          <div className="resolver-error-card">
+            <p className="form-error">
+              {resolver.error instanceof Error ? resolver.error.message : 'Resolver request failed'}
+            </p>
+            <button
+              className="button button--ghost-dark"
+              type="button"
+              onClick={() => resolver.mutate()}
+              disabled={!canSubmit}
+            >
+              Retry resolver
+            </button>
+          </div>
         ) : null}
       </section>
 
-      {resolver.data ? <ResolverResultPanel result={resolver.data} /> : null}
+      {resolver.isPending ? (
+        <section className="dashboard-card dashboard-card--wide">
+          <p className="loading-state">Running variant resolver…</p>
+        </section>
+      ) : null}
+
+      {resolver.data ? (
+        <ResolverResultPanel result={resolver.data} rawColor={rawColor} rawSize={rawSize} />
+      ) : null}
     </div>
   );
 }

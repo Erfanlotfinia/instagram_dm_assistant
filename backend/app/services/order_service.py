@@ -135,6 +135,7 @@ class OrderService:
                 city=slots.city or "",
                 address=slots.address or "",
                 postal_code=slots.postal_code or "",
+                is_simulation=conversation.is_simulation,
             )
             self.orders.create(order)
         else:

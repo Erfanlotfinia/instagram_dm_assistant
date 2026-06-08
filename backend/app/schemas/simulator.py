@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -14,15 +15,30 @@ class DMSimulatorRequest(BaseModel):
 
 class DMSimulatorResponse(BaseModel):
     conversation_id: UUID
+    message_id: UUID
     is_simulation: bool = True
-    extracted_intent: str | None = None
+    intent: str | None = None
     extracted_slots: dict = Field(default_factory=dict)
     product_resolution: dict = Field(default_factory=dict)
     variant_resolution: dict = Field(default_factory=dict)
     inventory_result: dict = Field(default_factory=dict)
     next_state: str
     suggested_reply: str | None = None
-    auto_send: bool = False
-    preview_required: bool = False
-    handoff_required: bool = False
-    audit: list[dict] = Field(default_factory=list)
+    auto_send_decision: dict = Field(default_factory=dict)
+    handoff_reason: str | None = None
+    draft_order: dict | None = None
+    decision_trace: dict = Field(default_factory=dict)
+
+
+class SimulatorRunSummary(BaseModel):
+    conversation_id: UUID
+    message_id: UUID | None = None
+    created_at: datetime
+    intent: str | None = None
+    next_state: str | None = None
+    suggested_reply: str | None = None
+    message_preview: str | None = None
+
+
+class SimulatorResetResponse(BaseModel):
+    deleted_conversations: int

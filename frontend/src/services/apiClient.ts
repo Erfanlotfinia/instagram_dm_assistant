@@ -21,7 +21,7 @@ import type {
   RecoveryRuleUpdate,
 } from '../types/sprintD';
 import type { DashboardMetrics } from '../types/dashboard';
-import type { AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PostPerformanceRow, ResponseTimeAnalytics, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
+import type { AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PostPerformanceRow, ResponseTimeAnalytics, SimulatorRunSummary, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
 import type { SemanticSearchResponse } from '../types/semanticSearch';
 import type { LoginRequest, TokenResponse, User } from '../types/auth';
 import type { HealthResponse } from '../types/health';
@@ -155,12 +155,14 @@ export const apiClient = {
   updateAgentStudioSettings: (shopId: string, payload: Partial<AgentStudioSettings>) =>
     request<AgentStudioSettings>(`/api/v1/shops/${shopId}/agent-settings`, { method: 'PUT', body: JSON.stringify(payload) }),
   runDMSimulator: (shopId: string, payload: DMSimulatorRequest) =>
-    request<DMSimulatorResponse>(`/api/v1/shops/${shopId}/simulator/dm`, {
+    request<DMSimulatorResponse>(`/api/v1/shops/${shopId}/simulator/run`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  listSimulatorRuns: (shopId: string) =>
+    request<SimulatorRunSummary[]>(`/api/v1/shops/${shopId}/simulator/runs`),
   resetDMSimulator: (shopId: string) =>
-    request<{ deleted_conversations: number }>(`/api/v1/shops/${shopId}/simulator/dm`, { method: 'DELETE' }),
+    request<{ deleted_conversations: number }>(`/api/v1/shops/${shopId}/simulator/reset`, { method: 'DELETE' }),
   getAnalyticsFunnel: (shopId: string, start?: string, end?: string) =>
     request<FunnelAnalytics>(`/api/v1/shops/${shopId}/analytics/funnel${buildQuery({ start, end })}`),
   getAnalyticsPosts: (shopId: string, start?: string, end?: string) =>

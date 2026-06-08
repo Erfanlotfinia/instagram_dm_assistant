@@ -351,6 +351,7 @@ class Message(Base):
     message_type: Mapped[MessageType] = mapped_column(pg_enum(MessageType, name="message_type"), nullable=False)
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    is_simulation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
@@ -407,6 +408,7 @@ class AgentRun(Base):
         pg_enum(AgentRunStatus, name="agent_run_status"), nullable=False
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_simulation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
@@ -737,6 +739,7 @@ class Order(Base, TimestampMixin):
     )
     recovery_attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_recovery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_simulation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
 
     shop: Mapped[Shop] = relationship(back_populates="orders")
     customer: Mapped[Customer] = relationship(back_populates="orders")
@@ -889,6 +892,7 @@ class SuggestedReply(Base):
     approved_by_user_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     edited_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_simulation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

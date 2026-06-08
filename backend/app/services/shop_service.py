@@ -2,16 +2,14 @@ import re
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.enums import UserRole
-from app.domain.models import Conversation, InstagramAccount, InstagramProductMap, Product, ProductVariant, Shop, ShopMember, User
+from app.domain.models import InstagramAccount, Shop, ShopMember, User
 from app.repositories.shop_repository import ShopMemberRepository, ShopRepository
 from app.schemas.shop import (
     InstagramAccountStatusSummary,
-    OnboardingStatusRead,
-    OnboardingStepStatus,
     ShopAgentSettings,
     ShopCreate,
     ShopMemberRead,
@@ -130,32 +128,6 @@ class ShopService:
             webhook_active=webhook_active,
         )
 
-
-    def get_onboarding_status(self, shop_id: UUID, user: User) -> OnboardingStatusRead:
-        shop = self.get_shop_entity(shop_id, user)
-        account_count = self.db.scalar(select(func.count(InstagramAccount.id)).where(InstagramAccount.shop_id == shop_id)) or 0
-        product_count = self.db.scalar(select(func.count(Product.id)).where(Product.shop_id == shop_id)) or 0
-        variant_count = self.db.scalar(select(func.count(ProductVariant.id)).join(Product).where(Product.shop_id == shop_id)) or 0
-        map_count = self.db.scalar(select(func.count(InstagramProductMap.id)).where(InstagramProductMap.shop_id == shop_id)) or 0
-        sim_count = self.db.scalar(select(func.count(Conversation.id)).where(Conversation.shop_id == shop_id, Conversation.is_simulation.is_(True))) or 0
-        flags = shop.onboarding_flags or {}
-        steps = [
-            OnboardingStepStatus(key="connect_instagram", label="Connect Instagram account", completed=account_count > 0, href="/instagram-accounts"),
-            OnboardingStepStatus(key="shop_profile", label="Create shop profile", completed=bool(shop.name and shop.slug), href="/shops"),
-            OnboardingStepStatus(key="first_product", label="Add first product", completed=product_count > 0, href="/products"),
-            OnboardingStepStatus(key="variants", label="Add variants", completed=variant_count > 0, href="/products"),
-            OnboardingStepStatus(key="map_post", label="Map Instagram post URL", completed=map_count > 0, href="/instagram-mapping"),
-            OnboardingStepStatus(key="dm_simulator", label="Run DM simulator test", completed=sim_count > 0 or bool(flags.get("dm_simulator")), href="/simulator"),
-            OnboardingStepStatus(key="enable_auto_reply", label="Enable auto reply", completed=bool((shop.agent_settings or {}).get("auto_reply_enabled")), href="/settings"),
-        ]
-        completed = sum(1 for step in steps if step.completed)
-        return OnboardingStatusRead(
-            shop_id=shop_id,
-            completed_steps=completed,
-            total_steps=len(steps),
-            progress_percent=round(completed / len(steps) * 100),
-            steps=steps,
-        )
 
     def list_members(self, shop_id: UUID, user: User) -> list[ShopMemberRead]:
         self._require_membership(shop_id, user.id)

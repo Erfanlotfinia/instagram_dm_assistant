@@ -13,6 +13,7 @@ from app.schemas.instagram_account import InstagramAccountCreate, InstagramAccou
 from app.schemas.shop import OnboardingStatusRead, ShopAgentSettings, ShopCreate, ShopMemberRead, ShopRead, ShopSettingsRead, ShopUpdate
 from app.services.dashboard_service import DashboardService
 from app.services.instagram_account_service import InstagramAccountService
+from app.services.onboarding_status_service import OnboardingStatusService
 from app.services.shop_service import ShopService
 
 router = APIRouter(prefix="/shops", tags=["shops"])
@@ -90,7 +91,7 @@ def get_onboarding_status(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db_session)],
 ) -> OnboardingStatusRead:
-    return ShopService(db).get_onboarding_status(shop_id, current_user)
+    return OnboardingStatusService(db).get_status(shop_id, current_user)
 
 
 @router.get("/{shop_id}/members", response_model=list[ShopMemberRead])

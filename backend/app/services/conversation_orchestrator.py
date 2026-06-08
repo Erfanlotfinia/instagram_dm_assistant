@@ -144,6 +144,7 @@ class ConversationOrchestrator:
             extraction_input=extraction_input,
             extraction=extraction,
             error_message=extraction_error,
+            is_simulation=conversation.is_simulation,
         )
 
         if extraction_error:
@@ -403,11 +404,20 @@ class ConversationOrchestrator:
             confidence=extraction.confidence.intent,
         )
         if decision.auto_send_allowed and not conversation.is_simulation:
-            outbound = self.send_service.send_text_message(conversation_id, reply, commit=False)
+            outbound = self.send_service.send_text_message(
+                conversation_id, reply, commit=False, is_simulation=False
+            )
             AuditService(self.db).log(action="message_auto_sent", entity_type="conversation", shop_id=conversation.shop_id, entity_id=str(conversation.id), metadata={"message_id": str(outbound.id)})
             self._log_action(conversation_id, "send_outbound", {"reply": reply}, {"message_id": str(outbound.id)}, confidence=None)
         else:
-            SuggestedReplyService(self.db).create_agent_suggestion(shop_id=conversation.shop_id, conversation_id=conversation.id, message_id=message.id, text=reply, reason=preview_reason)
+            SuggestedReplyService(self.db).create_agent_suggestion(
+                shop_id=conversation.shop_id,
+                conversation_id=conversation.id,
+                message_id=message.id,
+                text=reply,
+                reason=preview_reason,
+                is_simulation=conversation.is_simulation,
+            )
             action = "handoff_required" if decision.requires_handoff else "message_blocked_due_to_confidence" if decision.requires_preview else "suggested_reply_created"
             AuditService(self.db).log(action=action, entity_type="conversation", shop_id=conversation.shop_id, entity_id=str(conversation.id), metadata={"reasons": decision.reasons})
             self._log_action(conversation_id, "preview_outbound", {"reply": reply}, {"preview_required": decision.requires_preview, "reason": preview_reason, "simulation": conversation.is_simulation}, confidence=extraction.confidence.intent)
@@ -522,6 +532,7 @@ class ConversationOrchestrator:
         extraction_input: AgentExtractionInput,
         extraction: AgentExtractionResult,
         error_message: str | None,
+        is_simulation: bool = False,
     ) -> AgentRun:
         run = AgentRun(
             conversation_id=conversation_id,
@@ -532,6 +543,7 @@ class ConversationOrchestrator:
             output_json=extraction.model_dump(mode="json"),
             status=AgentRunStatus.FAILED if error_message else AgentRunStatus.SUCCESS,
             error_message=error_message,
+            is_simulation=is_simulation,
         )
         if error_message:
             FAILED_AGENT_RUNS.inc()

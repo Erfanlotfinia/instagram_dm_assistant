@@ -27,6 +27,7 @@ class SuggestedReplyService:
         message_id: UUID | None,
         text: str,
         reason: str | None,
+        is_simulation: bool = False,
     ) -> SuggestedReply:
         reply = SuggestedReply(
             shop_id=shop_id,
@@ -35,6 +36,7 @@ class SuggestedReplyService:
             suggested_text=text,
             reason=reason,
             generated_by=SuggestedReplyGeneratedBy.AGENT,
+            is_simulation=is_simulation,
         )
         self.db.add(reply)
         AuditService(self.db).log(

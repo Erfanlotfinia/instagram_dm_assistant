@@ -34,10 +34,12 @@ export interface VariantResolverResult {
   normalized_color?: string | null;
   normalized_size?: string | null;
   available_stock?: number | null;
+  color_confidence?: number;
+  size_confidence?: number;
   confidence: number;
-  mismatch_reasons: string[];
-  alternatives: VariantAlternative[];
-  available_alternatives: VariantAlternative[];
+  mismatch_reasons?: string[];
+  alternatives?: VariantAlternative[];
+  available_alternatives?: VariantAlternative[];
 }
 
 export interface UnavailableDemandLog {
