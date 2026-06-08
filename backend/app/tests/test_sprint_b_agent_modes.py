@@ -83,3 +83,19 @@ def test_handoff_required_never_auto_sends():
     assert decision.auto_send_allowed is False
     assert decision.requires_handoff is True
     assert decision.requires_preview is True
+
+
+def test_sprint_b_sqlalchemy_enums_persist_value_labels():
+    from app.domain.enums import SuggestedReplyGeneratedBy, SuggestedReplyStatus
+    from app.domain.models import SuggestedReply
+
+    assert ShopAgentSettings.__table__.c.mode.type.enums == [member.value for member in AgentMode]
+    assert ShopAgentSettings.__table__.c.selling_style.type.enums == [
+        member.value for member in SellingStyle
+    ]
+    assert SuggestedReply.__table__.c.status.type.enums == [
+        member.value for member in SuggestedReplyStatus
+    ]
+    assert SuggestedReply.__table__.c.generated_by.type.enums == [
+        member.value for member in SuggestedReplyGeneratedBy
+    ]
