@@ -16,6 +16,7 @@ from app.schemas.instagram_product_map import (
     ResolveInstagramProductResponse,
 )
 from app.schemas.product import ProductRead
+from app.services.audit_service import AuditService
 from app.services.shop_service import ShopService
 
 
@@ -63,6 +64,15 @@ class InstagramProductResolver:
         created = self.maps.create(mapping)
         self.maps.commit()
         self.maps.refresh(created)
+        AuditService(self.db).log(
+            action="product_mapping_created",
+            entity_type="instagram_product_map",
+            shop_id=shop_id,
+            actor_user_id=user.id,
+            entity_id=str(created.id),
+            metadata={"product_id": str(payload.product_id), "instagram_post_url": created.instagram_post_url},
+        )
+        self.maps.commit()
         return InstagramProductMapRead.model_validate(created)
 
     def update_map(
@@ -86,6 +96,15 @@ class InstagramProductResolver:
 
         self.maps.commit()
         self.maps.refresh(mapping)
+        AuditService(self.db).log(
+            action="product_mapping_updated",
+            entity_type="instagram_product_map",
+            shop_id=shop_id,
+            actor_user_id=user.id,
+            entity_id=str(mapping.id),
+            metadata=updates,
+        )
+        self.maps.commit()
         return InstagramProductMapRead.model_validate(mapping)
 
     def resolve(

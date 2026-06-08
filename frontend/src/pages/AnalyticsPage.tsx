@@ -81,13 +81,37 @@ export function AnalyticsPage() {
     queryFn: () => apiClient.getAnalyticsHandoff(selectedShopId, startIso, endIso),
     enabled: Boolean(selectedShopId),
   });
+  const postRevenue = useQuery({
+    queryKey: ['analytics-post-revenue', selectedShopId, startIso, endIso],
+    queryFn: () => apiClient.getPostRevenueAnalytics(selectedShopId, startIso, endIso),
+    enabled: Boolean(selectedShopId),
+  });
+  const lostDemand = useQuery({
+    queryKey: ['analytics-lost-demand', selectedShopId, startIso, endIso],
+    queryFn: () => apiClient.getAnalyticsLostDemand(selectedShopId, startIso, endIso),
+    enabled: Boolean(selectedShopId),
+  });
+  const agentPerformance = useQuery({
+    queryKey: ['analytics-agent-performance', selectedShopId, startIso, endIso],
+    queryFn: () => apiClient.getAnalyticsAgentPerformance(selectedShopId, startIso, endIso),
+    enabled: Boolean(selectedShopId),
+  });
+  const operatorPerformance = useQuery({
+    queryKey: ['analytics-operator-performance', selectedShopId, startIso, endIso],
+    queryFn: () => apiClient.getAnalyticsOperatorPerformance(selectedShopId, startIso, endIso),
+    enabled: Boolean(selectedShopId),
+  });
 
   const isLoading =
     funnel.isLoading ||
     posts.isLoading ||
     stock.isLoading ||
     unavailableDemand.isLoading ||
-    handoff.isLoading;
+    handoff.isLoading ||
+    postRevenue.isLoading ||
+    lostDemand.isLoading ||
+    agentPerformance.isLoading ||
+    operatorPerformance.isLoading;
 
   function applyPreset(preset: DatePreset) {
     if (preset === 'all') {
@@ -192,19 +216,70 @@ export function AnalyticsPage() {
             </article>
             <article className="stat-card">
               <p className="stat-card__label">Product resolved</p>
-              <p className="stat-card__value">{Math.round(funnel.data.resolved_product_rate * 100)}%</p>
+              <p className="stat-card__value">
+                {Math.round((funnel.data.product_resolved_rate ?? funnel.data.resolved_product_rate) * 100)}%
+              </p>
             </article>
             <article className="stat-card">
               <p className="stat-card__label">Variant resolved</p>
               <p className="stat-card__value">{Math.round(funnel.data.variant_resolved_rate * 100)}%</p>
             </article>
             <article className="stat-card">
+              <p className="stat-card__label">Paid orders</p>
+              <p className="stat-card__value">{funnel.data.paid_orders}</p>
+            </article>
+            <article className="stat-card">
               <p className="stat-card__label">Revenue</p>
               <p className="stat-card__value">{funnel.data.revenue}</p>
             </article>
+            <article className="stat-card">
+              <p className="stat-card__label">Payment conversion</p>
+              <p className="stat-card__value">{Math.round(funnel.data.payment_conversion_rate * 100)}%</p>
+            </article>
           </div>
+          {funnel.error ? (
+            <p className="form-error">
+              {funnel.error instanceof Error ? funnel.error.message : 'Failed to load funnel metrics'}
+            </p>
+          ) : null}
         </section>
       ) : null}
+
+      <section className="dashboard-card dashboard-card--wide">
+        <h2>Post revenue</h2>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Post</th>
+                <th>Conversations</th>
+                <th>Paid orders</th>
+                <th>Conversion</th>
+                <th>Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {postRevenue.data?.map((row) => (
+                <tr key={row.instagram_post_url}>
+                  <td>{row.instagram_post_url}</td>
+                  <td>{row.conversations}</td>
+                  <td>{row.paid_orders}</td>
+                  <td>{Math.round(row.conversion_rate * 100)}%</td>
+                  <td>{row.revenue}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {postRevenue.error ? (
+            <p className="form-error">
+              {postRevenue.error instanceof Error ? postRevenue.error.message : 'Failed to load post revenue'}
+            </p>
+          ) : null}
+          {!postRevenue.isLoading && !postRevenue.error && (postRevenue.data?.length ?? 0) === 0 ? (
+            <p className="empty-state">No post revenue data for this period.</p>
+          ) : null}
+        </div>
+      </section>
 
       <section className="dashboard-card dashboard-card--wide">
         <h2>Post performance</h2>
@@ -307,6 +382,129 @@ export function AnalyticsPage() {
           !unavailableDemand.error &&
           (unavailableDemand.data?.length ?? 0) === 0 ? (
             <p className="empty-state">No unavailable demand logged for this period.</p>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="dashboard-card dashboard-card--wide">
+        <h2>Lost demand</h2>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Color</th>
+                <th>Size</th>
+                <th>Reason</th>
+                <th>Count</th>
+                <th>Est. lost revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lostDemand.data?.items.map((row) => (
+                <tr key={`${row.requested_product ?? 'any'}-${row.requested_color ?? 'any'}-${row.requested_size ?? 'any'}-${row.reason ?? 'none'}`}>
+                  <td>{row.requested_product ?? '—'}</td>
+                  <td>{row.requested_color ?? '—'}</td>
+                  <td>{row.requested_size ?? '—'}</td>
+                  <td>{row.reason ?? '—'}</td>
+                  <td>{row.count}</td>
+                  <td>{row.estimated_lost_revenue}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {lostDemand.error ? (
+            <p className="form-error">
+              {lostDemand.error instanceof Error ? lostDemand.error.message : 'Failed to load lost demand'}
+            </p>
+          ) : null}
+          {!lostDemand.isLoading && !lostDemand.error && (lostDemand.data?.items.length ?? 0) === 0 ? (
+            <p className="empty-state">No lost demand logged for this period.</p>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="dashboard-card dashboard-card--wide">
+        <h2>Agent performance</h2>
+        {agentPerformance.isLoading ? <p className="loading-state">Loading agent performance...</p> : null}
+        {agentPerformance.error ? (
+          <p className="form-error">
+            {agentPerformance.error instanceof Error ? agentPerformance.error.message : 'Failed to load agent performance'}
+          </p>
+        ) : null}
+        {agentPerformance.data ? (
+          <div className="stats-grid">
+            <article className="stat-card">
+              <p className="stat-card__label">Auto-sent messages</p>
+              <p className="stat-card__value">{agentPerformance.data.auto_sent_messages}</p>
+            </article>
+            <article className="stat-card">
+              <p className="stat-card__label">Preview required</p>
+              <p className="stat-card__value">{agentPerformance.data.preview_required_messages}</p>
+            </article>
+            <article className="stat-card">
+              <p className="stat-card__label">Handoff rate</p>
+              <p className="stat-card__value">{Math.round(agentPerformance.data.handoff_rate * 100)}%</p>
+            </article>
+            <article className="stat-card">
+              <p className="stat-card__label">Failed agent runs</p>
+              <p className="stat-card__value">{agentPerformance.data.failed_agent_runs}</p>
+            </article>
+            <article className="stat-card">
+              <p className="stat-card__label">Invalid LLM outputs</p>
+              <p className="stat-card__value">{agentPerformance.data.invalid_llm_outputs}</p>
+            </article>
+            <article className="stat-card">
+              <p className="stat-card__label">Avg intent confidence</p>
+              <p className="stat-card__value">
+                {agentPerformance.data.average_intent_confidence != null
+                  ? Math.round(agentPerformance.data.average_intent_confidence * 100)
+                  : '—'}
+                %
+              </p>
+            </article>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="dashboard-card dashboard-card--wide">
+        <h2>Operator performance</h2>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Operator</th>
+                <th>Assigned</th>
+                <th>Resolved</th>
+                <th>Manual messages</th>
+                <th>Orders closed</th>
+                <th>Revenue assisted</th>
+              </tr>
+            </thead>
+            <tbody>
+              {operatorPerformance.data?.items.map((row) => (
+                <tr key={row.operator_id}>
+                  <td>{row.operator_name}</td>
+                  <td>{row.assigned_conversations}</td>
+                  <td>{row.resolved_conversations}</td>
+                  <td>{row.manual_messages_sent}</td>
+                  <td>{row.orders_closed}</td>
+                  <td>{row.revenue_assisted}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {operatorPerformance.error ? (
+            <p className="form-error">
+              {operatorPerformance.error instanceof Error
+                ? operatorPerformance.error.message
+                : 'Failed to load operator performance'}
+            </p>
+          ) : null}
+          {!operatorPerformance.isLoading &&
+          !operatorPerformance.error &&
+          (operatorPerformance.data?.items.length ?? 0) === 0 ? (
+            <p className="empty-state">No operator activity for this period.</p>
           ) : null}
         </div>
       </section>

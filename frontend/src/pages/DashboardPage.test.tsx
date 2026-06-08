@@ -53,7 +53,11 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('Abandoned orders')).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText('Recovered revenue')).toBeInTheDocument();
-    expect(screen.getByText('49.99')).toBeInTheDocument();
+    expect(screen.getByText('$49.99')).toBeInTheDocument();
+    expect(screen.getByText('Conversion funnel')).toBeInTheDocument();
+    expect(screen.getByText(/2 of 10 messages became a paid order/i)).toBeInTheDocument();
+    expect(screen.getByText('Customers who DMed your shop')).toBeInTheDocument();
+    expect(screen.getByText('20% of all messages')).toBeInTheDocument();
     expect(screen.getByText('https://instagram.com/p/top')).toBeInTheDocument();
   });
 });

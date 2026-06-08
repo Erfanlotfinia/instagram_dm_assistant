@@ -30,6 +30,7 @@ from app.domain.enums import (
     ConversationEventType,
     ConversationPriorityLevel,
     ConversationState,
+    FailedJobStatus,
     InstagramAccountStatus,
     InventoryMovementType,
     MessageChannel,
@@ -386,6 +387,9 @@ class AgentAction(Base):
 
 class AgentRun(Base):
     __tablename__ = "agent_runs"
+    __table_args__ = (
+        UniqueConstraint("input_message_id", name="uq_agent_runs_input_message_id"),
+    )
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     conversation_id: Mapped[UUID] = mapped_column(
@@ -923,18 +927,24 @@ class AgentDecisionAudit(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
 
-class FailedJob(Base):
+class FailedJob(Base, TimestampMixin):
     __tablename__ = "failed_jobs"
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     queue_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     job_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    traceback: Mapped[str | None] = mapped_column(Text, nullable=True)
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    status: Mapped[FailedJobStatus] = mapped_column(
+        pg_enum(FailedJobStatus, name="failed_job_status"), nullable=False, default=FailedJobStatus.FAILED, index=True
+    )
     resolved: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
 
 class AdminAuditLog(Base):

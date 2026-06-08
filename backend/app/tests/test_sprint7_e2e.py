@@ -212,3 +212,7 @@ def test_ready_endpoint(client) -> None:
     body = response.json()
     assert "checks" in body
     assert "postgres" in body["checks"]
+    if body["status"] == "failed":
+        assert response.status_code == 503
+    else:
+        assert response.status_code == 200

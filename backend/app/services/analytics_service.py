@@ -6,12 +6,24 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from app.domain.enums import MessageDirection, OrderPaymentStatus, OrderStatus
-from app.domain.models import Conversation, ConversationSlots, Message, Order, UnavailableDemandLog
-from app.domain.models import User
-from app.schemas.analytics import FunnelAnalytics, HandoffAnalyticsRow, PostPerformanceRow, PostRevenueRow, ResponseTimeAnalytics, StockDemandRow, UnavailableDemandRow
+from app.domain.enums import AgentRunStatus, ConversationState, MessageDirection, OrderPaymentStatus, OrderStatus
+from app.domain.models import AdminAuditLog, AgentDecisionAudit, AgentRun, Conversation, ConversationSlots, Message, Order, Product, ShopMember, UnavailableDemandLog, User
+from app.schemas.analytics import (
+    AgentPerformanceMetrics,
+    FunnelAnalytics,
+    HandoffAnalyticsRow,
+    LostDemandListResponse,
+    LostDemandRow,
+    OperatorPerformanceListResponse,
+    OperatorPerformanceRow,
+    PostPerformanceRow,
+    PostRevenueRow,
+    ResponseTimeAnalytics,
+    StockDemandRow,
+    UnavailableDemandRow,
+)
 from app.services.shop_service import ShopService
 
 
@@ -183,11 +195,278 @@ class AnalyticsService:
 
     def response_time(self, shop_id: UUID, user: User, start: datetime | None = None, end: datetime | None = None) -> ResponseTimeAnalytics:
         self.shop_service.get_shop(shop_id, user)
-        # Conservative placeholders until event timestamps are fully normalized across channels.
         return ResponseTimeAnalytics(
             average_first_response_time_seconds=self.funnel(shop_id, user, start, end).average_time_to_first_response_seconds,
             average_time_to_draft_order_seconds=None,
             average_time_to_payment_seconds=self.funnel(shop_id, user, start, end).average_time_to_payment_seconds,
+        )
+
+    def lost_demand(
+        self,
+        shop_id: UUID,
+        user: User,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        page: int = 1,
+        page_size: int = 25,
+    ) -> LostDemandListResponse:
+        self.shop_service.get_shop(shop_id, user)
+        rows = self.db.execute(
+            self._range(
+                select(
+                    UnavailableDemandLog.product_id,
+                    UnavailableDemandLog.requested_color_normalized,
+                    UnavailableDemandLog.requested_size_normalized,
+                    UnavailableDemandLog.reason,
+                    func.count(UnavailableDemandLog.id),
+                    func.coalesce(func.sum(UnavailableDemandLog.estimated_lost_revenue), 0),
+                )
+                .where(UnavailableDemandLog.shop_id == shop_id)
+                .group_by(
+                    UnavailableDemandLog.product_id,
+                    UnavailableDemandLog.requested_color_normalized,
+                    UnavailableDemandLog.requested_size_normalized,
+                    UnavailableDemandLog.reason,
+                ),
+                UnavailableDemandLog.created_at,
+                start,
+                end,
+            )
+        ).all()
+        product_titles = {
+            product.id: product.title
+            for product in self.db.scalars(select(Product).where(Product.shop_id == shop_id)).all()
+        }
+        items = [
+            LostDemandRow(
+                requested_product=product_titles.get(product_id) if product_id else None,
+                requested_color=color,
+                requested_size=size,
+                product_id=product_id,
+                count=count,
+                estimated_lost_revenue=lost,
+                reason=reason,
+            )
+            for product_id, color, size, reason, count, lost in rows
+        ]
+        items.sort(key=lambda row: (row.count, row.estimated_lost_revenue), reverse=True)
+        total = len(items)
+        offset = (page - 1) * page_size
+        return LostDemandListResponse(
+            items=items[offset : offset + page_size],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
+    def operator_performance(
+        self,
+        shop_id: UUID,
+        user: User,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        page: int = 1,
+        page_size: int = 25,
+    ) -> OperatorPerformanceListResponse:
+        self.shop_service.get_shop(shop_id, user)
+        members = self.db.scalars(
+            select(ShopMember).options(joinedload(ShopMember.user)).where(ShopMember.shop_id == shop_id)
+        ).all()
+        rows: list[OperatorPerformanceRow] = []
+        for member in members:
+            operator = member.user
+            if operator is None:
+                continue
+            assigned = self._count_conversations(
+                shop_id,
+                start,
+                end,
+                Conversation.assigned_operator_id == operator.id,
+            )
+            resolved = self._count_conversations(
+                shop_id,
+                start,
+                end,
+                (Conversation.assigned_operator_id == operator.id)
+                & (Conversation.state == ConversationState.CLOSED),
+            )
+            manual_messages = self.db.scalar(
+                self._range(
+                    select(func.count(AdminAuditLog.id)).where(
+                        AdminAuditLog.shop_id == shop_id,
+                        AdminAuditLog.user_id == operator.id,
+                        AdminAuditLog.action == "manual_message_sent",
+                    ),
+                    AdminAuditLog.created_at,
+                    start,
+                    end,
+                )
+            ) or 0
+            orders_closed = self.db.scalar(
+                self._range(
+                    select(func.count(Order.id))
+                    .join(Conversation, Conversation.id == Order.conversation_id)
+                    .where(
+                        Order.shop_id == shop_id,
+                        Order.payment_status == OrderPaymentStatus.PAID,
+                        Conversation.assigned_operator_id == operator.id,
+                    ),
+                    Order.created_at,
+                    start,
+                    end,
+                )
+            ) or 0
+            revenue = self.db.scalar(
+                self._range(
+                    select(func.coalesce(func.sum(Order.total_amount), 0))
+                    .join(Conversation, Conversation.id == Order.conversation_id)
+                    .where(
+                        Order.shop_id == shop_id,
+                        Order.payment_status == OrderPaymentStatus.PAID,
+                        Conversation.assigned_operator_id == operator.id,
+                    ),
+                    Order.created_at,
+                    start,
+                    end,
+                )
+            ) or Decimal("0")
+            rows.append(
+                OperatorPerformanceRow(
+                    operator_id=operator.id,
+                    operator_name=operator.full_name,
+                    assigned_conversations=assigned,
+                    resolved_conversations=resolved,
+                    average_response_time_seconds=None,
+                    manual_messages_sent=manual_messages,
+                    orders_closed=orders_closed,
+                    revenue_assisted=Decimal(str(revenue)),
+                )
+            )
+        rows.sort(key=lambda row: (row.revenue_assisted, row.resolved_conversations), reverse=True)
+        total = len(rows)
+        offset = (page - 1) * page_size
+        return OperatorPerformanceListResponse(
+            items=rows[offset : offset + page_size],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
+    def agent_performance(
+        self,
+        shop_id: UUID,
+        user: User,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> AgentPerformanceMetrics:
+        self.shop_service.get_shop(shop_id, user)
+        total_conversations = self._count_conversations(shop_id, start, end) or 1
+        handoffs = self._count_conversations(shop_id, start, end, Conversation.handoff_required.is_(True))
+        auto_sent = self.db.scalar(
+            self._range(
+                select(func.count(AdminAuditLog.id)).where(
+                    AdminAuditLog.shop_id == shop_id,
+                    AdminAuditLog.action == "message_auto_sent",
+                ),
+                AdminAuditLog.created_at,
+                start,
+                end,
+            )
+        ) or 0
+        preview_required = self.db.scalar(
+            self._range(
+                select(func.count(Conversation.id)).where(
+                    Conversation.shop_id == shop_id,
+                    Conversation.preview_required.is_(True),
+                    Conversation.is_simulation.is_(False),
+                ),
+                Conversation.created_at,
+                start,
+                end,
+            )
+        ) or 0
+        failed_runs = self.db.scalar(
+            self._range(
+                select(func.count(AgentRun.id))
+                .join(Conversation)
+                .where(
+                    Conversation.shop_id == shop_id,
+                    AgentRun.status == AgentRunStatus.FAILED,
+                    AgentRun.is_simulation.is_(False),
+                ),
+                AgentRun.created_at,
+                start,
+                end,
+            )
+        ) or 0
+        invalid_outputs = self.db.scalar(
+            self._range(
+                select(func.count(AgentRun.id))
+                .join(Conversation)
+                .where(
+                    Conversation.shop_id == shop_id,
+                    AgentRun.status == AgentRunStatus.FAILED,
+                    AgentRun.error_message.is_not(None),
+                    AgentRun.is_simulation.is_(False),
+                ),
+                AgentRun.created_at,
+                start,
+                end,
+            )
+        ) or 0
+        intent_confidences: list[float] = []
+        product_confidences: list[float] = []
+        variant_confidences: list[float] = []
+        audits = self.db.scalars(
+            self._range(
+                select(AgentDecisionAudit).where(AgentDecisionAudit.shop_id == shop_id),
+                AgentDecisionAudit.created_at,
+                start,
+                end,
+            )
+        ).all()
+        for audit in audits:
+            slots = audit.extracted_slots or {}
+            confidence = slots.get("confidence") or {}
+            if isinstance(confidence, dict):
+                if confidence.get("intent") is not None:
+                    intent_confidences.append(float(confidence["intent"]))
+                if confidence.get("product") is not None:
+                    product_confidences.append(float(confidence["product"]))
+                if confidence.get("variant") is not None:
+                    variant_confidences.append(float(confidence["variant"]))
+        runs = self.db.scalars(
+            self._range(
+                select(AgentRun)
+                .join(Conversation)
+                .where(Conversation.shop_id == shop_id, AgentRun.is_simulation.is_(False)),
+                AgentRun.created_at,
+                start,
+                end,
+            )
+        ).all()
+        for run in runs:
+            confidence = (run.output_json or {}).get("confidence") or {}
+            if isinstance(confidence, dict):
+                if confidence.get("intent") is not None:
+                    intent_confidences.append(float(confidence["intent"]))
+                if confidence.get("product") is not None:
+                    product_confidences.append(float(confidence["product"]))
+                if confidence.get("variant") is not None:
+                    variant_confidences.append(float(confidence["variant"]))
+
+        def _avg(values: list[float]) -> float | None:
+            return round(sum(values) / len(values), 4) if values else None
+
+        return AgentPerformanceMetrics(
+            auto_sent_messages=auto_sent,
+            preview_required_messages=preview_required,
+            handoff_rate=self._rate(handoffs, total_conversations),
+            failed_agent_runs=failed_runs,
+            invalid_llm_outputs=invalid_outputs,
+            average_intent_confidence=_avg(intent_confidences),
+            average_product_confidence=_avg(product_confidences),
+            average_variant_confidence=_avg(variant_confidences),
         )
 
     def _range(self, stmt, column, start, end):

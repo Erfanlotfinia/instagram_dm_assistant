@@ -18,11 +18,13 @@ from app.domain.enums import (
     ConfidenceSource,
     ConversationPriorityLevel,
     ConversationState,
+    FailedJobStatus,
     InstagramAccountStatus,
     MessageChannel,
     MessageDirection,
     MessageType,
     OrderPaymentStatus,
+    OrderRecoveryStatus,
     OrderShippingStatus,
     OrderStatus,
     ProductStatus,
@@ -30,6 +32,7 @@ from app.domain.enums import (
     SuggestedReplyGeneratedBy,
     SuggestedReplyStatus,
     TriggerSourceType,
+    UpsellSuggestionStatus,
     UserRole,
 )
 from app.domain.models import (
@@ -38,12 +41,14 @@ from app.domain.models import (
     Conversation,
     ConversationSlots,
     Customer,
+    FailedJob,
     InstagramAccount,
     InstagramProductMap,
     Message,
     Order,
     OrderItem,
     Product,
+    ProductUpsell,
     ProductVariant,
     Shop,
     ShopAgentSettings,
@@ -52,6 +57,7 @@ from app.domain.models import (
     SuggestedReply,
     TriggerEvent,
     UnavailableDemandLog,
+    UpsellSuggestion,
     User,
 )
 from app.repositories.shop_repository import ShopMemberRepository, ShopRepository
@@ -199,6 +205,272 @@ def _ensure_message(
     db.add(message)
 
 
+def _seed_dashboard_metrics_demo(
+    db: Session,
+    *,
+    shop: Shop,
+    account: InstagramAccount,
+    now: datetime,
+    hoodie: Product,
+    dress: Product,
+    black_shirt: Product | None,
+    hoodie_variant: ProductVariant | None,
+    dress_variant: ProductVariant | None,
+    shirt_variant: ProductVariant | None,
+    ali: Customer,
+    sara: Customer,
+    reza: Customer,
+    conv_order_ready: Conversation,
+    conv_handoff: Conversation,
+    conv_sim: Conversation,
+) -> None:
+    """Extra conversations, orders, and upsells so dashboard funnel/recovery widgets look alive."""
+    if db.scalar(
+        select(Order).where(
+            Order.shop_id == shop.id,
+            Order.notes == "demo-order-recovered-hoodie",
+        )
+    ) is not None:
+        return
+
+    nadia = _get_or_create_customer(
+        db,
+        shop.id,
+        instagram_user_id="demo-cust-nadia",
+        full_name="Nadia Hosseini",
+        phone="09123334444",
+    )
+    conv_dress = _get_or_create_conversation(
+        db,
+        shop_id=shop.id,
+        account_id=account.id,
+        customer_id=nadia.id,
+        channel_conversation_id="demo-conv-dress-inquiry",
+        state=ConversationState.OPEN,
+        workflow_state=AgentWorkflowState.WAITING_FOR_CUSTOMER_INFO,
+        handoff_required=False,
+        priority_level=ConversationPriorityLevel.MEDIUM,
+        priority_score=45,
+        last_message_at=now - timedelta(hours=5),
+    )
+
+    for message_id, conversation_id, text, created_at in [
+        ("demo-msg-ali-in-2", conv_order_ready.id, "آدرس همینه که قبلاً فرستادم", now - timedelta(minutes=15)),
+        ("demo-msg-sara-in-2", conv_handoff.id, "What colors do you have?", now - timedelta(minutes=5)),
+        ("demo-msg-sara-in-3", conv_handoff.id, "Maybe navy instead?", now - timedelta(minutes=3)),
+        ("demo-msg-reza-in-2", conv_sim.id, "قیمت چنده؟", now - timedelta(hours=1, minutes=50)),
+        ("demo-msg-nadia-in-1", conv_dress.id, "Is the red dress available in S?", now - timedelta(hours=6)),
+        ("demo-msg-nadia-in-2", conv_dress.id, "Perfect, I'll take it", now - timedelta(hours=5, minutes=45)),
+    ]:
+        _ensure_message(
+            db,
+            conversation_id=conversation_id,
+            instagram_message_id=message_id,
+            direction=MessageDirection.INBOUND,
+            text=text,
+            created_at=created_at,
+        )
+
+    if db.scalar(select(ConversationSlots).where(ConversationSlots.conversation_id == conv_dress.id)) is None:
+        db.add(
+            ConversationSlots(
+                conversation_id=conv_dress.id,
+                product_id=dress.id,
+                product_variant_id=dress_variant.id if dress_variant is not None else None,
+                instagram_post_url=POST_URL_DRESS,
+                color="Red",
+                normalized_color="red",
+                size="S",
+                normalized_size="S",
+                quantity=1,
+                missing_fields=[],
+                confidence={"intent": 0.9, "product": 0.86, "variant": 0.88},
+            )
+        )
+
+    if black_shirt is not None and db.scalar(
+        select(ConversationSlots).where(ConversationSlots.conversation_id == conv_sim.id)
+    ) is None:
+        db.add(
+            ConversationSlots(
+                conversation_id=conv_sim.id,
+                product_id=black_shirt.id,
+                product_variant_id=shirt_variant.id if shirt_variant is not None else None,
+                color="Black",
+                normalized_color="black",
+                size="L",
+                normalized_size="L",
+                quantity=1,
+                missing_fields=["address"],
+                confidence={"intent": 0.82, "product": 0.79, "variant": 0.8},
+            )
+        )
+
+    if hoodie_variant is None or dress_variant is None:
+        return
+
+    _ensure_order_with_item(
+        db,
+        shop_id=shop.id,
+        customer_id=nadia.id,
+        conversation_id=conv_dress.id,
+        product=dress,
+        variant=dress_variant,
+        status=OrderStatus.EXPIRED,
+        payment_status=OrderPaymentStatus.UNPAID,
+        shipping_status=OrderShippingStatus.NOT_STARTED,
+        customer_name="Nadia Hosseini",
+        reference_key="demo-order-expired-dress",
+        recovery_status=OrderRecoveryStatus.ELIGIBLE,
+    )
+    _ensure_order_with_item(
+        db,
+        shop_id=shop.id,
+        customer_id=ali.id,
+        conversation_id=conv_order_ready.id,
+        product=hoodie,
+        variant=hoodie_variant,
+        status=OrderStatus.PAID,
+        payment_status=OrderPaymentStatus.PAID,
+        shipping_status=OrderShippingStatus.PREPARING,
+        customer_name="Ali Rezaei",
+        reference_key="demo-order-recovered-hoodie",
+        recovery_status=OrderRecoveryStatus.RECOVERED,
+    )
+
+    upsell_rule = db.scalar(
+        select(ProductUpsell).where(
+            ProductUpsell.shop_id == shop.id,
+            ProductUpsell.source_product_id == hoodie.id,
+            ProductUpsell.target_product_id == dress.id,
+        )
+    )
+    if upsell_rule is None:
+        upsell_rule = ProductUpsell(
+            shop_id=shop.id,
+            source_product_id=hoodie.id,
+            target_product_id=dress.id,
+            message_template="Customers also love our {target_product} — want to add one?",
+            is_active=True,
+        )
+        db.add(upsell_rule)
+        db.flush()
+
+    upsell_specs = [
+        (conv_order_ready.id, ali.id, UpsellSuggestionStatus.ACCEPTED, "demo-upsell-accepted"),
+        (conv_handoff.id, sara.id, UpsellSuggestionStatus.SUGGESTED, "demo-upsell-suggested-handoff"),
+        (conv_sim.id, reza.id, UpsellSuggestionStatus.SUGGESTED, "demo-upsell-suggested-sim"),
+        (conv_dress.id, nadia.id, UpsellSuggestionStatus.SUGGESTED, "demo-upsell-suggested-dress"),
+    ]
+    for conversation_id, customer_id, status, marker in upsell_specs:
+        if db.scalar(
+            select(UpsellSuggestion).where(
+                UpsellSuggestion.shop_id == shop.id,
+                UpsellSuggestion.suggested_text.like(f"%{marker}%"),
+            )
+        ) is not None:
+            continue
+        db.add(
+            UpsellSuggestion(
+                shop_id=shop.id,
+                conversation_id=conversation_id,
+                source_product_id=hoodie.id,
+                target_product_id=dress.id,
+                suggested_text=f"{marker}: Pair the hoodie with our linen dress?",
+                status=status,
+            )
+        )
+
+    logger.info("Seeded dashboard funnel, recovery, and upsell demo metrics")
+
+
+def _seed_failed_jobs(
+    db: Session,
+    *,
+    shop: Shop,
+    account: InstagramAccount,
+    conv_order_ready: Conversation,
+    conv_handoff: Conversation,
+    ali: Customer,
+    sara: Customer,
+) -> None:
+    if db.scalar(select(FailedJob).where(FailedJob.error_message.like("demo:%")).limit(1)) is not None:
+        return
+
+    inbound_order = db.scalar(
+        select(Message).where(Message.instagram_message_id == "demo-msg-ali-in-1")
+    )
+    inbound_handoff = db.scalar(
+        select(Message).where(Message.instagram_message_id == "demo-msg-sara-in-1")
+    )
+    now = datetime.now(UTC)
+    settings_queue = "instagram.message.received"
+    dlq_queue = "instagram.message.received.dlq"
+
+    if inbound_order is not None:
+        db.add(
+            FailedJob(
+                shop_id=shop.id,
+                queue_name=settings_queue,
+                job_type="message_received",
+                payload={
+                    "message_id": str(inbound_order.id),
+                    "conversation_id": str(conv_order_ready.id),
+                    "shop_id": str(shop.id),
+                    "instagram_account_id": str(account.id),
+                    "customer_id": str(ali.id),
+                },
+                error_message="demo: ConversationOrchestrator timed out waiting for OpenAI response",
+                traceback="TimeoutError: LLM request exceeded 30s",
+                retry_count=3,
+                max_retries=3,
+                status=FailedJobStatus.FAILED,
+                resolved=False,
+                created_at=now - timedelta(minutes=12),
+            )
+        )
+
+    if inbound_handoff is not None:
+        db.add(
+            FailedJob(
+                shop_id=shop.id,
+                queue_name=dlq_queue,
+                job_type="message_received",
+                payload={
+                    "message_id": str(inbound_handoff.id),
+                    "conversation_id": str(conv_handoff.id),
+                    "shop_id": str(shop.id),
+                    "instagram_account_id": str(account.id),
+                    "customer_id": str(sara.id),
+                },
+                error_message="demo: Variant lock could not be acquired after max retries",
+                traceback="ConversationLockedError: Conversation lock held by another worker",
+                retry_count=3,
+                max_retries=3,
+                status=FailedJobStatus.FAILED,
+                resolved=False,
+                created_at=now - timedelta(minutes=5),
+            )
+        )
+
+    db.add(
+        FailedJob(
+            shop_id=None,
+            queue_name=dlq_queue,
+            job_type="message_received",
+            payload={"raw": "malformed-worker-payload", "retry_count": 3},
+            error_message="demo: Worker payload failed JSON schema validation",
+            traceback='ValidationError: 3 validation errors for MessageReceivedJob\nmessage_id\n  field required',
+            retry_count=3,
+            max_retries=3,
+            status=FailedJobStatus.FAILED,
+            resolved=False,
+            created_at=now - timedelta(minutes=2),
+        )
+    )
+    logger.info("Seeded demo failed jobs for system health UI")
+
+
 def _ensure_order_with_item(
     db: Session,
     *,
@@ -212,6 +484,7 @@ def _ensure_order_with_item(
     shipping_status: OrderShippingStatus,
     customer_name: str,
     reference_key: str,
+    recovery_status: OrderRecoveryStatus = OrderRecoveryStatus.NONE,
 ) -> Order:
     existing = db.scalar(
         select(Order).where(
@@ -220,6 +493,8 @@ def _ensure_order_with_item(
         )
     )
     if existing is not None:
+        if existing.recovery_status != recovery_status:
+            existing.recovery_status = recovery_status
         return existing
 
     order = Order(
@@ -238,6 +513,7 @@ def _ensure_order_with_item(
         address="Valiasr St 10",
         postal_code="1234567890",
         notes=reference_key,
+        recovery_status=recovery_status,
     )
     db.add(order)
     db.flush()
@@ -466,6 +742,9 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
 
     hoodie_variant = db.scalar(
         select(ProductVariant).where(ProductVariant.product_id == hoodie.id, ProductVariant.sku == "HD-BLK-L")
+    )
+    dress_variant = db.scalar(
+        select(ProductVariant).where(ProductVariant.product_id == dress.id, ProductVariant.sku == "DR-RED-S")
     )
     shirt_variant = None
     if black_shirt is not None:
@@ -727,6 +1006,35 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
     if account.status != InstagramAccountStatus.CONNECTED:
         account.status = InstagramAccountStatus.CONNECTED
     account.webhook_enabled = True
+
+    _seed_dashboard_metrics_demo(
+        db,
+        shop=shop,
+        account=account,
+        now=now,
+        hoodie=hoodie,
+        dress=dress,
+        black_shirt=black_shirt,
+        hoodie_variant=hoodie_variant,
+        dress_variant=dress_variant,
+        shirt_variant=shirt_variant,
+        ali=ali,
+        sara=sara,
+        reza=reza,
+        conv_order_ready=conv_order_ready,
+        conv_handoff=conv_handoff,
+        conv_sim=conv_sim,
+    )
+
+    _seed_failed_jobs(
+        db,
+        shop=shop,
+        account=account,
+        conv_order_ready=conv_order_ready,
+        conv_handoff=conv_handoff,
+        ali=ali,
+        sara=sara,
+    )
 
     db.flush()
     logger.info("Rich demo data seeded for shop %s", shop.slug)

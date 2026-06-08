@@ -23,6 +23,7 @@ import { ProductDetailPage } from '../pages/ProductDetailPage';
 import { ProductsPage } from '../pages/ProductsPage';
 import { PostRevenueAnalyticsPage } from '../pages/PostRevenueAnalyticsPage';
 import { RecoveryRulesPage } from '../pages/RecoveryRulesPage';
+import { SystemHealthPage } from '../pages/SystemHealthPage';
 import { UpsellRulesPage } from '../pages/UpsellRulesPage';
 import { SemanticSearchPage } from '../pages/SemanticSearchPage';
 import { SettingsPage } from '../pages/SettingsPage';
@@ -227,6 +228,14 @@ export function AppRoutes() {
         element={
           <AuthenticatedShell>
             <ConversationDetailPage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/system-health"
+        element={
+          <AuthenticatedShell>
+            <SystemHealthPage />
           </AuthenticatedShell>
         }
       />

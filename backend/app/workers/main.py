@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.core.metrics import PROCESSED_MESSAGES, QUEUE_LAG
 from app.integrations.rabbitmq import RETRY_COUNT_HEADER, RabbitMQPublisher, setup_message_queues
+from app.services.failed_job_service import FailedJobService, format_traceback
 from app.workers.message_consumer import ConversationLockedError, handle_delivery
 
 logger = logging.getLogger(__name__)
@@ -83,26 +84,44 @@ class WorkerApp:
             self._update_queue_lag()
         except ConversationLockedError:
             channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-        except Exception:
+        except Exception as exc:
             logger.exception("Worker failed to process message retry_count=%s", retry_count)
             channel.basic_ack(delivery_tag=method.delivery_tag)
             next_retry = retry_count + 1
+            try:
+                payload = json.loads(body.decode("utf-8"))
+            except json.JSONDecodeError:
+                payload = {"raw": body.decode("utf-8", errors="replace")}
             if next_retry > self.settings.rabbitmq_max_retries:
-                try:
-                    payload = json.loads(body.decode("utf-8"))
-                except json.JSONDecodeError:
-                    payload = {"raw": body.decode("utf-8", errors="replace")}
                 self._publisher.publish_to_dlq(payload, next_retry)
+                self._persist_failed_job(payload, next_retry, exc)
             else:
-                try:
-                    payload = json.loads(body.decode("utf-8"))
-                    self._publisher.publish(
-                        self.settings.rabbitmq_queue_message_received,
-                        payload,
-                        retry_count=next_retry,
-                    )
-                except json.JSONDecodeError:
-                    self._publisher.publish_to_dlq({"raw": body.decode("utf-8", errors="replace")}, next_retry)
+                self._publisher.publish(
+                    self.settings.rabbitmq_queue_message_received,
+                    payload,
+                    retry_count=next_retry,
+                )
+
+    def _persist_failed_job(self, payload: dict, retry_count: int, exc: Exception | None) -> None:
+        from app.db.session import SessionLocal
+
+        db = SessionLocal()
+        try:
+            FailedJobService.record_failure(
+                db,
+                queue_name=self.settings.rabbitmq_queue_dlq,
+                job_type="message_received",
+                payload=payload,
+                error_message=str(exc) if exc else "Max retries exceeded",
+                retry_count=retry_count,
+                tb=format_traceback(exc) if exc else None,
+                settings=self.settings,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Unable to persist failed job record")
+            db.rollback()
+        finally:
+            db.close()
 
 
 def main() -> None:

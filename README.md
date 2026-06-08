@@ -304,7 +304,7 @@ Use this checklist after `docker compose up --build` and seeding a demo shop.
 
 - Structured JSON logs with `request_id` correlation
 - Prometheus metrics at `GET /api/v1/metrics`
-- Readiness probe at `GET /api/v1/ready` (postgres, redis, rabbitmq, qdrant)
+- Readiness probe at `GET /api/v1/ready` (postgres, redis, rabbitmq, qdrant). Returns HTTP 200 for `ok` and `degraded`; HTTP 503 only when Postgres is unavailable (`failed`).
 
 ### Reliability
 
@@ -368,7 +368,11 @@ cd backend && alembic upgrade head && uvicorn app.main:create_app --factory --re
 cd frontend && npm install && npm run dev
 ```
 
-Key admin pages: `/onboarding`, `/simulator`, `/analytics`, `/instagram-mapping`, `/conversations`, `/orders`.
+Key admin pages: `/onboarding`, `/simulator`, `/analytics`, `/system-health`, `/instagram-mapping`, `/conversations`, `/orders`.
+
+## Sprint F: Pilot readiness
+
+See [Sprint F pilot readiness guide](docs/sprint-f-pilot-readiness.md) for analytics APIs, system health, failed jobs, idempotency, security audit coverage, and the production readiness checklist.
 
 
 ## Competitor-informed positioning

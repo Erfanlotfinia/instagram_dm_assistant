@@ -103,6 +103,12 @@ class ConversationOrchestrator:
             logger.warning("Message %s not found", message_id)
             return False
 
+        existing_run = self.agent_runs.get_by_input_message_id(message_id)
+        if existing_run is not None:
+            logger.info("Agent run already exists for message %s; skipping duplicate processing", message_id)
+            self.db.commit()
+            return True
+
         ConversationEventService(self.db).record(
             conversation_id,
             ConversationEventType.INBOUND_MESSAGE,

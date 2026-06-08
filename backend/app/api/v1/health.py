@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 import pika
 import redis
@@ -14,6 +14,12 @@ from app.db.session import SessionLocal
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
+
+CheckStatus = Literal["ok", "error"]
+
+
+def _normalize_check(result: dict[str, Any]) -> CheckStatus:
+    return "ok" if result.get("status") == "ok" else "error"
 
 
 def _check_postgres() -> dict[str, Any]:
@@ -62,6 +68,33 @@ def _check_qdrant() -> dict[str, Any]:
         return {"status": "error", "detail": str(exc)}
 
 
+def _check_openai_config() -> dict[str, Any]:
+    settings = get_settings()
+    if settings.openai_api_key:
+        return {"status": "ok"}
+    return {"status": "error", "detail": "OPENAI_API_KEY is not configured"}
+
+
+def build_readiness_payload() -> tuple[str, dict[str, CheckStatus], bool]:
+    raw_checks = {
+        "postgres": _check_postgres(),
+        "redis": _check_redis(),
+        "rabbitmq": _check_rabbitmq(),
+        "qdrant": _check_qdrant(),
+        "openai_config": _check_openai_config(),
+    }
+    checks = {name: _normalize_check(result) for name, result in raw_checks.items()}
+    postgres_ok = checks["postgres"] == "ok"
+    all_ok = all(value == "ok" for value in checks.values())
+    if not postgres_ok:
+        overall = "failed"
+    elif all_ok:
+        overall = "ok"
+    else:
+        overall = "degraded"
+    return overall, checks, all_ok
+
+
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -69,18 +102,10 @@ def health() -> dict[str, str]:
 
 @router.get("/ready")
 def ready(response: Response) -> dict[str, Any]:
-    settings = get_settings()
-    checks = {
-        "postgres": _check_postgres(),
-        "redis": _check_redis(),
-        "rabbitmq": _check_rabbitmq(),
-        "qdrant": _check_qdrant(),
-        "openai_config": {"status": "ok" if bool(settings.openai_api_key) else "error", "detail": None if settings.openai_api_key else "OPENAI_API_KEY is not configured"},
-    }
-    all_ok = all(check["status"] == "ok" for check in checks.values())
-    if not all_ok:
+    overall, checks, _all_ok = build_readiness_payload()
+    if overall == "failed":
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-    return {"status": "ok" if all_ok else "degraded", "checks": checks}
+    return {"status": overall, "checks": checks}
 
 
 @router.get("/metrics")

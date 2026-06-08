@@ -21,10 +21,10 @@ import type {
   RecoveryRuleUpdate,
 } from '../types/sprintD';
 import type { DashboardMetrics } from '../types/dashboard';
-import type { AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PostPerformanceRow, ResponseTimeAnalytics, SimulatorRunSummary, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
+import type { AgentPerformanceMetrics, AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PaginatedLostDemand, PaginatedOperatorPerformance, PostPerformanceRow, ResponseTimeAnalytics, SimulatorRunSummary, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
 import type { SemanticSearchResponse } from '../types/semanticSearch';
 import type { LoginRequest, TokenResponse, User } from '../types/auth';
-import type { HealthResponse } from '../types/health';
+import type { FailedJobListResponse, HealthResponse, ReadinessResponse } from '../types/health';
 import type { ColorAlias, SizeAlias, UnavailableDemandLog, VariantResolverResult } from '../types/fashion';
 import type { InstagramAccount, InstagramAccountCreate } from '../types/instagramAccount';
 import type {
@@ -115,6 +115,7 @@ function buildQuery(params: Record<string, string | undefined>): string {
 
 export const apiClient = {
   getHealth: () => request<HealthResponse>('/api/v1/health'),
+  getReady: () => request<ReadinessResponse>('/api/v1/ready'),
   login: (payload: LoginRequest) =>
     request<TokenResponse>('/api/v1/auth/login', {
       method: 'POST',
@@ -163,22 +164,74 @@ export const apiClient = {
     request<SimulatorRunSummary[]>(`/api/v1/shops/${shopId}/simulator/runs`),
   resetDMSimulator: (shopId: string) =>
     request<{ deleted_conversations: number }>(`/api/v1/shops/${shopId}/simulator/reset`, { method: 'DELETE' }),
-  getAnalyticsFunnel: (shopId: string, start?: string, end?: string) =>
-    request<FunnelAnalytics>(`/api/v1/shops/${shopId}/analytics/funnel${buildQuery({ start, end })}`),
-  getAnalyticsPosts: (shopId: string, start?: string, end?: string) =>
-    request<PostPerformanceRow[]>(`/api/v1/shops/${shopId}/analytics/posts${buildQuery({ start, end })}`),
-  getAnalyticsStockDemand: (shopId: string, start?: string, end?: string) =>
-    request<StockDemandRow[]>(`/api/v1/shops/${shopId}/analytics/stock-demand${buildQuery({ start, end })}`),
-  getAnalyticsUnavailableDemand: (shopId: string, start?: string, end?: string) =>
-    request<UnavailableDemandRow[]>(`/api/v1/shops/${shopId}/analytics/unavailable-demand${buildQuery({ start, end })}`),
-  getAnalyticsResponseTime: (shopId: string, start?: string, end?: string) =>
-    request<ResponseTimeAnalytics>(`/api/v1/shops/${shopId}/analytics/response-time${buildQuery({ start, end })}`),
-  getAnalyticsHandoff: (shopId: string, start?: string, end?: string) =>
-    request<HandoffAnalyticsRow[]>(`/api/v1/shops/${shopId}/analytics/handoff${buildQuery({ start, end })}`),
-  getPostRevenueAnalytics: (shopId: string, start?: string, end?: string) =>
-    request<PostRevenueRow[]>(
-      `/api/v1/shops/${shopId}/analytics/post-revenue${buildQuery({ start, end })}`,
+  getAnalyticsFunnel: (shopId: string, dateFrom?: string, dateTo?: string) =>
+    request<FunnelAnalytics>(
+      `/api/v1/shops/${shopId}/analytics/funnel${buildQuery({ date_from: dateFrom, date_to: dateTo })}`,
     ),
+  getAnalyticsPosts: (shopId: string, dateFrom?: string, dateTo?: string) =>
+    request<PostPerformanceRow[]>(
+      `/api/v1/shops/${shopId}/analytics/posts${buildQuery({ date_from: dateFrom, date_to: dateTo })}`,
+    ),
+  getAnalyticsStockDemand: (shopId: string, dateFrom?: string, dateTo?: string) =>
+    request<StockDemandRow[]>(
+      `/api/v1/shops/${shopId}/analytics/stock-demand${buildQuery({ date_from: dateFrom, date_to: dateTo })}`,
+    ),
+  getAnalyticsUnavailableDemand: (shopId: string, dateFrom?: string, dateTo?: string) =>
+    request<UnavailableDemandRow[]>(
+      `/api/v1/shops/${shopId}/analytics/unavailable-demand${buildQuery({ date_from: dateFrom, date_to: dateTo })}`,
+    ),
+  getAnalyticsResponseTime: (shopId: string, dateFrom?: string, dateTo?: string) =>
+    request<ResponseTimeAnalytics>(
+      `/api/v1/shops/${shopId}/analytics/response-time${buildQuery({ date_from: dateFrom, date_to: dateTo })}`,
+    ),
+  getAnalyticsHandoff: (shopId: string, dateFrom?: string, dateTo?: string) =>
+    request<HandoffAnalyticsRow[]>(
+      `/api/v1/shops/${shopId}/analytics/handoff${buildQuery({ date_from: dateFrom, date_to: dateTo })}`,
+    ),
+  getAnalyticsLostDemand: (shopId: string, dateFrom?: string, dateTo?: string, page = 1) =>
+    request<PaginatedLostDemand>(
+      `/api/v1/shops/${shopId}/analytics/lost-demand${buildQuery({ date_from: dateFrom, date_to: dateTo, page: String(page) })}`,
+    ),
+  getAnalyticsOperatorPerformance: (shopId: string, dateFrom?: string, dateTo?: string, page = 1) =>
+    request<PaginatedOperatorPerformance>(
+      `/api/v1/shops/${shopId}/analytics/operator-performance${buildQuery({ date_from: dateFrom, date_to: dateTo, page: String(page) })}`,
+    ),
+  getAnalyticsAgentPerformance: (shopId: string, dateFrom?: string, dateTo?: string) =>
+    request<AgentPerformanceMetrics>(
+      `/api/v1/shops/${shopId}/analytics/agent-performance${buildQuery({ date_from: dateFrom, date_to: dateTo })}`,
+    ),
+  getPostRevenueAnalytics: (shopId: string, dateFrom?: string, dateTo?: string) =>
+    request<PostRevenueRow[]>(
+      `/api/v1/shops/${shopId}/analytics/post-revenue${buildQuery({ date_from: dateFrom, date_to: dateTo })}`,
+    ),
+  listFailedJobs: (shopId: string, page = 1) =>
+    request<FailedJobListResponse>(`/api/v1/shops/${shopId}/failed-jobs${buildQuery({ page: String(page) })}`),
+  listAccessibleFailedJobs: (options?: { shopId?: string; unscopedOnly?: boolean; page?: number }) =>
+    request<FailedJobListResponse>(
+      `/api/v1/failed-jobs${buildQuery({
+        shop_id: options?.shopId,
+        unscoped_only: options?.unscopedOnly ? 'true' : undefined,
+        page: String(options?.page ?? 1),
+      })}`,
+    ),
+  retryFailedJob: (shopId: string, jobId: string) =>
+    request<{ id: string; status: string; message: string }>(
+      `/api/v1/shops/${shopId}/failed-jobs/${jobId}/retry`,
+      { method: 'POST' },
+    ),
+  retryFailedJobById: (jobId: string) =>
+    request<{ id: string; status: string; message: string }>(`/api/v1/failed-jobs/${jobId}/retry`, {
+      method: 'POST',
+    }),
+  ignoreFailedJob: (shopId: string, jobId: string) =>
+    request<{ id: string; status: string; message: string }>(
+      `/api/v1/shops/${shopId}/failed-jobs/${jobId}/ignore`,
+      { method: 'POST' },
+    ),
+  ignoreFailedJobById: (jobId: string) =>
+    request<{ id: string; status: string; message: string }>(`/api/v1/failed-jobs/${jobId}/ignore`, {
+      method: 'POST',
+    }),
   listRecoveryRules: (shopId: string) =>
     request<RecoveryRule[]>(`/api/v1/shops/${shopId}/recovery-rules`),
   createRecoveryRule: (shopId: string, payload: RecoveryRuleCreate) =>

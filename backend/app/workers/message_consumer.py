@@ -9,13 +9,13 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.db.session import SessionLocal
 from app.domain.enums import WebhookProcessingStatus
-from app.domain.models import FailedJob
 from app.integrations.redis_lock import ConversationLockService
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.webhook_event_repository import WebhookEventRepository
 from app.schemas.queue_events import MessageReceivedJob
 from app.services.conversation_orchestrator import ConversationOrchestrator
+from app.services.failed_job_service import FailedJobService, format_traceback
 
 logger = logging.getLogger(__name__)
 
@@ -93,8 +93,15 @@ def handle_delivery(body: bytes) -> bool:
     except Exception as exc:
         db.rollback()
         try:
-            db.add(FailedJob(queue_name=get_settings().rabbitmq_queue_message_received, job_type="message_received", payload=payload, error_message=str(exc), retry_count=int(payload.get("retry_count", 0) or 0), max_retries=get_settings().rabbitmq_max_retries))
-            db.commit()
+            FailedJobService.record_failure(
+                db,
+                queue_name=get_settings().rabbitmq_queue_message_received,
+                job_type="message_received",
+                payload=payload,
+                error_message=str(exc),
+                retry_count=int(payload.get("retry_count", 0) or 0),
+                tb=format_traceback(exc),
+            )
         except Exception:  # noqa: BLE001
             db.rollback()
         logger.exception("Failed to process RabbitMQ job")

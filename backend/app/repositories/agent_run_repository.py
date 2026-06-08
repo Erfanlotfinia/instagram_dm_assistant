@@ -23,3 +23,6 @@ class AgentRunRepository:
             .limit(limit)
         )
         return list(self.db.scalars(stmt).all())
+
+    def get_by_input_message_id(self, message_id: UUID) -> AgentRun | None:
+        return self.db.scalar(select(AgentRun).where(AgentRun.input_message_id == message_id))

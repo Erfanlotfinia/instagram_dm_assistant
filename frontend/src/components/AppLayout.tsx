@@ -29,6 +29,7 @@ export function AppLayout({ children }: PropsWithChildren) {
     { to: '/instagram-accounts', label: 'Instagram Accounts' },
     { to: '/shops', label: 'Shops' },
     { to: '/settings', label: 'Settings' },
+    { to: '/system-health', label: 'System Health' },
   ];
 
   return (

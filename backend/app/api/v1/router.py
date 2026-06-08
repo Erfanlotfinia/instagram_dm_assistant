@@ -6,6 +6,8 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.conversations import router as conversations_router
 from app.api.v1.customers import router as customers_router
 from app.api.v1.decision_traces import router as decision_traces_router
+from app.api.v1.failed_jobs import router as failed_jobs_router
+from app.api.v1.failed_jobs_platform import router as failed_jobs_platform_router
 from app.api.v1.fashion import router as fashion_router
 from app.api.v1.health import router as health_router
 from app.api.v1.jobs import router as jobs_router
@@ -41,6 +43,8 @@ router.include_router(webhooks_router)
 router.include_router(jobs_router)
 
 router.include_router(fashion_router)
+router.include_router(failed_jobs_platform_router)
+router.include_router(failed_jobs_router)
 router.include_router(simulator_router)
 router.include_router(triggers_router)
 router.include_router(analytics_router)

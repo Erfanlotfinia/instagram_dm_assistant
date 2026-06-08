@@ -245,6 +245,12 @@ class UpsellSuggestionStatus(str, enum.Enum):
     SKIPPED = "skipped"
 
 
+class FailedJobStatus(str, enum.Enum):
+    FAILED = "failed"
+    RETRIED = "retried"
+    IGNORED = "ignored"
+
+
 class ConversationEventType(str, enum.Enum):
     INBOUND_MESSAGE = "inbound_message_received"
     OUTBOUND_MESSAGE = "outbound_message_sent"

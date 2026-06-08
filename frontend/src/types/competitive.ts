@@ -51,7 +51,13 @@ export interface SimulatorRunSummary {
 
 export interface FunnelAnalytics {
   inbound_messages: number;
+  product_resolved_count?: number;
+  variant_resolved_count?: number;
+  draft_orders?: number;
+  confirmed_orders?: number;
+  waiting_for_payment?: number;
   resolved_product_rate: number;
+  product_resolved_rate?: number;
   variant_resolved_rate: number;
   draft_order_rate: number;
   payment_conversion_rate: number;
@@ -141,4 +147,50 @@ export interface ResponseTimeAnalytics {
   average_first_response_time_seconds: number | null;
   average_time_to_draft_order_seconds: number | null;
   average_time_to_payment_seconds: number | null;
+}
+
+export interface LostDemandRow {
+  requested_product: string | null;
+  requested_color: string | null;
+  requested_size: string | null;
+  product_id: string | null;
+  count: number;
+  estimated_lost_revenue: string;
+  reason: string | null;
+}
+
+export interface PaginatedLostDemand {
+  items: LostDemandRow[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface OperatorPerformanceRow {
+  operator_id: string;
+  operator_name: string;
+  assigned_conversations: number;
+  resolved_conversations: number;
+  average_response_time_seconds: number | null;
+  manual_messages_sent: number;
+  orders_closed: number;
+  revenue_assisted: string;
+}
+
+export interface PaginatedOperatorPerformance {
+  items: OperatorPerformanceRow[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface AgentPerformanceMetrics {
+  auto_sent_messages: number;
+  preview_required_messages: number;
+  handoff_rate: number;
+  failed_agent_runs: number;
+  invalid_llm_outputs: number;
+  average_intent_confidence: number | null;
+  average_product_confidence: number | null;
+  average_variant_confidence: number | null;
 }

@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class FunnelAnalytics(BaseModel):
@@ -25,6 +25,11 @@ class FunnelAnalytics(BaseModel):
     operator_handoff_rate: float = 0.0
     average_time_to_first_response_seconds: float | None = None
     average_time_to_payment_seconds: float | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def product_resolved_rate(self) -> float:
+        return self.resolved_product_rate
 
 
 class PostPerformanceRow(BaseModel):
@@ -77,3 +82,49 @@ class ResponseTimeAnalytics(BaseModel):
     average_first_response_time_seconds: float | None = None
     average_time_to_draft_order_seconds: float | None = None
     average_time_to_payment_seconds: float | None = None
+
+
+class LostDemandRow(BaseModel):
+    requested_product: str | None = None
+    requested_color: str | None = None
+    requested_size: str | None = None
+    product_id: UUID | None = None
+    count: int = 0
+    estimated_lost_revenue: Decimal = Decimal("0")
+    reason: str | None = None
+
+
+class LostDemandListResponse(BaseModel):
+    items: list[LostDemandRow]
+    total: int
+    page: int
+    page_size: int
+
+
+class OperatorPerformanceRow(BaseModel):
+    operator_id: UUID
+    operator_name: str
+    assigned_conversations: int = 0
+    resolved_conversations: int = 0
+    average_response_time_seconds: float | None = None
+    manual_messages_sent: int = 0
+    orders_closed: int = 0
+    revenue_assisted: Decimal = Decimal("0")
+
+
+class OperatorPerformanceListResponse(BaseModel):
+    items: list[OperatorPerformanceRow]
+    total: int
+    page: int
+    page_size: int
+
+
+class AgentPerformanceMetrics(BaseModel):
+    auto_sent_messages: int = 0
+    preview_required_messages: int = 0
+    handoff_rate: float = 0.0
+    failed_agent_runs: int = 0
+    invalid_llm_outputs: int = 0
+    average_intent_confidence: float | None = None
+    average_product_confidence: float | None = None
+    average_variant_confidence: float | None = None
