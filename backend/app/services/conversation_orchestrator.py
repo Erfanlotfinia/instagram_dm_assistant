@@ -188,16 +188,41 @@ class ConversationOrchestrator:
             conversation.state = ConversationState.PENDING_HANDOFF
             HANDOFF_COUNT.inc()
 
-        payment_url: str | None = None
-        active_order = None
+        active_order = self.order_service.orders.get_active_for_conversation(conversation_id)
+        estimated_order_value = self._estimated_order_value(active_order, variant, slots)
+        settings_row = self._get_or_create_agent_settings(conversation.shop_id)
+        decision = AutoSendDecisionService().decide(
+            AutoSendDecisionInput(
+                settings=settings_row,
+                intent_confidence=extraction.confidence.intent,
+                product_confidence=extraction.confidence.product,
+                variant_confidence=extraction.confidence.slots,
+                address_confidence=extraction.confidence.address,
+                order_value=estimated_order_value,
+                is_first_order=self._is_first_customer_order(conversation),
+                handoff_reason=conversation.handoff_reason if conversation.handoff_required else None,
+                message_risk="simulation" if conversation.is_simulation else None,
+            )
+        )
+        preview_reason = ";".join(decision.reasons) if decision.reasons else None
+        conversation.preview_required = decision.requires_preview
+        conversation.preview_reason = preview_reason
+        if decision.requires_handoff:
+            conversation.handoff_required = True
+            conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
+            conversation.state = ConversationState.PENDING_HANDOFF
 
-        if extraction.intent == AgentIntent.CANCEL_ORDER:
-            self.order_service.cancel_active_for_conversation(
+        payment_url: str | None = None
+        order_side_effects_allowed = decision.auto_send_allowed and not conversation.is_simulation
+
+        if order_side_effects_allowed and extraction.intent == AgentIntent.CANCEL_ORDER:
+            active_order = self.order_service.cancel_active_for_conversation(
                 conversation_id,
                 reason="Customer cancelled via chat",
             )
         elif (
-            product is not None
+            order_side_effects_allowed
+            and product is not None
             and variant is not None
             and self.order_service.can_create_draft(slots, variant)
         ):
@@ -239,6 +264,14 @@ class ConversationOrchestrator:
                     elif inventory_available is False:
                         conversation.workflow_state = AgentWorkflowState.WAITING_FOR_VARIANT
                         slots.missing_fields = ["stock"]
+        elif not order_side_effects_allowed:
+            self._log_action(
+                conversation_id,
+                "order_side_effects_blocked",
+                {"intent": extraction.intent.value},
+                {"reasons": decision.reasons},
+                confidence=extraction.confidence.intent,
+            )
 
         reply = self.response_service.generate(
             ReplyFacts(
@@ -509,6 +542,17 @@ class ConversationOrchestrator:
             return True
         order_count = self.db.query(Order).filter(Order.customer_id == conversation.customer_id).count()
         return order_count <= 1
+
+    def _estimated_order_value(
+        self, active_order: Order | None, variant: ProductVariant | None, slots
+    ) -> Decimal:
+        values: list[Decimal] = []
+        if active_order is not None:
+            values.append(Decimal(active_order.total_amount))
+        if variant is not None:
+            quantity = slots.quantity or 1
+            values.append(Decimal(str(variant.price)) * Decimal(quantity))
+        return max(values, default=Decimal("0"))
 
     def _audit_decision(
         self,

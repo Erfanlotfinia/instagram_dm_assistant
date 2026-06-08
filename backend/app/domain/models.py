@@ -52,6 +52,10 @@ from app.domain.enums import (
 from app.domain.mixins import TimestampMixin
 
 
+def enum_values(enum_cls: type[Any]) -> list[str]:
+    return [member.value for member in enum_cls]
+
+
 class User(Base, TimestampMixin):
     __tablename__ = "users"
 
