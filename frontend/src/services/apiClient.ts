@@ -10,6 +10,16 @@ import type {
   MessageCreate,
   SuggestedReply,
 } from '../types/conversation';
+import type {
+  CustomerPreferences,
+  PostRevenueRow,
+  ProductUpsellCreate,
+  ProductUpsellRule,
+  ProductUpsellUpdate,
+  RecoveryRule,
+  RecoveryRuleCreate,
+  RecoveryRuleUpdate,
+} from '../types/sprintD';
 import type { DashboardMetrics } from '../types/dashboard';
 import type { AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PostPerformanceRow, ResponseTimeAnalytics, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
 import type { SemanticSearchResponse } from '../types/semanticSearch';
@@ -163,6 +173,40 @@ export const apiClient = {
     request<ResponseTimeAnalytics>(`/api/v1/shops/${shopId}/analytics/response-time${buildQuery({ start, end })}`),
   getAnalyticsHandoff: (shopId: string, start?: string, end?: string) =>
     request<HandoffAnalyticsRow[]>(`/api/v1/shops/${shopId}/analytics/handoff${buildQuery({ start, end })}`),
+  getPostRevenueAnalytics: (shopId: string, start?: string, end?: string) =>
+    request<PostRevenueRow[]>(
+      `/api/v1/shops/${shopId}/analytics/post-revenue${buildQuery({ start, end })}`,
+    ),
+  listRecoveryRules: (shopId: string) =>
+    request<RecoveryRule[]>(`/api/v1/shops/${shopId}/recovery-rules`),
+  createRecoveryRule: (shopId: string, payload: RecoveryRuleCreate) =>
+    request<RecoveryRule>(`/api/v1/shops/${shopId}/recovery-rules`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateRecoveryRule: (shopId: string, ruleId: string, payload: RecoveryRuleUpdate) =>
+    request<RecoveryRule>(`/api/v1/shops/${shopId}/recovery-rules/${ruleId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteRecoveryRule: (shopId: string, ruleId: string) =>
+    request<void>(`/api/v1/shops/${shopId}/recovery-rules/${ruleId}`, { method: 'DELETE' }),
+  listProductUpsells: (shopId: string) =>
+    request<ProductUpsellRule[]>(`/api/v1/shops/${shopId}/product-upsells`),
+  createProductUpsell: (shopId: string, payload: ProductUpsellCreate) =>
+    request<ProductUpsellRule>(`/api/v1/shops/${shopId}/product-upsells`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateProductUpsell: (shopId: string, upsellId: string, payload: ProductUpsellUpdate) =>
+    request<ProductUpsellRule>(`/api/v1/shops/${shopId}/product-upsells/${upsellId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteProductUpsell: (shopId: string, upsellId: string) =>
+    request<void>(`/api/v1/shops/${shopId}/product-upsells/${upsellId}`, { method: 'DELETE' }),
+  getCustomerPreferences: (shopId: string, customerId: string) =>
+    request<CustomerPreferences>(`/api/v1/shops/${shopId}/customers/${customerId}/preferences`),
 
   listColorAliases: (shopId: string) => request<ColorAlias[]>(`/api/v1/shops/${shopId}/color-aliases`),
   createColorAlias: (shopId: string, payload: Pick<ColorAlias, 'raw_value' | 'normalized_value' | 'language'>) =>

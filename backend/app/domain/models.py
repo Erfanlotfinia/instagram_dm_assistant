@@ -36,8 +36,11 @@ from app.domain.enums import (
     MessageDirection,
     MessageType,
     OrderPaymentStatus,
+    OrderRecoveryAttemptStatus,
+    OrderRecoveryStatus,
     OrderShippingStatus,
     OrderStatus,
+    UpsellSuggestionStatus,
     PaymentProvider,
     PaymentRecordStatus,
     ProductStatus,
@@ -115,6 +118,12 @@ class Shop(Base, TimestampMixin):
     trigger_rules: Mapped[list[CommentToDmTrigger]] = relationship(back_populates="shop", cascade="all, delete-orphan")
     agent_studio_settings: Mapped[ShopAgentSettings | None] = relationship(back_populates="shop", cascade="all, delete-orphan", uselist=False)
     suggested_replies: Mapped[list[SuggestedReply]] = relationship(back_populates="shop", cascade="all, delete-orphan")
+    recovery_rules: Mapped[list[AbandonedOrderRecoveryRule]] = relationship(
+        back_populates="shop", cascade="all, delete-orphan"
+    )
+    product_upsells: Mapped[list[ProductUpsell]] = relationship(
+        back_populates="shop", cascade="all, delete-orphan"
+    )
 
 
 class ShopMember(Base):
@@ -182,6 +191,9 @@ class Customer(Base, TimestampMixin):
     shop: Mapped[Shop] = relationship(back_populates="customers")
     conversations: Mapped[list[Conversation]] = relationship(back_populates="customer")
     orders: Mapped[list[Order]] = relationship(back_populates="customer")
+    preferences: Mapped[CustomerPreferences | None] = relationship(
+        back_populates="customer", cascade="all, delete-orphan", uselist=False
+    )
 
 
 class Conversation(Base, TimestampMixin):
@@ -717,6 +729,14 @@ class Order(Base, TimestampMixin):
     approval_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
     payment_callback_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    recovery_status: Mapped[OrderRecoveryStatus] = mapped_column(
+        pg_enum(OrderRecoveryStatus, name="order_recovery_status"),
+        nullable=False,
+        default=OrderRecoveryStatus.NONE,
+        index=True,
+    )
+    recovery_attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_recovery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     shop: Mapped[Shop] = relationship(back_populates="orders")
     customer: Mapped[Customer] = relationship(back_populates="orders")
@@ -728,6 +748,9 @@ class Order(Base, TimestampMixin):
         back_populates="order", cascade="all, delete-orphan"
     )
     shipments: Mapped[list[Shipment]] = relationship(
+        back_populates="order", cascade="all, delete-orphan"
+    )
+    recovery_attempts: Mapped[list[OrderRecoveryAttempt]] = relationship(
         back_populates="order", cascade="all, delete-orphan"
     )
 
@@ -930,4 +953,130 @@ class AdminAuditLog(Base):
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+
+class AbandonedOrderRecoveryRule(Base, TimestampMixin):
+    __tablename__ = "abandoned_order_recovery_rules"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    trigger_after_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    message_template: Mapped[str] = mapped_column(Text, nullable=False)
+    only_inside_allowed_messaging_window: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    shop: Mapped[Shop] = relationship(back_populates="recovery_rules")
+
+
+class OrderRecoveryAttempt(Base):
+    __tablename__ = "order_recovery_attempts"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    order_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    conversation_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    message_text: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[OrderRecoveryAttemptStatus] = mapped_column(
+        pg_enum(OrderRecoveryAttemptStatus, name="order_recovery_attempt_status"),
+        nullable=False,
+        default=OrderRecoveryAttemptStatus.CREATED,
+        index=True,
+    )
+    skip_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    order: Mapped[Order] = relationship(back_populates="recovery_attempts")
+    conversation: Mapped[Conversation] = relationship()
+
+
+class CustomerPreferences(Base):
+    __tablename__ = "customer_preferences"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    customer_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("customers.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    preferred_size: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    preferred_colors: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    preferred_categories: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    last_successful_size: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_successful_city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_successful_address_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    customer: Mapped[Customer] = relationship(back_populates="preferences")
+
+
+class ProductUpsell(Base, TimestampMixin):
+    __tablename__ = "product_upsells"
+    __table_args__ = (
+        UniqueConstraint("shop_id", "source_product_id", "target_product_id", name="uq_product_upsells_shop_source_target"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    source_product_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    target_product_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    message_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    shop: Mapped[Shop] = relationship(back_populates="product_upsells")
+    source_product: Mapped[Product] = relationship(foreign_keys=[source_product_id])
+    target_product: Mapped[Product] = relationship(foreign_keys=[target_product_id])
+
+
+class UpsellSuggestion(Base, TimestampMixin):
+    __tablename__ = "upsell_suggestions"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    conversation_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    order_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_product_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    target_product_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    suggested_text: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[UpsellSuggestionStatus] = mapped_column(
+        pg_enum(UpsellSuggestionStatus, name="upsell_suggestion_status"),
+        nullable=False,
+        default=UpsellSuggestionStatus.SUGGESTED,
+        index=True,
     )

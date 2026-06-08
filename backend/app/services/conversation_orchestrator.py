@@ -33,6 +33,7 @@ from app.services.agent_settings_live import resolve_live_agent_settings
 from app.services.audit_service import AuditService
 from app.services.conversation_event_service import ConversationEventService
 from app.services.conversation_priority_service import ConversationPriorityService
+from app.services.customer_preferences_service import CustomerPreferencesService
 from app.services.auto_send_decision_service import AutoSendDecisionInput, AutoSendDecisionService
 from app.services.handoff_service import evaluate_handoff
 from app.services.instagram_product_resolver import InstagramProductResolver
@@ -43,6 +44,7 @@ from app.services.payment_service import PaymentService
 from app.services.product_semantic_search_service import ProductSemanticSearchService
 from app.services.response_generation_service import ReplyFacts, ResponseGenerationService
 from app.services.suggested_reply_service import SuggestedReplyService
+from app.services.upsell_service import UpsellService
 from app.services.variant_resolver import VariantResolver
 from app.services.slot_merge_service import compute_missing_fields, merge_extracted_slots, slots_to_dict
 from app.services.state_machine_service import (
@@ -148,6 +150,17 @@ class ConversationOrchestrator:
             conversation.agent_failure_count += 1
 
         merge_extracted_slots(slots, extraction)
+
+        prefs_service = CustomerPreferencesService(self.db)
+        size_confirmation_needed = False
+        if prefs_service.detect_same_size_request(message.text) and conversation.customer_id:
+            suggested_size, size_confidence, size_confirmation_needed = (
+                prefs_service.resolve_size_from_preferences(conversation.customer_id)
+            )
+            if suggested_size and not slots.size:
+                slots.size = suggested_size
+                if size_confirmation_needed:
+                    slots.missing_fields = list(set(slots.missing_fields or []) | {"size_confirmation"})
         if product is not None:
             slots.product_id = product.id
 
@@ -284,6 +297,28 @@ class ConversationOrchestrator:
                 confidence=extraction.confidence.intent,
             )
 
+        upsell_text: str | None = None
+        if (
+            product is not None
+            and active_order is not None
+            and conversation.workflow_state
+            in {
+                AgentWorkflowState.WAITING_FOR_CONFIRMATION,
+                AgentWorkflowState.WAITING_FOR_PAYMENT,
+            }
+        ):
+            suggestion = UpsellService(self.db).maybe_suggest_upsell(
+                shop_id=conversation.shop_id,
+                conversation_id=conversation.id,
+                order=active_order,
+                source_product_id=product.id,
+                intent_confidence=extraction.confidence.intent,
+                handoff_required=conversation.handoff_required,
+                workflow_clear=variant is not None and not slots.missing_fields,
+            )
+            if suggestion and suggestion.status.value == "suggested":
+                upsell_text = suggestion.suggested_text
+
         reply = self.response_service.generate(
             ReplyFacts(
                 intent=extraction.intent,
@@ -306,8 +341,12 @@ class ConversationOrchestrator:
                     str(active_order.total_amount) if active_order is not None else None
                 ),
                 order_currency=active_order.currency if active_order is not None else None,
+                upsell_text=upsell_text,
+                size_confirmation_needed=size_confirmation_needed,
             )
         )
+        if upsell_text and reply and upsell_text not in reply:
+            reply = f"{reply}\n\n{upsell_text}"
 
         self._log_action(
             conversation_id,

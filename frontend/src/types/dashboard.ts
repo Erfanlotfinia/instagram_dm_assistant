@@ -20,6 +20,26 @@ export interface DashboardMetrics {
   paid_orders: number;
   waiting_for_payment: number;
   handoff_conversations: number;
+  abandoned_orders: number;
+  recovered_orders: number;
+  recovered_revenue: string;
+  upsell_suggestions: number;
+  upsell_accepted: number;
+  top_selling_posts: TopSellingPostSummary[];
+  top_lost_demand_variants: LostDemandVariantSummary[];
   low_stock_variants: LowStockVariantSummary[];
   conversion_funnel: ConversionFunnelMetrics;
+}
+
+export interface TopSellingPostSummary {
+  instagram_post_url: string;
+  paid_orders: number;
+  revenue: string;
+}
+
+export interface LostDemandVariantSummary {
+  requested_color: string | null;
+  requested_size: string | null;
+  product_id: string | null;
+  count: number;
 }

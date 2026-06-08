@@ -74,6 +74,7 @@ export interface CustomerProfile extends Customer {
   previous_orders: PreviousOrderSummary[];
   preferred_size: string | null;
   preferred_colors: string[];
+  last_successful_size: string | null;
   last_purchase_at: string | null;
   total_paid_amount: string;
   order_count: number;

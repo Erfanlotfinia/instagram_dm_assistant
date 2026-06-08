@@ -27,6 +27,12 @@ class SchedulerWorker:
             if expired:
                 logger.info("Expired %s unpaid orders", expired)
 
+            from app.services.order_recovery_service import OrderRecoveryService
+
+            recovery_stats = OrderRecoveryService(db).process_recovery_cycle()
+            if any(recovery_stats.values()):
+                logger.info("Recovery cycle stats=%s", recovery_stats)
+
             refreshed = self._refresh_embeddings(db)
             if refreshed:
                 logger.info("Refreshed embeddings for %s products", refreshed)

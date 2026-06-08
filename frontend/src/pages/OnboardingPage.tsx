@@ -21,10 +21,42 @@ export function OnboardingPage() {
         <p>Complete these steps before enabling autonomous Instagram fashion ordering.</p>
         <ShopSelector />
       </section>
+      {statusQuery.isLoading && selectedShopId ? (
+        <section className="dashboard-card dashboard-card--wide">
+          <p className="loading-state">Loading onboarding status...</p>
+        </section>
+      ) : null}
+      {!selectedShopId ? (
+        <section className="dashboard-card dashboard-card--wide">
+          <p className="empty-state">Select a shop to view onboarding progress.</p>
+        </section>
+      ) : null}
       {status ? (
         <section className="dashboard-card dashboard-card--wide">
-          <h2>{status.progress_percent}% complete</h2>
-          <progress value={status.completed_steps} max={status.total_steps} />
+          <div className="onboarding-progress">
+            <div className="onboarding-progress__meta">
+              <h2>
+                {status.completed_steps} of {status.total_steps} steps complete
+              </h2>
+              <span className="onboarding-progress__percent">{status.progress_percent}%</span>
+            </div>
+            <div
+              className="onboarding-progress__track"
+              role="progressbar"
+              aria-valuenow={status.progress_percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Onboarding progress"
+            >
+              <div
+                className="onboarding-progress__fill"
+                style={{ width: `${status.progress_percent}%` }}
+              />
+            </div>
+          </div>
+          {status.progress_percent === 100 ? (
+            <p className="onboarding-progress__complete">All setup steps are complete. You can enable autonomous ordering when ready.</p>
+          ) : null}
           <div className="table-wrap">
             <table className="data-table">
               <tbody>

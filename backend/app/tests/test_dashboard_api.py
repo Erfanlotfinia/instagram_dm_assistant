@@ -20,6 +20,8 @@ def test_get_dashboard_metrics(client, auth_headers, db_session, demo_shop) -> N
     assert "handoff_conversations" in data
     assert "low_stock_variants" in data
     assert "conversion_funnel" in data
+    assert "abandoned_orders" in data
+    assert "recovered_orders" in data
     assert data["conversion_funnel"]["inbound_messages"] >= 0
 
 

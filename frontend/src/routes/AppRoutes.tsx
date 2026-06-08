@@ -21,6 +21,9 @@ import { OrderDetailPage } from '../pages/OrderDetailPage';
 import { OrdersPage } from '../pages/OrdersPage';
 import { ProductDetailPage } from '../pages/ProductDetailPage';
 import { ProductsPage } from '../pages/ProductsPage';
+import { PostRevenueAnalyticsPage } from '../pages/PostRevenueAnalyticsPage';
+import { RecoveryRulesPage } from '../pages/RecoveryRulesPage';
+import { UpsellRulesPage } from '../pages/UpsellRulesPage';
 import { SemanticSearchPage } from '../pages/SemanticSearchPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { TriggerRulesPage } from '../pages/TriggerRulesPage';
@@ -128,6 +131,30 @@ export function AppRoutes() {
         element={
           <AuthenticatedShell>
             <InstagramAccountsPage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/recovery-rules"
+        element={
+          <AuthenticatedShell>
+            <RecoveryRulesPage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/upsell-rules"
+        element={
+          <AuthenticatedShell>
+            <UpsellRulesPage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/post-revenue"
+        element={
+          <AuthenticatedShell>
+            <PostRevenueAnalyticsPage />
           </AuthenticatedShell>
         }
       />

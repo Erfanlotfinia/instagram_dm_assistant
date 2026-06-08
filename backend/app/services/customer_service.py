@@ -13,6 +13,7 @@ from app.repositories.customer_repository import CustomerRepository
 from app.repositories.order_repository import OrderRepository
 from app.schemas.customer import CustomerProfileRead, CustomerUpdate, PreviousOrderSummary
 from app.services.audit_service import AuditService
+from app.services.customer_preferences_service import CustomerPreferencesService
 from app.services.shop_service import ShopService
 
 
@@ -67,6 +68,11 @@ class CustomerService:
             last_purchase = max(o.updated_at for o in paid_orders)
 
         preferred_sizes, preferred_colors = self._extract_preferences(orders)
+        prefs = CustomerPreferencesService(self.db).get_or_create(customer.id)
+        if prefs.preferred_size:
+            preferred_sizes = [prefs.preferred_size, *[s for s in preferred_sizes if s != prefs.preferred_size]]
+        if prefs.preferred_colors:
+            preferred_colors = list(dict.fromkeys((prefs.preferred_colors or []) + preferred_colors))
         previous = [
             PreviousOrderSummary(
                 id=o.id,
@@ -90,6 +96,7 @@ class CustomerService:
             previous_orders=previous,
             preferred_size=preferred_sizes[0] if preferred_sizes else None,
             preferred_colors=preferred_colors,
+            last_successful_size=prefs.last_successful_size,
             last_purchase_at=last_purchase,
             total_paid_amount=str(total_paid),
             order_count=len(orders),

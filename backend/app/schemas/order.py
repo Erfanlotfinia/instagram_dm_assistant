@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.enums import (
     OrderPaymentStatus,
+    OrderRecoveryStatus,
     OrderShippingStatus,
     OrderStatus,
     PaymentProvider,
@@ -88,6 +89,9 @@ class OrderRead(BaseModel):
     approval_source: str | None = None
     payment_callback_status: str | None = None
     expires_at: datetime | None
+    recovery_status: OrderRecoveryStatus = OrderRecoveryStatus.NONE
+    recovery_attempt_count: int = 0
+    last_recovery_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     items: list[OrderItemRead] = Field(default_factory=list)

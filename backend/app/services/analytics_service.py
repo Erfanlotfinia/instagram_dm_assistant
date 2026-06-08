@@ -9,9 +9,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.domain.enums import MessageDirection, OrderPaymentStatus, OrderStatus
-from app.domain.models import AgentDecisionAudit, Conversation, ConversationSlots, Message, Order, OrderItem, UnavailableDemand
+from app.domain.models import Conversation, ConversationSlots, Message, Order, UnavailableDemandLog
 from app.domain.models import User
-from app.schemas.analytics import FunnelAnalytics, HandoffAnalyticsRow, PostPerformanceRow, ResponseTimeAnalytics, StockDemandRow, UnavailableDemandRow
+from app.schemas.analytics import FunnelAnalytics, HandoffAnalyticsRow, PostPerformanceRow, PostRevenueRow, ResponseTimeAnalytics, StockDemandRow, UnavailableDemandRow
 from app.services.shop_service import ShopService
 
 
@@ -70,18 +70,75 @@ class AnalyticsService:
             row.conversion_rate = self._rate(row.paid_orders, max(row.inbound_messages, 1))
         return sorted(rows.values(), key=lambda r: (r.paid_orders, r.revenue), reverse=True)
 
+    def post_revenue(
+        self, shop_id: UUID, user: User, start: datetime | None = None, end: datetime | None = None
+    ) -> list[PostRevenueRow]:
+        self.shop_service.get_shop(shop_id, user)
+        slots = self.db.scalars(
+            self._range(
+                select(ConversationSlots).join(Conversation).where(
+                    Conversation.shop_id == shop_id,
+                    ConversationSlots.instagram_post_url.is_not(None),
+                ),
+                Conversation.created_at,
+                start,
+                end,
+            )
+        ).all()
+        rows: dict[str, PostRevenueRow] = {}
+        conversation_posts: dict[UUID, str] = {}
+        for slot in slots:
+            url = slot.instagram_post_url
+            conversation_posts[slot.conversation_id] = url
+            row = rows.setdefault(
+                url,
+                PostRevenueRow(instagram_post_url=url, product_id=slot.product_id),
+            )
+            row.conversations += 1
+
+        orders = self.db.scalars(
+            self._range(select(Order).where(Order.shop_id == shop_id), Order.created_at, start, end)
+        ).all()
+        for order in orders:
+            url = conversation_posts.get(order.conversation_id)
+            if not url:
+                continue
+            row = rows.setdefault(url, PostRevenueRow(instagram_post_url=url))
+            if order.status in {
+                OrderStatus.DRAFT,
+                OrderStatus.WAITING_FOR_CONFIRMATION,
+                OrderStatus.WAITING_FOR_PAYMENT,
+                OrderStatus.PAID,
+            }:
+                row.draft_orders += 1
+            if order.payment_status == OrderPaymentStatus.PAID:
+                row.paid_orders += 1
+                row.revenue += Decimal(str(order.total_amount))
+            row.conversion_rate = self._rate(row.paid_orders, max(row.conversations, 1))
+            abandoned = max(row.draft_orders - row.paid_orders, 0)
+            row.abandoned_rate = self._rate(abandoned, max(row.draft_orders, 1))
+        return sorted(rows.values(), key=lambda r: (r.revenue, r.paid_orders), reverse=True)
+
     def stock_demand(self, shop_id: UUID, user: User, start: datetime | None = None, end: datetime | None = None) -> list[StockDemandRow]:
         self.shop_service.get_shop(shop_id, user)
-        audits = self.db.scalars(self._range(select(AgentDecisionAudit).where(AgentDecisionAudit.shop_id == shop_id), AgentDecisionAudit.created_at, start, end)).all()
-        colors: Counter[str] = Counter(); sizes: Counter[str] = Counter()
-        for audit in audits:
-            result = audit.variant_resolver_result or {}
-            reasons = set(result.get("mismatch_reasons") or [])
-            if "color_unavailable" in reasons and result.get("normalized_color"):
-                colors[result["normalized_color"]] += 1
-            if "size_unavailable" in reasons and result.get("normalized_size"):
-                sizes[result["normalized_size"]] += 1
-        return [StockDemandRow(type="color", value=k, requests=v) for k, v in colors.most_common(10)] + [StockDemandRow(type="size", value=k, requests=v) for k, v in sizes.most_common(10)]
+        logs = self.db.scalars(
+            self._range(
+                select(UnavailableDemandLog).where(UnavailableDemandLog.shop_id == shop_id),
+                UnavailableDemandLog.created_at,
+                start,
+                end,
+            )
+        ).all()
+        colors: Counter[str] = Counter()
+        sizes: Counter[str] = Counter()
+        for log in logs:
+            if log.requested_color_normalized:
+                colors[log.requested_color_normalized] += 1
+            if log.requested_size_normalized:
+                sizes[log.requested_size_normalized] += 1
+        return [StockDemandRow(type="color", value=k, requests=v) for k, v in colors.most_common(10)] + [
+            StockDemandRow(type="size", value=k, requests=v) for k, v in sizes.most_common(10)
+        ]
 
     def handoff(self, shop_id: UUID, user: User, start: datetime | None = None, end: datetime | None = None) -> list[HandoffAnalyticsRow]:
         self.shop_service.get_shop(shop_id, user)
@@ -93,17 +150,36 @@ class AnalyticsService:
 
     def unavailable_demand(self, shop_id: UUID, user: User, start: datetime | None = None, end: datetime | None = None) -> list[UnavailableDemandRow]:
         self.shop_service.get_shop(shop_id, user)
-        rows = self.db.execute(self._range(
-            select(
-                UnavailableDemand.requested_color,
-                UnavailableDemand.requested_size,
-                UnavailableDemand.product_id,
-                func.count(UnavailableDemand.id),
-                func.coalesce(func.sum(UnavailableDemand.lost_revenue_estimate), 0),
-            ).where(UnavailableDemand.shop_id == shop_id).group_by(UnavailableDemand.requested_color, UnavailableDemand.requested_size, UnavailableDemand.product_id),
-            UnavailableDemand.created_at, start, end,
-        )).all()
-        return [UnavailableDemandRow(requested_color=color, requested_size=size, product_id=product_id, count=count, lost_revenue_estimate=lost) for color, size, product_id, count, lost in rows]
+        rows = self.db.execute(
+            self._range(
+                select(
+                    UnavailableDemandLog.requested_color_normalized,
+                    UnavailableDemandLog.requested_size_normalized,
+                    UnavailableDemandLog.product_id,
+                    func.count(UnavailableDemandLog.id),
+                    func.coalesce(func.sum(UnavailableDemandLog.estimated_lost_revenue), 0),
+                )
+                .where(UnavailableDemandLog.shop_id == shop_id)
+                .group_by(
+                    UnavailableDemandLog.requested_color_normalized,
+                    UnavailableDemandLog.requested_size_normalized,
+                    UnavailableDemandLog.product_id,
+                ),
+                UnavailableDemandLog.created_at,
+                start,
+                end,
+            )
+        ).all()
+        return [
+            UnavailableDemandRow(
+                requested_color=color,
+                requested_size=size,
+                product_id=product_id,
+                count=count,
+                lost_revenue_estimate=lost,
+            )
+            for color, size, product_id, count, lost in rows
+        ]
 
     def response_time(self, shop_id: UUID, user: User, start: datetime | None = None, end: datetime | None = None) -> ResponseTimeAnalytics:
         self.shop_service.get_shop(shop_id, user)

@@ -10,9 +10,10 @@ from app.domain.enums import (
     ConversationState,
     MessageDirection,
     OrderPaymentStatus,
+    OrderRecoveryStatus,
     OrderStatus,
 )
-from app.domain.models import Conversation, ConversationSlots, Message, Order, Product, ProductVariant
+from app.domain.models import Conversation, ConversationSlots, Message, Order, Product, ProductVariant, UnavailableDemandLog
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
@@ -20,10 +21,13 @@ from app.repositories.variant_repository import VariantRepository
 from app.schemas.dashboard import (
     ConversionFunnelMetrics,
     DashboardMetrics,
+    LostDemandVariantSummary,
     LowStockVariantSummary,
+    TopSellingPostSummary,
 )
 from app.schemas.shop import ShopAgentSettings
 from app.services.shop_service import ShopService
+from app.services.upsell_service import UpsellService
 
 
 class DashboardService:
@@ -48,12 +52,24 @@ class DashboardService:
         handoff_conversations = self._count_handoff_conversations(shop_id)
         low_stock = self._list_low_stock_variants(shop_id, threshold)
         funnel = self._build_conversion_funnel(shop_id)
+        abandoned_orders = self._count_abandoned_orders(shop_id)
+        recovered_orders, recovered_revenue = self._recovery_stats(shop_id)
+        upsell_suggestions, upsell_accepted = UpsellService.count_suggestions(self.db, shop_id)
+        top_posts = self._top_selling_posts(shop_id)
+        top_lost = self._top_lost_demand(shop_id)
 
         return DashboardMetrics(
             today_orders=today_orders,
             paid_orders=paid_orders,
             waiting_for_payment=waiting_for_payment,
             handoff_conversations=handoff_conversations,
+            abandoned_orders=abandoned_orders,
+            recovered_orders=recovered_orders,
+            recovered_revenue=str(recovered_revenue),
+            upsell_suggestions=upsell_suggestions,
+            upsell_accepted=upsell_accepted,
+            top_selling_posts=top_posts,
+            top_lost_demand_variants=top_lost,
             low_stock_variants=low_stock,
             conversion_funnel=funnel,
         )
@@ -166,3 +182,95 @@ class DashboardService:
             draft_orders=draft_orders,
             paid_orders=paid_orders,
         )
+
+    def _count_abandoned_orders(self, shop_id: UUID) -> int:
+        stmt = select(func.count()).select_from(Order).where(
+            Order.shop_id == shop_id,
+            Order.status.in_([OrderStatus.EXPIRED, OrderStatus.CANCELLED]),
+            Order.payment_status != OrderPaymentStatus.PAID,
+            Order.recovery_status.in_([
+                OrderRecoveryStatus.NONE,
+                OrderRecoveryStatus.ELIGIBLE,
+                OrderRecoveryStatus.IN_PROGRESS,
+                OrderRecoveryStatus.FAILED,
+            ]),
+        )
+        waiting = select(func.count()).select_from(Order).where(
+            Order.shop_id == shop_id,
+            Order.status == OrderStatus.WAITING_FOR_PAYMENT,
+            Order.payment_status != OrderPaymentStatus.PAID,
+        )
+        return int(self.db.scalar(stmt) or 0) + int(self.db.scalar(waiting) or 0)
+
+    def _recovery_stats(self, shop_id: UUID) -> tuple[int, float]:
+        from decimal import Decimal
+
+        recovered = int(
+            self.db.scalar(
+                select(func.count()).select_from(Order).where(
+                    Order.shop_id == shop_id,
+                    Order.recovery_status == OrderRecoveryStatus.RECOVERED,
+                )
+            )
+            or 0
+        )
+        revenue = self.db.scalar(
+            select(func.coalesce(func.sum(Order.total_amount), 0)).where(
+                Order.shop_id == shop_id,
+                Order.recovery_status == OrderRecoveryStatus.RECOVERED,
+                Order.payment_status == OrderPaymentStatus.PAID,
+            )
+        ) or Decimal("0")
+        return recovered, float(revenue)
+
+    def _top_selling_posts(self, shop_id: UUID, limit: int = 5) -> list[TopSellingPostSummary]:
+        from decimal import Decimal
+
+        from app.domain.models import ConversationSlots
+
+        slots = self.db.scalars(
+            select(ConversationSlots).join(Conversation).where(
+                Conversation.shop_id == shop_id,
+                ConversationSlots.instagram_post_url.is_not(None),
+            )
+        ).all()
+        conversation_posts = {slot.conversation_id: slot.instagram_post_url for slot in slots}
+        rows: dict[str, TopSellingPostSummary] = {}
+        orders = self.db.scalars(select(Order).where(Order.shop_id == shop_id)).all()
+        for order in orders:
+            url = conversation_posts.get(order.conversation_id)
+            if not url:
+                continue
+            row = rows.setdefault(url, TopSellingPostSummary(instagram_post_url=url))
+            if order.payment_status == OrderPaymentStatus.PAID:
+                row.paid_orders += 1
+                row.revenue = str(Decimal(row.revenue) + Decimal(str(order.total_amount)))
+        ranked = sorted(rows.values(), key=lambda r: (Decimal(r.revenue), r.paid_orders), reverse=True)
+        return ranked[:limit]
+
+    def _top_lost_demand(self, shop_id: UUID, limit: int = 5) -> list[LostDemandVariantSummary]:
+        stmt = (
+            select(
+                UnavailableDemandLog.requested_color_normalized,
+                UnavailableDemandLog.requested_size_normalized,
+                UnavailableDemandLog.product_id,
+                func.count(UnavailableDemandLog.id),
+            )
+            .where(UnavailableDemandLog.shop_id == shop_id)
+            .group_by(
+                UnavailableDemandLog.requested_color_normalized,
+                UnavailableDemandLog.requested_size_normalized,
+                UnavailableDemandLog.product_id,
+            )
+            .order_by(func.count(UnavailableDemandLog.id).desc())
+            .limit(limit)
+        )
+        return [
+            LostDemandVariantSummary(
+                requested_color=color,
+                requested_size=size,
+                product_id=product_id,
+                count=count,
+            )
+            for color, size, product_id, count in self.db.execute(stmt).all()
+        ]

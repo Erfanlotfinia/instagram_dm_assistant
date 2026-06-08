@@ -15,6 +15,7 @@ from app.domain.enums import (
     AgentWorkflowState,
     InventoryMovementType,
     OrderPaymentStatus,
+    OrderRecoveryStatus,
     OrderShippingStatus,
     OrderStatus,
 )
@@ -219,6 +220,9 @@ class OrderService:
         order.status = OrderStatus.WAITING_FOR_PAYMENT
         order.payment_status = OrderPaymentStatus.PENDING
         order.expires_at = datetime.now(UTC) + timedelta(minutes=self.settings.order_expiration_minutes)
+        order.recovery_status = OrderRecoveryStatus.NONE
+        order.recovery_attempt_count = 0
+        order.last_recovery_at = None
         self.orders.commit()
         logger.info("Order confirmed for payment order=%s expires_at=%s", order.id, order.expires_at)
         return order
@@ -276,6 +280,9 @@ class OrderService:
             else order.payment_status
         )
         order.expires_at = None
+        from app.services.order_recovery_service import OrderRecoveryService
+
+        OrderRecoveryService(self.db, settings=self.settings).on_order_terminal(order)
         if reason:
             order.notes = reason
         self.orders.commit()
@@ -289,6 +296,9 @@ class OrderService:
         order.status = OrderStatus.EXPIRED
         order.payment_status = OrderPaymentStatus.UNPAID
         order.expires_at = None
+        from app.services.order_recovery_service import OrderRecoveryService
+
+        OrderRecoveryService(self.db, settings=self.settings).on_order_terminal(order)
         self.orders.commit()
         logger.info("Order expired order=%s", order.id)
         return order
@@ -316,6 +326,11 @@ class OrderService:
         order.payment_status = OrderPaymentStatus.PAID
         order.expires_at = None
         order.shipping_status = OrderShippingStatus.PREPARING
+        from app.services.customer_preferences_service import CustomerPreferencesService
+        from app.services.order_recovery_service import OrderRecoveryService
+
+        CustomerPreferencesService(self.db).update_from_paid_order(order)
+        OrderRecoveryService(self.db, settings=self.settings).on_order_paid(order)
         self.orders.commit()
         order.payment_callback_status = payment.status.value if payment else "manual_paid"
         logger.info("Order marked paid order=%s payment=%s", order.id, payment.id if payment else None)

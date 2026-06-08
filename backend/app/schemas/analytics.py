@@ -37,6 +37,17 @@ class PostPerformanceRow(BaseModel):
     conversion_rate: float = 0.0
 
 
+class PostRevenueRow(BaseModel):
+    instagram_post_url: str
+    product_id: UUID | None = None
+    conversations: int = 0
+    draft_orders: int = 0
+    paid_orders: int = 0
+    revenue: Decimal = Decimal("0")
+    conversion_rate: float = 0.0
+    abandoned_rate: float = 0.0
+
+
 class StockDemandRow(BaseModel):
     type: str
     value: str

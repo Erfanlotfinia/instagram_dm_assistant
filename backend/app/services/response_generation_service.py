@@ -38,6 +38,8 @@ class ReplyFacts:
     payment_url: str | None = None
     order_total: str | None = None
     order_currency: str | None = None
+    upsell_text: str | None = None
+    size_confirmation_needed: bool = False
 
 
 class ResponseGenerationService:
@@ -53,6 +55,12 @@ class ResponseGenerationService:
             return "برای ادامه، لطفاً پست اینستاگرام محصول مورد نظرتان را ارسال کنید یا نام محصول را بنویسید."
 
         if facts.workflow_state == AgentWorkflowState.WAITING_FOR_VARIANT:
+            if "size_confirmation" in facts.missing_fields or facts.size_confirmation_needed:
+                size = facts.slots.size or "—"
+                return (
+                    f"سایز قبلی شما {size} بود. همین سایز را تأیید می‌کنید؟ "
+                    "در صورت تأیید «بله» بفرستید یا سایز دیگری را مشخص کنید."
+                )
             if facts.invalid_color or facts.invalid_size:
                 colors = "، ".join(facts.valid_colors) if facts.valid_colors else "نامشخص"
                 sizes = "، ".join(facts.valid_sizes) if facts.valid_sizes else "نامشخص"

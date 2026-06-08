@@ -99,6 +99,20 @@ def mark_order_paid(
     return OrderService(db).get_order_read(shop_id, order.id, current_user)
 
 
+@router.post("/{shop_id}/orders/{order_id}/stop-recovery", response_model=OrderRead)
+def stop_order_recovery(
+    shop_id: UUID,
+    order_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _: Annotated[ShopMember, Depends(require_shop_role(UserRole.OPERATOR))],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> OrderRead:
+    from app.services.order_recovery_service import OrderRecoveryService
+
+    OrderRecoveryService(db).stop_recovery(shop_id, order_id, current_user)
+    return OrderService(db).get_order_read(shop_id, order_id, current_user)
+
+
 @router.post("/{shop_id}/orders/{order_id}/ship", response_model=OrderRead)
 def ship_order(
     shop_id: UUID,

@@ -12,6 +12,8 @@ from app.api.v1.jobs import router as jobs_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.product_selection import router as product_selection_router
+from app.api.v1.recovery import router as recovery_router
+from app.api.v1.upsells import router as upsells_router
 from app.api.v1.products import router as products_router
 from app.api.v1.shops import router as shops_router
 from app.api.v1.semantic_search import router as semantic_search_router
@@ -26,6 +28,8 @@ router.include_router(health_router)
 router.include_router(auth_router)
 router.include_router(shops_router)
 router.include_router(products_router)
+router.include_router(recovery_router)
+router.include_router(upsells_router)
 router.include_router(product_selection_router)
 router.include_router(orders_router)
 router.include_router(conversations_router)

@@ -35,6 +35,7 @@ class CustomerProfileRead(BaseModel):
     previous_orders: list[PreviousOrderSummary] = Field(default_factory=list)
     preferred_size: str | None = None
     preferred_colors: list[str] = Field(default_factory=list)
+    last_successful_size: str | None = None
     last_purchase_at: datetime | None = None
     total_paid_amount: str = "0"
     order_count: int = 0

@@ -93,6 +93,88 @@ export function DashboardPage() {
           </section>
 
           <section className="dashboard-card dashboard-card--wide">
+            <h2>Revenue recovery & upsell</h2>
+            <div className="stats-grid">
+              <article className="stat-card">
+                <p className="stat-card__label">Abandoned orders</p>
+                <p className="stat-card__value">{metrics.abandoned_orders}</p>
+              </article>
+              <article className="stat-card">
+                <p className="stat-card__label">Recovered orders</p>
+                <p className="stat-card__value">{metrics.recovered_orders}</p>
+              </article>
+              <article className="stat-card">
+                <p className="stat-card__label">Recovered revenue</p>
+                <p className="stat-card__value">{metrics.recovered_revenue}</p>
+              </article>
+              <article className="stat-card">
+                <p className="stat-card__label">Upsell suggestions</p>
+                <p className="stat-card__value">{metrics.upsell_suggestions}</p>
+              </article>
+              <article className="stat-card">
+                <p className="stat-card__label">Upsell accepted</p>
+                <p className="stat-card__value">{metrics.upsell_accepted}</p>
+              </article>
+            </div>
+          </section>
+
+          <section className="dashboard-card dashboard-card--wide">
+            <h2>Top selling posts</h2>
+            {metrics.top_selling_posts.length === 0 ? (
+              <p className="empty-state">No post-attributed paid orders yet.</p>
+            ) : (
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Post</th>
+                      <th>Paid orders</th>
+                      <th>Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metrics.top_selling_posts.map((post) => (
+                      <tr key={post.instagram_post_url}>
+                        <td>{post.instagram_post_url}</td>
+                        <td>{post.paid_orders}</td>
+                        <td>{post.revenue}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section className="dashboard-card dashboard-card--wide">
+            <h2>Top lost-demand variants</h2>
+            {metrics.top_lost_demand_variants.length === 0 ? (
+              <p className="empty-state">No unavailable demand logged yet.</p>
+            ) : (
+              <div className="table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Color</th>
+                      <th>Size</th>
+                      <th>Requests</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metrics.top_lost_demand_variants.map((row, index) => (
+                      <tr key={`${row.product_id}-${index}`}>
+                        <td>{row.requested_color ?? '—'}</td>
+                        <td>{row.requested_size ?? '—'}</td>
+                        <td>{row.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section className="dashboard-card dashboard-card--wide">
             <div className="section-header">
               <h2>Low stock variants</h2>
               <Link className="table-link" to="/products">

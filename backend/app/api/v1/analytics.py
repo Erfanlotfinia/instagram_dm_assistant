@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_shop_membership
 from app.db.session import get_db_session
 from app.domain.models import ShopMember, User
-from app.schemas.analytics import FunnelAnalytics, HandoffAnalyticsRow, PostPerformanceRow, ResponseTimeAnalytics, StockDemandRow, UnavailableDemandRow
+from app.schemas.analytics import FunnelAnalytics, HandoffAnalyticsRow, PostPerformanceRow, PostRevenueRow, ResponseTimeAnalytics, StockDemandRow, UnavailableDemandRow
 from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/shops/{shop_id}/analytics", tags=["analytics"])
@@ -22,6 +22,11 @@ def funnel(shop_id: UUID, current_user: Annotated[User, Depends(get_current_user
 @router.get("/posts", response_model=list[PostPerformanceRow])
 def posts(shop_id: UUID, current_user: Annotated[User, Depends(get_current_user)], _membership: Annotated[ShopMember, Depends(get_shop_membership)], db: Annotated[Session, Depends(get_db_session)], start: datetime | None = None, end: datetime | None = None) -> list[PostPerformanceRow]:
     return AnalyticsService(db).posts(shop_id, current_user, start, end)
+
+
+@router.get("/post-revenue", response_model=list[PostRevenueRow])
+def post_revenue(shop_id: UUID, current_user: Annotated[User, Depends(get_current_user)], _membership: Annotated[ShopMember, Depends(get_shop_membership)], db: Annotated[Session, Depends(get_db_session)], start: datetime | None = None, end: datetime | None = None) -> list[PostRevenueRow]:
+    return AnalyticsService(db).post_revenue(shop_id, current_user, start, end)
 
 
 @router.get("/stock-demand", response_model=list[StockDemandRow])

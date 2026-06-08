@@ -71,13 +71,23 @@ export function AnalyticsPage() {
     queryFn: () => apiClient.getAnalyticsStockDemand(selectedShopId, startIso, endIso),
     enabled: Boolean(selectedShopId),
   });
+  const unavailableDemand = useQuery({
+    queryKey: ['analytics-unavailable-demand', selectedShopId, startIso, endIso],
+    queryFn: () => apiClient.getAnalyticsUnavailableDemand(selectedShopId, startIso, endIso),
+    enabled: Boolean(selectedShopId),
+  });
   const handoff = useQuery({
     queryKey: ['analytics-handoff', selectedShopId, startIso, endIso],
     queryFn: () => apiClient.getAnalyticsHandoff(selectedShopId, startIso, endIso),
     enabled: Boolean(selectedShopId),
   });
 
-  const isLoading = funnel.isLoading || posts.isLoading || stock.isLoading || handoff.isLoading;
+  const isLoading =
+    funnel.isLoading ||
+    posts.isLoading ||
+    stock.isLoading ||
+    unavailableDemand.isLoading ||
+    handoff.isLoading;
 
   function applyPreset(preset: DatePreset) {
     if (preset === 'all') {
@@ -226,7 +236,10 @@ export function AnalyticsPage() {
       </section>
 
       <section className="dashboard-card dashboard-card--wide">
-        <h2>Unavailable demand</h2>
+        <h2>Stock demand signals</h2>
+        <p className="analytics-toolbar__summary">
+          Color and size requests that failed variant resolution during conversations.
+        </p>
         <div className="table-wrap">
           <table className="data-table">
             <thead>
@@ -246,7 +259,53 @@ export function AnalyticsPage() {
               ))}
             </tbody>
           </table>
-          {!stock.isLoading && (stock.data?.length ?? 0) === 0 ? (
+          {stock.error ? (
+            <p className="form-error">
+              {stock.error instanceof Error ? stock.error.message : 'Failed to load stock demand'}
+            </p>
+          ) : null}
+          {!stock.isLoading && !stock.error && (stock.data?.length ?? 0) === 0 ? (
+            <p className="empty-state">No stock demand signals for this period.</p>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="dashboard-card dashboard-card--wide">
+        <h2>Unavailable demand</h2>
+        <p className="analytics-toolbar__summary">
+          Aggregated out-of-stock or variant-mismatch requests with estimated lost revenue.
+        </p>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Color</th>
+                <th>Size</th>
+                <th>Requests</th>
+                <th>Est. lost revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {unavailableDemand.data?.map((row) => (
+                <tr key={`${row.requested_color ?? 'any'}-${row.requested_size ?? 'any'}-${row.product_id ?? 'none'}`}>
+                  <td>{row.requested_color ?? '—'}</td>
+                  <td>{row.requested_size ?? '—'}</td>
+                  <td>{row.count}</td>
+                  <td>{row.lost_revenue_estimate}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {unavailableDemand.error ? (
+            <p className="form-error">
+              {unavailableDemand.error instanceof Error
+                ? unavailableDemand.error.message
+                : 'Failed to load unavailable demand'}
+            </p>
+          ) : null}
+          {!unavailableDemand.isLoading &&
+          !unavailableDemand.error &&
+          (unavailableDemand.data?.length ?? 0) === 0 ? (
             <p className="empty-state">No unavailable demand logged for this period.</p>
           ) : null}
         </div>

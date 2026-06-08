@@ -222,6 +222,29 @@ class ConversationPriorityLevel(str, enum.Enum):
     LOW = "low"
 
 
+class OrderRecoveryStatus(str, enum.Enum):
+    NONE = "none"
+    ELIGIBLE = "eligible"
+    IN_PROGRESS = "in_progress"
+    RECOVERED = "recovered"
+    FAILED = "failed"
+    STOPPED = "stopped"
+
+
+class OrderRecoveryAttemptStatus(str, enum.Enum):
+    CREATED = "created"
+    SENT = "sent"
+    SKIPPED = "skipped"
+    FAILED = "failed"
+
+
+class UpsellSuggestionStatus(str, enum.Enum):
+    SUGGESTED = "suggested"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    SKIPPED = "skipped"
+
+
 class ConversationEventType(str, enum.Enum):
     INBOUND_MESSAGE = "inbound_message_received"
     OUTBOUND_MESSAGE = "outbound_message_sent"

@@ -41,6 +41,9 @@ export function CustomerProfilePanel({ profile, onSave, isSaving }: CustomerProf
           <strong>Preferred size:</strong> {profile.preferred_size ?? '—'}
         </p>
         <p>
+          <strong>Previous successful size:</strong> {profile.last_successful_size ?? '—'}
+        </p>
+        <p>
           <strong>Preferred colors:</strong>{' '}
           {profile.preferred_colors.length ? profile.preferred_colors.join(', ') : '—'}
         </p>
