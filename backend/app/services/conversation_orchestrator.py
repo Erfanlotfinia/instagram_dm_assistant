@@ -66,6 +66,7 @@ class ConversationOrchestrator:
         chat_client: OpenAIChatClient | None = None,
         qdrant_client: QdrantClient | None = None,
         settings: Settings | None = None,
+        allow_simulated_order_side_effects: bool = False,
     ) -> None:
         self.db = db
         self.settings = settings or get_settings()
@@ -82,6 +83,7 @@ class ConversationOrchestrator:
         self.response_service = ResponseGenerationService()
         self.order_service = OrderService(db, settings=self.settings)
         self.payment_service = PaymentService(db, settings=self.settings)
+        self.allow_simulated_order_side_effects = allow_simulated_order_side_effects
 
         chat_client = chat_client or LiveOpenAIChatClient(self.settings)
         qdrant_client = qdrant_client or LiveQdrantClient(self.settings)
@@ -232,7 +234,7 @@ class ConversationOrchestrator:
                 order_value=estimated_order_value,
                 is_first_order=self._is_first_customer_order(conversation),
                 handoff_reason=conversation.handoff_reason if conversation.handoff_required else None,
-                message_risk="simulation" if conversation.is_simulation else None,
+                message_risk="simulation" if conversation.is_simulation and not self.allow_simulated_order_side_effects else None,
             )
         )
         preview_reason = ";".join(decision.reasons) if decision.reasons else None
@@ -244,7 +246,7 @@ class ConversationOrchestrator:
             conversation.state = ConversationState.PENDING_HANDOFF
 
         payment_url: str | None = None
-        order_side_effects_allowed = decision.auto_send_allowed and not conversation.is_simulation
+        order_side_effects_allowed = decision.auto_send_allowed and (not conversation.is_simulation or self.allow_simulated_order_side_effects)
 
         if order_side_effects_allowed and extraction.intent == AgentIntent.CANCEL_ORDER:
             active_order = self.order_service.cancel_active_for_conversation(
@@ -385,7 +387,7 @@ class ConversationOrchestrator:
                 order_value=Decimal(active_order.total_amount) if active_order is not None else Decimal("0"),
                 is_first_order=self._is_first_customer_order(conversation),
                 handoff_reason=conversation.handoff_reason if conversation.handoff_required else None,
-                message_risk="simulation" if conversation.is_simulation else None,
+                message_risk="simulation" if conversation.is_simulation and not self.allow_simulated_order_side_effects else None,
             )
         )
         preview_reason = ";".join(decision.reasons) if decision.reasons else None

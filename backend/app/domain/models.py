@@ -125,6 +125,9 @@ class Shop(Base, TimestampMixin):
     product_upsells: Mapped[list[ProductUpsell]] = relationship(
         back_populates="shop", cascade="all, delete-orphan"
     )
+    trl_validation_runs: Mapped[list[TRLValidationRun]] = relationship(
+        back_populates="shop", cascade="all, delete-orphan"
+    )
 
 
 class ShopMember(Base):
@@ -1094,3 +1097,43 @@ class UpsellSuggestion(Base, TimestampMixin):
         default=UpsellSuggestionStatus.SUGGESTED,
         index=True,
     )
+
+
+class TRLValidationRun(Base):
+    __tablename__ = "trl_validation_runs"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="running", index=True)
+    total_scenarios: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    passed_scenarios: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_scenarios: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    metrics_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_user_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    shop: Mapped[Shop] = relationship(back_populates="trl_validation_runs")
+    created_by_user: Mapped[User | None] = relationship()
+    scenario_results: Mapped[list[TRLValidationScenarioResult]] = relationship(back_populates="run", cascade="all, delete-orphan")
+
+
+class TRLValidationScenarioResult(Base):
+    __tablename__ = "trl_validation_scenario_results"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    run_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("trl_validation_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    scenario_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    input_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    expected_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    actual_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    passed: Mapped[bool] = mapped_column(Boolean, nullable=False, index=True)
+    failure_reasons: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    processing_time_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    conversation_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True)
+    order_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+    run: Mapped[TRLValidationRun] = relationship(back_populates="scenario_results")
+    conversation: Mapped[Conversation | None] = relationship()
+    order: Mapped[Order | None] = relationship()
