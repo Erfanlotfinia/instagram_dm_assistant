@@ -1,7 +1,9 @@
-"""Seed the database with an initial admin user, demo shop, and demo catalog.
+"""Seed the database with admin user, demo shops, catalog, and rich demo data.
 
 Usage:
     python -m app.scripts.seed
+
+Login: admin@example.com / changeme123
 """
 from __future__ import annotations
 
@@ -23,6 +25,7 @@ from app.domain.models import (
 )
 from app.repositories.shop_repository import ShopMemberRepository, ShopRepository
 from app.repositories.user_repository import UserRepository
+from app.scripts.seed_demo_data import seed_rich_demo_data
 from app.services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
@@ -160,6 +163,7 @@ def seed() -> None:
 
         account = _seed_instagram_account(db, shop)
         _seed_product_catalog(db, shop, account)
+        seed_rich_demo_data(db, admin, shop, account)
         db.commit()
     finally:
         db.close()

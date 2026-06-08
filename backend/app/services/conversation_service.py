@@ -28,6 +28,7 @@ from app.schemas.conversation import (
     ConversationRead,
     ConversationResolveResponse,
     CustomerRead,
+    CustomerSummary,
     InventoryStatusRead,
     LinkedOrderSummary,
     LinkedProductSummary,
@@ -455,13 +456,33 @@ class ConversationService:
 
     @staticmethod
     def _to_conversation_read(conversation) -> ConversationRead:
-        read = ConversationRead.model_validate(conversation)
-        read.confidence_score = ConversationService._extract_confidence(conversation)
-        if conversation.shop is not None and conversation.shop.agent_studio_settings is not None:
-            read.agent_mode = conversation.shop.agent_studio_settings.mode
+        operator_summary = None
         if conversation.assigned_operator is not None:
-            read.assigned_operator = OperatorSummary(
+            operator_summary = OperatorSummary(
                 id=conversation.assigned_operator.id,
                 full_name=conversation.assigned_operator.full_name,
             )
+        customer_summary = None
+        if conversation.customer is not None:
+            customer_summary = CustomerSummary(
+                id=conversation.customer.id,
+                instagram_user_id=conversation.customer.instagram_user_id,
+                full_name=conversation.customer.full_name,
+            )
+
+        read = ConversationRead.model_validate(
+            {
+                **{
+                    field: getattr(conversation, field)
+                    for field in ConversationRead.model_fields
+                    if field not in {"customer", "assigned_operator", "last_message_text", "last_message_direction", "confidence_score", "agent_mode", "linked_product", "linked_order"}
+                    and hasattr(conversation, field)
+                },
+                "customer": customer_summary,
+                "assigned_operator": operator_summary,
+            }
+        )
+        read.confidence_score = ConversationService._extract_confidence(conversation)
+        if conversation.shop is not None and conversation.shop.agent_studio_settings is not None:
+            read.agent_mode = conversation.shop.agent_studio_settings.mode
         return read

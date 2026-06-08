@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.enums import (
     AgentMode,
@@ -107,6 +107,28 @@ class ConversationRead(BaseModel):
     agent_mode: AgentMode | None = None
     linked_product: LinkedProductSummary | None = None
     linked_order: LinkedOrderSummary | None = None
+
+    @field_validator("customer", mode="before")
+    @classmethod
+    def _coerce_customer(cls, value: Any) -> Any:
+        if value is None or isinstance(value, CustomerSummary):
+            return value
+        if hasattr(value, "id") and hasattr(value, "instagram_user_id"):
+            return CustomerSummary(
+                id=value.id,
+                instagram_user_id=value.instagram_user_id,
+                full_name=getattr(value, "full_name", None),
+            )
+        return value
+
+    @field_validator("assigned_operator", mode="before")
+    @classmethod
+    def _coerce_assigned_operator(cls, value: Any) -> Any:
+        if value is None or isinstance(value, OperatorSummary):
+            return value
+        if hasattr(value, "id") and hasattr(value, "full_name"):
+            return OperatorSummary(id=value.id, full_name=value.full_name)
+        return value
 
 
 class MessageRead(BaseModel):
