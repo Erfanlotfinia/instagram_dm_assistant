@@ -7,19 +7,21 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_shop_membership, rate_limit_outbound_message, require_shop_role
 from app.db.session import get_db_session
-from app.domain.enums import ConversationState, UserRole
+from app.domain.enums import ConversationPriorityLevel, ConversationState, UserRole
 from app.domain.models import ShopMember, User
 from app.schemas.conversation import (
+    ConversationAssignRequest,
+    ConversationAssignResponse,
     ConversationDetailRead,
     ConversationHandoffResponse,
     ConversationListFilters,
     ConversationRead,
     ConversationResolveResponse,
     CustomerRead,
-    CustomerUpdate,
     MessageCreate,
     MessageRead,
 )
+from app.schemas.customer import CustomerUpdate
 from app.schemas.order import OrderRead
 from app.services.conversation_service import ConversationService
 
@@ -35,17 +37,45 @@ def list_conversations(
     state: ConversationState | None = None,
     handoff_required: bool | None = None,
     assigned_operator_id: UUID | None = None,
+    unassigned: bool | None = None,
     updated_from: datetime | None = None,
     updated_to: datetime | None = None,
     search: str | None = None,
+    priority_level: ConversationPriorityLevel | None = None,
+    urgent: bool | None = None,
+    high_priority: bool | None = None,
+    needs_attention: bool | None = None,
+    waiting_for_payment: bool | None = None,
+    ready_to_order: bool | None = None,
+    low_confidence: bool | None = None,
+    is_simulation: bool | None = None,
+    assigned_to_me: bool | None = None,
 ) -> list[ConversationRead]:
+    priority_levels: list[ConversationPriorityLevel] | None = None
+    if urgent:
+        priority_level = ConversationPriorityLevel.URGENT
+    elif high_priority:
+        priority_levels = [ConversationPriorityLevel.URGENT, ConversationPriorityLevel.HIGH]
+
+    operator_id = assigned_operator_id
+    if assigned_to_me:
+        operator_id = current_user.id
+
     filters = ConversationListFilters(
         state=state,
         handoff_required=handoff_required,
-        assigned_operator_id=assigned_operator_id,
+        assigned_operator_id=operator_id,
+        unassigned=unassigned,
         updated_from=updated_from,
         updated_to=updated_to,
         search=search,
+        priority_level=priority_level,
+        priority_levels=priority_levels,
+        needs_attention=needs_attention,
+        waiting_for_payment=waiting_for_payment,
+        ready_to_order=ready_to_order,
+        low_confidence=low_confidence,
+        is_simulation=is_simulation,
     )
     return ConversationService(db).list_conversations(shop_id, current_user, filters)
 
@@ -63,6 +93,19 @@ def get_conversation(
 
 @router.post("/{conversation_id}/messages", response_model=MessageRead, status_code=201)
 def send_conversation_message(
+    shop_id: UUID,
+    conversation_id: UUID,
+    payload: MessageCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _membership: Annotated[ShopMember, Depends(require_shop_role(UserRole.OPERATOR))],
+    _rate_limit: Annotated[None, Depends(rate_limit_outbound_message)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> MessageRead:
+    return ConversationService(db).send_manual_message(shop_id, conversation_id, current_user, payload)
+
+
+@router.post("/{conversation_id}/send-manual-message", response_model=MessageRead, status_code=201)
+def send_manual_message(
     shop_id: UUID,
     conversation_id: UUID,
     payload: MessageCreate,
@@ -94,6 +137,31 @@ def release_conversation_to_agent(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> ConversationHandoffResponse:
     return ConversationService(db).release_to_agent(shop_id, conversation_id, current_user)
+
+
+@router.post("/{conversation_id}/release-agent", response_model=ConversationHandoffResponse)
+def release_agent(
+    shop_id: UUID,
+    conversation_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _membership: Annotated[ShopMember, Depends(require_shop_role(UserRole.OPERATOR))],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ConversationHandoffResponse:
+    return ConversationService(db).release_to_agent(shop_id, conversation_id, current_user)
+
+
+@router.post("/{conversation_id}/assign", response_model=ConversationAssignResponse)
+def assign_conversation(
+    shop_id: UUID,
+    conversation_id: UUID,
+    payload: ConversationAssignRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _membership: Annotated[ShopMember, Depends(require_shop_role(UserRole.OPERATOR))],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ConversationAssignResponse:
+    return ConversationService(db).assign_conversation(
+        shop_id, conversation_id, payload.operator_id, current_user
+    )
 
 
 @router.post("/{conversation_id}/mark-resolved", response_model=ConversationResolveResponse)

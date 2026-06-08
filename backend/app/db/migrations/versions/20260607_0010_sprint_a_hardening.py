@@ -6,6 +6,8 @@ Create Date: 2026-06-07
 """
 from __future__ import annotations
 
+import uuid
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -67,10 +69,52 @@ def upgrade() -> None:
     for column in ("shop_id", "product_id", "requested_color_normalized", "requested_size_normalized", "reason", "conversation_id", "customer_id", "created_at"):
         op.create_index(f"ix_unavailable_demand_logs_{column}", "unavailable_demand_logs", [column])
 
-    color_table = sa.table("color_aliases", sa.column("shop_id"), sa.column("raw_value"), sa.column("normalized_value"), sa.column("language"), sa.column("is_active"))
-    size_table = sa.table("size_aliases", sa.column("shop_id"), sa.column("raw_value"), sa.column("normalized_value"), sa.column("category"), sa.column("is_active"))
-    op.bulk_insert(color_table, [{"shop_id": None, "raw_value": raw, "normalized_value": normalized, "language": language, "is_active": True} for raw, normalized, language in COLOR_DEFAULTS])
-    op.bulk_insert(size_table, [{"shop_id": None, "raw_value": raw, "normalized_value": normalized, "category": category, "is_active": True} for raw, normalized, category in SIZE_DEFAULTS])
+    color_table = sa.table(
+        "color_aliases",
+        sa.column("id"),
+        sa.column("shop_id"),
+        sa.column("raw_value"),
+        sa.column("normalized_value"),
+        sa.column("language"),
+        sa.column("is_active"),
+    )
+    size_table = sa.table(
+        "size_aliases",
+        sa.column("id"),
+        sa.column("shop_id"),
+        sa.column("raw_value"),
+        sa.column("normalized_value"),
+        sa.column("category"),
+        sa.column("is_active"),
+    )
+    op.bulk_insert(
+        color_table,
+        [
+            {
+                "id": uuid.uuid4(),
+                "shop_id": None,
+                "raw_value": raw,
+                "normalized_value": normalized,
+                "language": language,
+                "is_active": True,
+            }
+            for raw, normalized, language in COLOR_DEFAULTS
+        ],
+    )
+    op.bulk_insert(
+        size_table,
+        [
+            {
+                "id": uuid.uuid4(),
+                "shop_id": None,
+                "raw_value": raw,
+                "normalized_value": normalized,
+                "category": category,
+                "is_active": True,
+            }
+            for raw, normalized, category in SIZE_DEFAULTS
+        ],
+    )
 
 
 def downgrade() -> None:

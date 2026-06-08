@@ -18,9 +18,17 @@ depends_on = None
 
 def upgrade() -> None:
     bind = op.get_bind()
-    trigger_source_type = postgresql.ENUM("comment", "story_reply", "reel_comment", "direct_dm", "ad_comment", name="trigger_source_type")
+    trigger_source_type = postgresql.ENUM(
+        "comment", "story_reply", "reel_comment", "direct_dm", "ad_comment",
+        name="trigger_source_type",
+        create_type=False,
+    )
     trigger_source_type.create(bind, checkfirst=True)
-    selling_style = postgresql.ENUM("educational", "balanced", "promotional", name="selling_style")
+    selling_style = postgresql.ENUM(
+        "educational", "balanced", "promotional",
+        name="selling_style",
+        create_type=False,
+    )
     selling_style.create(bind, checkfirst=True)
     op.execute("ALTER TYPE message_channel ADD VALUE IF NOT EXISTS 'whatsapp'")
     op.execute("ALTER TYPE message_channel ADD VALUE IF NOT EXISTS 'telegram'")

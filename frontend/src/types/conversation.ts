@@ -13,6 +13,29 @@ export type AgentWorkflowState =
   | 'cancelled'
   | 'human_handoff';
 
+export type ConversationPriorityLevel = 'urgent' | 'high' | 'medium' | 'low';
+
+export type ConversationEventType =
+  | 'inbound_message_received'
+  | 'outbound_message_sent'
+  | 'suggested_reply_created'
+  | 'suggested_reply_approved'
+  | 'product_resolved'
+  | 'variant_resolved'
+  | 'inventory_checked'
+  | 'draft_order_created'
+  | 'customer_info_completed'
+  | 'confirmation_requested'
+  | 'payment_link_sent'
+  | 'payment_received'
+  | 'order_shipped'
+  | 'handoff_required'
+  | 'operator_took_over'
+  | 'operator_released_to_agent'
+  | 'order_cancelled'
+  | 'conversation_assigned'
+  | 'customer_profile_updated';
+
 export type MessageDirection = 'inbound' | 'outbound';
 export type MessageType = 'text' | 'shared_post' | 'attachment' | 'system';
 
@@ -39,13 +62,40 @@ export interface CustomerUpdate {
   notes?: string | null;
 }
 
+export interface PreviousOrderSummary {
+  id: string;
+  status: string;
+  payment_status: string;
+  total_amount: string;
+  created_at: string;
+}
+
+export interface CustomerProfile extends Customer {
+  previous_orders: PreviousOrderSummary[];
+  preferred_size: string | null;
+  preferred_colors: string[];
+  last_purchase_at: string | null;
+  total_paid_amount: string;
+  order_count: number;
+  is_repeat_customer: boolean;
+}
+
 export interface ConversationListFilters {
   state?: ConversationState;
   handoff_required?: boolean;
   assigned_operator_id?: string;
+  unassigned?: boolean;
   updated_from?: string;
   updated_to?: string;
   search?: string;
+  urgent?: boolean;
+  high_priority?: boolean;
+  needs_attention?: boolean;
+  waiting_for_payment?: boolean;
+  ready_to_order?: boolean;
+  low_confidence?: boolean;
+  assigned_to_me?: boolean;
+  is_simulation?: boolean;
 }
 
 export interface LinkedProductSummary {
@@ -58,6 +108,11 @@ export interface LinkedOrderSummary {
   status: string;
   payment_status: string;
   total_amount: string;
+}
+
+export interface OperatorSummary {
+  id: string;
+  full_name: string;
 }
 
 export interface ConversationSlots {
@@ -107,6 +162,23 @@ export interface AgentRun {
   created_at: string;
 }
 
+export interface ConversationEvent {
+  id: string;
+  conversation_id: string;
+  event_type: ConversationEventType;
+  title: string;
+  description: string | null;
+  metadata: Record<string, unknown> | null;
+  created_by_user_id: string | null;
+  created_at: string;
+}
+
+export interface InventoryStatus {
+  variant_id: string | null;
+  in_stock: boolean | null;
+  available_quantity: number | null;
+}
+
 export interface Conversation {
   id: string;
   shop_id: string;
@@ -115,11 +187,18 @@ export interface Conversation {
   state: ConversationState;
   workflow_state: AgentWorkflowState;
   agent_paused: boolean;
+  is_simulation?: boolean;
   suggested_outbound?: string | null;
   preview_required?: boolean;
   preview_reason?: string | null;
+  priority_score?: number;
+  priority_level?: ConversationPriorityLevel;
+  priority_reason?: string | null;
+  needs_attention?: boolean;
+  last_operator_action_at?: string | null;
   last_intent: string | null;
   assigned_operator_id: string | null;
+  assigned_operator?: OperatorSummary | null;
   handoff_required: boolean;
   handoff_reason: string | null;
   last_message_at: string | null;
@@ -130,6 +209,8 @@ export interface Conversation {
   last_message_direction?: MessageDirection | null;
   confidence_score?: number | null;
   agent_mode?: 'copilot' | 'controlled_autopilot' | 'human_first' | null;
+  linked_product?: LinkedProductSummary | null;
+  linked_order?: LinkedOrderSummary | null;
 }
 
 export interface Message {
@@ -145,7 +226,6 @@ export interface Message {
 export interface MessageCreate {
   text: string;
 }
-
 
 export interface SuggestedReply {
   id: string;
@@ -168,9 +248,13 @@ export interface ConversationDetail extends Conversation {
   agent_runs: AgentRun[];
   agent_actions: AgentAction[];
   customer?: Customer | null;
+  customer_profile?: CustomerProfile | null;
   linked_product?: LinkedProductSummary | null;
   linked_order?: LinkedOrderSummary | null;
   suggested_replies?: SuggestedReply[];
+  events?: ConversationEvent[];
+  inventory_status?: InventoryStatus | null;
+  decision_trace_summary?: string | null;
 }
 
 export interface ConversationHandoffResponse {
@@ -183,9 +267,22 @@ export interface ConversationHandoffResponse {
   preview_required?: boolean;
   preview_reason?: string | null;
   assigned_operator_id: string | null;
+  priority_score?: number;
+  priority_level?: ConversationPriorityLevel;
+  needs_attention?: boolean;
 }
 
 export interface ConversationResolveResponse {
   conversation_id: string;
   state: ConversationState;
+}
+
+export interface ConversationAssignRequest {
+  operator_id: string;
+}
+
+export interface ConversationAssignResponse {
+  conversation_id: string;
+  assigned_operator_id: string;
+  assigned_operator_name: string | null;
 }

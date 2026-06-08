@@ -241,6 +241,18 @@ class OrderService:
             entity_id=str(order.id),
             details={"reason": reason},
         )
+        if cancelled.conversation_id:
+            from app.domain.enums import ConversationEventType
+            from app.services.conversation_event_service import ConversationEventService
+            from app.services.conversation_priority_service import ConversationPriorityService
+
+            ConversationEventService(self.db).record(
+                cancelled.conversation_id,
+                ConversationEventType.ORDER_CANCELLED,
+                metadata={"order_id": str(cancelled.id), "reason": reason},
+                created_by_user_id=user.id,
+            )
+            ConversationPriorityService(self.db).refresh(cancelled.conversation_id)
         self.orders.commit()
         return self._to_read(cancelled)
 

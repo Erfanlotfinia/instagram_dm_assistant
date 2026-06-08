@@ -5,10 +5,14 @@ interface ShopSelectorProps {
 }
 
 export function ShopSelector({ label = 'Shop' }: ShopSelectorProps) {
-  const { shops, selectedShopId, setSelectedShopId, isLoading } = useShop();
+  const { shops, selectedShopId, setSelectedShopId, isLoading, error } = useShop();
 
   if (isLoading) {
     return <p className="loading-state">Loading shops...</p>;
+  }
+
+  if (error) {
+    return <p className="form-error">Failed to load shops: {error}</p>;
   }
 
   if (shops.length === 0) {

@@ -75,6 +75,18 @@ def cancel_order(
     return OrderService(db).cancel_order(shop_id, order_id, current_user, payload)
 
 
+@router.post("/{shop_id}/orders/{order_id}/send-payment-link", response_model=OrderRead)
+def send_payment_link(
+    shop_id: UUID,
+    order_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _: Annotated[ShopMember, Depends(require_shop_role(UserRole.OPERATOR))],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> OrderRead:
+    order = PaymentService(db).send_payment_link(shop_id, order_id, current_user)
+    return OrderService(db).get_order_read(shop_id, order.id, current_user)
+
+
 @router.post("/{shop_id}/orders/{order_id}/mark-paid", response_model=OrderRead)
 def mark_order_paid(
     shop_id: UUID,
@@ -97,4 +109,17 @@ def ship_order(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> OrderRead:
     order = ShippingService(db).ship_order(shop_id, order_id, payload, current_user)
+    return OrderService(db).get_order_read(shop_id, order.id, current_user)
+
+
+@router.post("/{shop_id}/orders/{order_id}/send-tracking-code", response_model=OrderRead)
+def send_tracking_code(
+    shop_id: UUID,
+    order_id: UUID,
+    payload: OrderShipRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _: Annotated[ShopMember, Depends(require_shop_role(UserRole.OPERATOR))],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> OrderRead:
+    order = ShippingService(db).send_tracking_code(shop_id, order_id, payload, current_user)
     return OrderService(db).get_order_read(shop_id, order.id, current_user)

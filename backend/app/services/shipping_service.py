@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.domain.enums import (
+    ConversationEventType,
     OrderShippingStatus,
     OrderStatus,
     ShipmentProvider,
@@ -18,6 +19,10 @@ from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.shipment_repository import ShipmentRepository
 from app.schemas.order import OrderShipRequest
+from app.services.audit_service import AuditService
+from app.services.conversation_event_service import ConversationEventService
+from app.services.conversation_priority_service import ConversationPriorityService
+from app.services.instagram_send_service import InstagramSendService
 from app.services.order_service import OrderService
 from app.services.shop_service import ShopService
 
@@ -80,6 +85,40 @@ class ShippingService:
         self.shipments.commit()
         self.orders.refresh(order)
         logger.info("Order shipped order=%s tracking=%s", order.id, payload.tracking_code)
+        return order
+
+    def send_tracking_code(
+        self,
+        shop_id: UUID,
+        order_id: UUID,
+        payload: OrderShipRequest,
+        user: User,
+    ) -> Order:
+        order = self.ship_order(shop_id, order_id, payload, user)
+        if order.conversation_id:
+            tracking_text = f"کد رهگیری سفارش شما: {payload.tracking_code}"
+            if payload.tracking_url:
+                tracking_text += f"\n{payload.tracking_url}"
+            InstagramSendService(self.db).send_text_message(order.conversation_id, tracking_text)
+            ConversationEventService(self.db).record(
+                order.conversation_id,
+                ConversationEventType.ORDER_SHIPPED,
+                metadata={
+                    "order_id": str(order.id),
+                    "tracking_code": payload.tracking_code,
+                },
+                created_by_user_id=user.id,
+            )
+            ConversationPriorityService(self.db).refresh(order.conversation_id)
+        AuditService(self.db).log(
+            action="tracking_code_sent",
+            entity_type="order",
+            shop_id=shop_id,
+            actor_user_id=user.id,
+            entity_id=str(order.id),
+            metadata={"tracking_code": payload.tracking_code},
+        )
+        self.shipments.commit()
         return order
 
     def create_pending_shipment(self, order: Order, provider: ShipmentProvider = ShipmentProvider.MANUAL) -> Shipment:

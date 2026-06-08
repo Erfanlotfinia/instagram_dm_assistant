@@ -196,9 +196,19 @@ export const apiClient = {
         handoff_required:
           filters.handoff_required === undefined ? undefined : String(filters.handoff_required),
         assigned_operator_id: filters.assigned_operator_id,
+        unassigned: filters.unassigned === undefined ? undefined : String(filters.unassigned),
         updated_from: filters.updated_from,
         updated_to: filters.updated_to,
         search: filters.search,
+        urgent: filters.urgent === undefined ? undefined : String(filters.urgent),
+        high_priority: filters.high_priority === undefined ? undefined : String(filters.high_priority),
+        needs_attention: filters.needs_attention === undefined ? undefined : String(filters.needs_attention),
+        waiting_for_payment:
+          filters.waiting_for_payment === undefined ? undefined : String(filters.waiting_for_payment),
+        ready_to_order: filters.ready_to_order === undefined ? undefined : String(filters.ready_to_order),
+        low_confidence: filters.low_confidence === undefined ? undefined : String(filters.low_confidence),
+        assigned_to_me: filters.assigned_to_me === undefined ? undefined : String(filters.assigned_to_me),
+        is_simulation: filters.is_simulation === undefined ? undefined : String(filters.is_simulation),
       })}`,
     ),
   getConversation: (shopId: string, conversationId: string) =>
@@ -225,6 +235,11 @@ export const apiClient = {
     request<ConversationHandoffResponse>(
       `/api/v1/shops/${shopId}/conversations/${conversationId}/release-to-agent`,
       { method: 'POST' },
+    ),
+  assignConversation: (shopId: string, conversationId: string, operatorId: string) =>
+    request<{ conversation_id: string; assigned_operator_id: string; assigned_operator_name: string | null }>(
+      `/api/v1/shops/${shopId}/conversations/${conversationId}/assign`,
+      { method: 'POST', body: JSON.stringify({ operator_id: operatorId }) },
     ),
   markConversationResolved: (shopId: string, conversationId: string) =>
     request<ConversationResolveResponse>(
@@ -303,8 +318,15 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  sendPaymentLink: (shopId: string, orderId: string) =>
+    request<Order>(`/api/v1/shops/${shopId}/orders/${orderId}/send-payment-link`, { method: 'POST' }),
   markOrderPaid: (shopId: string, orderId: string) =>
     request<Order>(`/api/v1/shops/${shopId}/orders/${orderId}/mark-paid`, { method: 'POST' }),
+  sendTrackingCode: (shopId: string, orderId: string, payload: OrderShipRequest) =>
+    request<Order>(`/api/v1/shops/${shopId}/orders/${orderId}/send-tracking-code`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   shipOrder: (shopId: string, orderId: string, payload: OrderShipRequest) =>
     request<Order>(`/api/v1/shops/${shopId}/orders/${orderId}/ship`, {
       method: 'POST',

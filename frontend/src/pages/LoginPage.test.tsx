@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LoginPage } from '../pages/LoginPage';
 import { AuthProvider } from '../contexts/AuthContext';
@@ -9,11 +9,15 @@ import { AuthProvider } from '../contexts/AuthContext';
 vi.mock('../services/apiClient', () => ({
   apiClient: {
     login: vi.fn(),
-    getMe: vi.fn(),
+    getMe: vi.fn().mockRejectedValue(new Error('not authenticated')),
   },
 }));
 
 describe('LoginPage', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it('shows validation errors for invalid credentials input', async () => {
     const user = userEvent.setup();
 

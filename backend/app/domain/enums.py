@@ -213,3 +213,32 @@ class SellingStyle(str, enum.Enum):
     PROMOTIONAL = "promotional"
     EDUCATIONAL = "educational"
     BALANCED = "balanced"
+
+
+class ConversationPriorityLevel(str, enum.Enum):
+    URGENT = "urgent"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class ConversationEventType(str, enum.Enum):
+    INBOUND_MESSAGE = "inbound_message_received"
+    OUTBOUND_MESSAGE = "outbound_message_sent"
+    SUGGESTED_REPLY_CREATED = "suggested_reply_created"
+    SUGGESTED_REPLY_APPROVED = "suggested_reply_approved"
+    PRODUCT_RESOLVED = "product_resolved"
+    VARIANT_RESOLVED = "variant_resolved"
+    INVENTORY_CHECKED = "inventory_checked"
+    DRAFT_ORDER_CREATED = "draft_order_created"
+    CUSTOMER_INFO_COMPLETED = "customer_info_completed"
+    CONFIRMATION_REQUESTED = "confirmation_requested"
+    PAYMENT_LINK_SENT = "payment_link_sent"
+    PAYMENT_RECEIVED = "payment_received"
+    ORDER_SHIPPED = "order_shipped"
+    HANDOFF_REQUIRED = "handoff_required"
+    OPERATOR_TOOK_OVER = "operator_took_over"
+    OPERATOR_RELEASED_AGENT = "operator_released_to_agent"
+    ORDER_CANCELLED = "order_cancelled"
+    CONVERSATION_ASSIGNED = "conversation_assigned"
+    CUSTOMER_PROFILE_UPDATED = "customer_profile_updated"

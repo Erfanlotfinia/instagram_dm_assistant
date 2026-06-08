@@ -14,6 +14,7 @@ from app.domain.enums import (
     AgentIntent,
     AgentRunStatus,
     AgentWorkflowState,
+    ConversationEventType,
     ConversationState,
 )
 from app.domain.models import AgentAction, AgentDecisionAudit, AgentRun, Conversation, Message, Order, Product, ProductVariant, ShopAgentSettings
@@ -30,6 +31,8 @@ from app.schemas.agent import AgentExtractionInput, AgentExtractionResult, Extra
 from app.schemas.instagram_product_map import ResolveInstagramProductRequest
 from app.services.agent_settings_live import resolve_live_agent_settings
 from app.services.audit_service import AuditService
+from app.services.conversation_event_service import ConversationEventService
+from app.services.conversation_priority_service import ConversationPriorityService
 from app.services.auto_send_decision_service import AutoSendDecisionInput, AutoSendDecisionService
 from app.services.handoff_service import evaluate_handoff
 from app.services.instagram_product_resolver import InstagramProductResolver
@@ -98,8 +101,16 @@ class ConversationOrchestrator:
             logger.warning("Message %s not found", message_id)
             return False
 
+        ConversationEventService(self.db).record(
+            conversation_id,
+            ConversationEventType.INBOUND_MESSAGE,
+            description=(message.text or "")[:200] or None,
+            metadata={"message_id": str(message.id)},
+        )
         if conversation.agent_paused or conversation.assigned_operator_id is not None:
             logger.info("Conversation %s is under human control; skipping agent", conversation_id)
+            ConversationPriorityService(self.db).refresh(conversation_id)
+            self.db.commit()
             return True
 
         slots = self.slots_repo.get_or_create(conversation_id)
@@ -378,6 +389,7 @@ class ConversationOrchestrator:
             conversation.agent_failure_count = 0
 
         self.slots_repo.save(slots)
+        ConversationPriorityService(self.db).refresh(conversation_id)
         self.db.commit()
         logger.info(
             "Orchestrator processed conversation=%s message=%s run=%s state=%s",

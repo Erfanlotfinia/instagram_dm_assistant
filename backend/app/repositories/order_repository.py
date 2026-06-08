@@ -42,6 +42,16 @@ class OrderRepository:
         )
         return self.db.scalar(stmt)
 
+    def list_for_customer(self, customer_id: UUID, *, limit: int = 50) -> list[Order]:
+        stmt = (
+            select(Order)
+            .options(joinedload(Order.items))
+            .where(Order.customer_id == customer_id)
+            .order_by(Order.created_at.desc())
+            .limit(limit)
+        )
+        return list(self.db.scalars(stmt).unique().all())
+
     def list_for_shop(
         self,
         shop_id: UUID,

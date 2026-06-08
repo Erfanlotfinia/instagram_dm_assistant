@@ -1,9 +1,12 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useEffect, useState } from 'react';
 
+import { queryKeys } from '../lib/queryClient';
 import { apiClient } from '../services/apiClient';
 import type { Shop } from '../types/shop';
 
 export function ShopsPage() {
+  const queryClient = useQueryClient();
   const [shops, setShops] = useState<Shop[]>([]);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -32,6 +35,7 @@ export function ShopsPage() {
       setName('');
       setSlug('');
       await loadShops();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.shops });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create shop');
     } finally {

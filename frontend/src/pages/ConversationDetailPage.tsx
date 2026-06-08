@@ -6,6 +6,12 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { z } from 'zod';
 
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ConversationEventsTimeline } from '../components/conversations/ConversationEventsTimeline';
+import { CustomerProfilePanel } from '../components/conversations/CustomerProfilePanel';
+import { MessageThread } from '../components/conversations/MessageThread';
+import { OperatorQuickActions } from '../components/conversations/OperatorQuickActions';
+import { PriorityBadge } from '../components/conversations/PriorityBadge';
+import { SuggestedReplyPanel } from '../components/conversations/SuggestedReplyPanel';
 import { useAuth } from '../contexts/AuthContext';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
@@ -17,17 +23,7 @@ const messageSchema = z.object({
   text: z.string().min(1, 'Message is required').max(4000),
 });
 
-const customerSchema = z.object({
-  full_name: z.string().optional(),
-  phone: z.string().optional(),
-  city: z.string().optional(),
-  address: z.string().optional(),
-  postal_code: z.string().optional(),
-  notes: z.string().optional(),
-});
-
 type MessageFormValues = z.infer<typeof messageSchema>;
-type CustomerFormValues = z.infer<typeof customerSchema>;
 
 export function ConversationDetailPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -39,6 +35,9 @@ export function ConversationDetailPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showResolveConfirm, setShowResolveConfirm] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showTrackingPrompt, setShowTrackingPrompt] = useState(false);
+  const [trackingCode, setTrackingCode] = useState('');
   const [editedSuggestedText, setEditedSuggestedText] = useState('');
 
   const conversationQuery = useQuery({
@@ -53,18 +52,6 @@ export function ConversationDetailPage() {
   const messageForm = useForm<MessageFormValues>({
     resolver: zodResolver(messageSchema),
     defaultValues: { text: '' },
-  });
-
-  const customerForm = useForm<CustomerFormValues>({
-    resolver: zodResolver(customerSchema),
-    values: {
-      full_name: conversation?.customer?.full_name ?? '',
-      phone: conversation?.customer?.phone ?? '',
-      city: conversation?.customer?.city ?? '',
-      address: conversation?.customer?.address ?? '',
-      postal_code: conversation?.customer?.postal_code ?? '',
-      notes: conversation?.customer?.notes ?? '',
-    },
   });
 
   function invalidateConversation() {
@@ -132,29 +119,96 @@ export function ConversationDetailPage() {
     onError: (error) => showToast(error instanceof Error ? error.message : 'Order creation failed', 'error'),
   });
 
+  const sendPaymentLinkMutation = useMutation({
+    mutationFn: () => apiClient.sendPaymentLink(shopId, conversation!.linked_order!.id),
+    onSuccess: () => {
+      showToast('Payment link sent.', 'success');
+      invalidateConversation();
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : 'Payment link failed', 'error'),
+  });
+
+  const markPaidMutation = useMutation({
+    mutationFn: () => apiClient.markOrderPaid(shopId, conversation!.linked_order!.id),
+    onSuccess: () => {
+      showToast('Order marked as paid.', 'success');
+      invalidateConversation();
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : 'Mark paid failed', 'error'),
+  });
+
+  const sendTrackingMutation = useMutation({
+    mutationFn: (code: string) =>
+      apiClient.sendTrackingCode(shopId, conversation!.linked_order!.id, {
+        tracking_code: code,
+      }),
+    onSuccess: () => {
+      setShowTrackingPrompt(false);
+      setTrackingCode('');
+      showToast('Tracking code sent.', 'success');
+      invalidateConversation();
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : 'Tracking failed', 'error'),
+  });
+
+  const cancelOrderMutation = useMutation({
+    mutationFn: () =>
+      apiClient.cancelOrder(shopId, conversation!.linked_order!.id, {
+        reason: 'Cancelled by operator',
+      }),
+    onSuccess: () => {
+      setShowCancelConfirm(false);
+      showToast('Order cancelled.', 'success');
+      invalidateConversation();
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : 'Cancel failed', 'error'),
+  });
+
   const approveSuggestedMutation = useMutation({
     mutationFn: (replyId: string) => apiClient.approveSuggestedReply(shopId, replyId),
-    onSuccess: () => { showToast('Suggested reply approved and sent.', 'success'); invalidateConversation(); },
+    onSuccess: () => {
+      showToast('Suggested reply approved and sent.', 'success');
+      invalidateConversation();
+    },
     onError: (error) => showToast(error instanceof Error ? error.message : 'Approve failed', 'error'),
   });
 
   const editSuggestedMutation = useMutation({
-    mutationFn: ({ replyId, text }: { replyId: string; text: string }) => apiClient.editAndSendSuggestedReply(shopId, replyId, text),
-    onSuccess: () => { showToast('Edited reply sent.', 'success'); setEditedSuggestedText(''); invalidateConversation(); },
+    mutationFn: ({ replyId, text }: { replyId: string; text: string }) =>
+      apiClient.editAndSendSuggestedReply(shopId, replyId, text),
+    onSuccess: () => {
+      showToast('Edited reply sent.', 'success');
+      setEditedSuggestedText('');
+      invalidateConversation();
+    },
     onError: (error) => showToast(error instanceof Error ? error.message : 'Edit and send failed', 'error'),
   });
 
   const rejectSuggestedMutation = useMutation({
     mutationFn: (replyId: string) => apiClient.rejectSuggestedReply(shopId, replyId, 'Rejected by operator'),
-    onSuccess: () => { showToast('Suggested reply rejected.', 'success'); invalidateConversation(); },
+    onSuccess: () => {
+      showToast('Suggested reply rejected.', 'success');
+      invalidateConversation();
+    },
     onError: (error) => showToast(error instanceof Error ? error.message : 'Reject failed', 'error'),
   });
 
   const pendingSuggestedReply = conversation?.suggested_replies?.[0];
+  const isMutating =
+    takeOverMutation.isPending ||
+    releaseMutation.isPending ||
+    sendMessageMutation.isPending ||
+    createOrderMutation.isPending ||
+    sendPaymentLinkMutation.isPending ||
+    markPaidMutation.isPending ||
+    sendTrackingMutation.isPending ||
+    cancelOrderMutation.isPending;
 
   useEffect(() => {
     if (conversation) {
-      setEditedSuggestedText(pendingSuggestedReply?.suggested_text ?? conversation.suggested_outbound ?? '');
+      setEditedSuggestedText(
+        pendingSuggestedReply?.suggested_text ?? conversation.suggested_outbound ?? '',
+      );
     }
   }, [conversation, pendingSuggestedReply?.id, pendingSuggestedReply?.suggested_text]);
 
@@ -188,250 +242,177 @@ export function ConversationDetailPage() {
     );
   }
 
-  const latestRun = conversation.agent_runs?.[0];
-  const confidence = conversation.slots?.confidence ?? latestRun?.output_json?.confidence;
-  const suggestedText = editedSuggestedText;
+  const confidence = conversation.slots?.confidence ?? conversation.agent_runs?.[0]?.output_json?.confidence;
 
   return (
     <div className="page-stack page-stack--wide">
       <section className="dashboard-card dashboard-card--wide">
         <p className="dashboard-card__eyebrow">Conversation</p>
-        <h1>
-          {conversation.customer?.full_name ??
-            conversation.customer?.instagram_user_id ??
-            conversation.customer_id}
-        </h1>
-        <p>
-          Lifecycle: <strong>{conversation.state}</strong> · Workflow:{' '}
-          <strong>{conversation.workflow_state}</strong> · Handoff:{' '}
-          <strong>{conversation.handoff_required ? 'required' : 'none'}</strong>
-        </p>
-        {conversation.handoff_reason ? (
-          <p>
-            Handoff reason: <strong>{conversation.handoff_reason}</strong>
-          </p>
-        ) : null}
-
-        <div className="detail-grid">
-          <p>
-            Linked product:{' '}
-            {conversation.linked_product ? (
-              <Link className="table-link" to={`/products/${conversation.linked_product.id}`}>
-                {conversation.linked_product.title}
-              </Link>
-            ) : (
-              '—'
-            )}
-          </p>
-          <p>
-            Linked order:{' '}
-            {conversation.linked_order ? (
-              <Link
-                className="table-link"
-                to={`/orders/${conversation.linked_order.id}?shopId=${shopId}`}
-              >
-                {conversation.linked_order.id.slice(0, 8)} · {conversation.linked_order.status}
-              </Link>
-            ) : (
-              '—'
-            )}
-          </p>
-        </div>
-
-        {conversation.preview_required ? (
-          <div className="empty-state">
-            <strong>Suggested reply requires approval:</strong> {conversation.preview_reason ?? 'preview required'}
-            <p>{conversation.suggested_outbound}</p>
+        <div className="conversation-header">
+          <div>
+            <h1>
+              {conversation.customer?.full_name ??
+                conversation.customer?.instagram_user_id ??
+                conversation.customer_id}
+            </h1>
+            <p>
+              {conversation.state} · {conversation.workflow_state} ·{' '}
+              <PriorityBadge
+                level={conversation.priority_level}
+                score={conversation.priority_score}
+                reason={conversation.priority_reason}
+              />
+            </p>
           </div>
-        ) : null}
-
-        <div className="button-row">
-          <button
-            className="button button--primary"
-            type="button"
-            onClick={() => takeOverMutation.mutate()}
-            disabled={takeOverMutation.isPending}
-          >
-            Take over
-          </button>
-          <button
-            className="button button--ghost-dark"
-            type="button"
-            onClick={() => releaseMutation.mutate()}
-            disabled={releaseMutation.isPending}
-          >
-            Release to agent
-          </button>
-          <button
-            className="button button--ghost-dark"
-            type="button"
-            onClick={() => setShowResolveConfirm(true)}
-          >
-            Mark resolved
-          </button>
-          <button
-            className="button button--ghost-dark"
-            type="button"
-            onClick={() => createOrderMutation.mutate()}
-            disabled={createOrderMutation.isPending}
-          >
-            Create order
-          </button>
+          <OperatorQuickActions
+            hasOrder={Boolean(conversation.linked_order)}
+            orderStatus={conversation.linked_order?.status}
+            paymentStatus={conversation.linked_order?.payment_status}
+            onTakeOver={() => takeOverMutation.mutate()}
+            onRelease={() => releaseMutation.mutate()}
+            onResolve={() => setShowResolveConfirm(true)}
+            onCreateOrder={() => createOrderMutation.mutate()}
+            onSendPaymentLink={() => sendPaymentLinkMutation.mutate()}
+            onMarkPaid={() => markPaidMutation.mutate()}
+            onSendTracking={() => setShowTrackingPrompt(true)}
+            onCancelOrder={() => setShowCancelConfirm(true)}
+            isLoading={isMutating}
+          />
         </div>
-
         <Link className="table-link" to="/conversations">
           Back to conversations
         </Link>
       </section>
 
-      <section className="dashboard-card dashboard-card--wide">
-        <h2>Send manual message</h2>
-        <form
-          className="inline-form"
-          onSubmit={messageForm.handleSubmit((values) => sendMessageMutation.mutate(values))}
-        >
-          <label className="form-field">
-            <span>Message</span>
-            <textarea rows={3} {...messageForm.register('text')} />
-            {messageForm.formState.errors.text ? (
-              <span className="field-error">{messageForm.formState.errors.text.message}</span>
-            ) : null}
-          </label>
-          <button className="button button--primary" type="submit" disabled={sendMessageMutation.isPending}>
-            {sendMessageMutation.isPending ? 'Sending...' : 'Send message'}
-          </button>
-        </form>
-      </section>
+      <div className="operator-layout">
+        <div className="operator-layout__main">
+          <section className="dashboard-card">
+            <h2>Message timeline</h2>
+            <MessageThread messages={conversation.messages} isAdmin={isAdmin} />
+          </section>
 
-      <section className="dashboard-card dashboard-card--wide">
-        <h2>Customer details</h2>
-        <form
-          className="inline-form"
-          onSubmit={customerForm.handleSubmit((values) => updateCustomerMutation.mutate(values))}
-        >
-          <div className="filter-grid">
-            <label className="form-field">
-              <span>Full name</span>
-              <input {...customerForm.register('full_name')} />
-            </label>
-            <label className="form-field">
-              <span>Phone</span>
-              <input {...customerForm.register('phone')} />
-            </label>
-            <label className="form-field">
-              <span>City</span>
-              <input {...customerForm.register('city')} />
-            </label>
-            <label className="form-field">
-              <span>Postal code</span>
-              <input {...customerForm.register('postal_code')} />
-            </label>
-          </div>
-          <label className="form-field">
-            <span>Address</span>
-            <textarea rows={2} {...customerForm.register('address')} />
-          </label>
-          <label className="form-field">
-            <span>Notes</span>
-            <textarea rows={2} {...customerForm.register('notes')} />
-          </label>
-          <button
-            className="button button--primary"
-            type="submit"
-            disabled={updateCustomerMutation.isPending}
-          >
-            Save customer
-          </button>
-        </form>
-      </section>
-
-      <section className="dashboard-card dashboard-card--wide">
-        <h2>Extracted slots</h2>
-        {conversation.slots ? (
-          <div className="detail-grid">
-            <p>Product: {conversation.slots.product_id ?? '—'}</p>
-            <p>Variant: {conversation.slots.product_variant_id ?? '—'}</p>
-            <p>Selected variant alternatives: {conversation.slots.variant_alternatives?.length ?? 0}</p>
-            <p>
-              Color / Size / Qty: {conversation.slots.color ?? '—'} ({conversation.slots.normalized_color ?? '—'}) / {conversation.slots.size ?? '—'} ({conversation.slots.normalized_size ?? '—'}){' '}
-              / {conversation.slots.quantity ?? '—'}
-            </p>
-            <p>Missing: {conversation.slots.missing_fields.join(', ') || 'none'}</p>
-          </div>
-        ) : (
-          <p className="empty-state">No extracted slots yet.</p>
-        )}
-        {confidence ? (
-          <p>
-            Confidence — intent: {String((confidence as Record<string, unknown>).intent ?? '—')} · slots:{' '}
-            {String((confidence as Record<string, unknown>).slots ?? '—')} · product:{' '}
-            {String((confidence as Record<string, unknown>).product ?? '—')}
-          </p>
-        ) : null}
-      </section>
-
-      <section className="dashboard-card dashboard-card--wide">
-        <h2>Suggested reply card</h2>
-        {pendingSuggestedReply ? (
-          <div className="empty-state" aria-label="Suggested reply card">
-            <p><strong>Reason:</strong> {pendingSuggestedReply.reason ?? conversation.preview_reason ?? 'Preview required'}</p>
-            <p>{pendingSuggestedReply.suggested_text}</p>
-            <label className="form-field">
-              <span>Edit before sending</span>
-              <textarea rows={4} value={suggestedText} onChange={(event) => setEditedSuggestedText(event.target.value)} />
-            </label>
-            <div className="button-row">
-              <button className="button button--primary" type="button" onClick={() => approveSuggestedMutation.mutate(pendingSuggestedReply.id)} disabled={approveSuggestedMutation.isPending}>Approve and send</button>
-              <button className="button button--ghost-dark" type="button" onClick={() => editSuggestedMutation.mutate({ replyId: pendingSuggestedReply.id, text: suggestedText })} disabled={!suggestedText || editSuggestedMutation.isPending}>Edit and send</button>
-              <button className="button button--danger" type="button" onClick={() => rejectSuggestedMutation.mutate(pendingSuggestedReply.id)} disabled={rejectSuggestedMutation.isPending}>Reject</button>
-            </div>
-          </div>
-        ) : (
-          <p className="empty-state">No pending suggested reply.</p>
-        )}
-      </section>
-
-      <section className="dashboard-card dashboard-card--wide">
-        <h2>Full audit trail</h2>
-        <ul className="simple-list">
-          {(conversation.agent_actions ?? []).map((action) => (
-            <li key={action.id}>
-              <strong>{action.action_name}</strong> · {action.status} ·{' '}
-              {new Date(action.created_at).toLocaleString()}
-            </li>
-          ))}
-        </ul>
-        {(conversation.agent_actions ?? []).length === 0 ? (
-          <p className="empty-state">No agent actions logged yet.</p>
-        ) : null}
-      </section>
-
-      <section className="dashboard-card dashboard-card--wide">
-        <h2>Message timeline</h2>
-        <div className="message-thread">
-          {conversation.messages.map((message) => (
-            <article
-              key={message.id}
-              className={`message-bubble message-bubble--${message.direction}`}
+          <section className="dashboard-card">
+            <h2>Send manual message</h2>
+            <form
+              className="inline-form"
+              onSubmit={messageForm.handleSubmit((values) => sendMessageMutation.mutate(values))}
             >
-              <p className="message-bubble__meta">
-                {message.direction} · {message.message_type} ·{' '}
-                {new Date(message.created_at).toLocaleString()}
-              </p>
-              <p className="message-bubble__text">{message.text ?? '(no text)'}</p>
-              {isAdmin && message.raw_payload ? (
-                <details className="message-bubble__debug">
-                  <summary>Raw payload</summary>
-                  <pre>{JSON.stringify(message.raw_payload, null, 2)}</pre>
-                </details>
-              ) : null}
-            </article>
-          ))}
-          {conversation.messages.length === 0 ? (
-            <p className="empty-state">No messages in this conversation.</p>
-          ) : null}
+              <label className="form-field">
+                <span>Message</span>
+                <textarea rows={3} {...messageForm.register('text')} />
+                {messageForm.formState.errors.text ? (
+                  <span className="field-error">{messageForm.formState.errors.text.message}</span>
+                ) : null}
+              </label>
+              <button
+                className="button button--primary"
+                type="submit"
+                disabled={sendMessageMutation.isPending}
+              >
+                {sendMessageMutation.isPending ? 'Sending...' : 'Send message'}
+              </button>
+            </form>
+          </section>
+
+          <section className="dashboard-card">
+            <h2>Suggested reply</h2>
+            <SuggestedReplyPanel
+              reply={pendingSuggestedReply}
+              editedText={editedSuggestedText}
+              previewReason={conversation.preview_reason}
+              onEdit={setEditedSuggestedText}
+              onApprove={() => approveSuggestedMutation.mutate(pendingSuggestedReply!.id)}
+              onEditAndSend={() =>
+                editSuggestedMutation.mutate({
+                  replyId: pendingSuggestedReply!.id,
+                  text: editedSuggestedText,
+                })
+              }
+              onReject={() => rejectSuggestedMutation.mutate(pendingSuggestedReply!.id)}
+              isApproving={approveSuggestedMutation.isPending}
+              isEditing={editSuggestedMutation.isPending}
+              isRejecting={rejectSuggestedMutation.isPending}
+            />
+          </section>
         </div>
-      </section>
+
+        <aside className="operator-layout__side">
+          <section className="dashboard-card">
+            <h2>Customer profile</h2>
+            <CustomerProfilePanel
+              profile={conversation.customer_profile ?? null}
+              onSave={(values) => updateCustomerMutation.mutate(values)}
+              isSaving={updateCustomerMutation.isPending}
+            />
+          </section>
+
+          <section className="dashboard-card">
+            <h2>Extracted slots</h2>
+            {conversation.slots ? (
+              <div className="detail-grid">
+                <p>Product: {conversation.linked_product?.title ?? conversation.slots.product_id ?? '—'}</p>
+                <p>Variant: {conversation.slots.product_variant_id ?? '—'}</p>
+                <p>
+                  Color / Size / Qty: {conversation.slots.color ?? '—'} / {conversation.slots.size ?? '—'} /{' '}
+                  {conversation.slots.quantity ?? '—'}
+                </p>
+                <p>Missing: {conversation.slots.missing_fields.join(', ') || 'none'}</p>
+              </div>
+            ) : (
+              <p className="empty-state">No extracted slots yet.</p>
+            )}
+            {confidence ? (
+              <p>
+                Confidence — intent: {String((confidence as Record<string, unknown>).intent ?? '—')} · slots:{' '}
+                {String((confidence as Record<string, unknown>).slots ?? '—')}
+              </p>
+            ) : null}
+          </section>
+
+          <section className="dashboard-card">
+            <h2>Inventory</h2>
+            {conversation.inventory_status ? (
+              <p>
+                {conversation.inventory_status.in_stock ? 'In stock' : 'Out of stock'} · Available:{' '}
+                {conversation.inventory_status.available_quantity ?? '—'}
+              </p>
+            ) : (
+              <p className="empty-state">No variant selected.</p>
+            )}
+          </section>
+
+          <section className="dashboard-card">
+            <h2>Current order</h2>
+            {conversation.linked_order ? (
+              <div className="detail-grid">
+                <p>
+                  <Link
+                    className="table-link"
+                    to={`/orders/${conversation.linked_order.id}?shopId=${shopId}`}
+                  >
+                    {conversation.linked_order.id.slice(0, 8)}
+                  </Link>
+                </p>
+                <p>Status: {conversation.linked_order.status}</p>
+                <p>Payment: {conversation.linked_order.payment_status}</p>
+                <p>Total: {conversation.linked_order.total_amount}</p>
+              </div>
+            ) : (
+              <p className="empty-state">No active order.</p>
+            )}
+          </section>
+
+          <section className="dashboard-card">
+            <h2>Decision trace</h2>
+            <p>{conversation.decision_trace_summary ?? 'No agent actions yet.'}</p>
+          </section>
+
+          <section className="dashboard-card">
+            <h2>Conversation events</h2>
+            <ConversationEventsTimeline events={conversation.events ?? []} />
+          </section>
+        </aside>
+      </div>
 
       <ConfirmDialog
         open={showResolveConfirm}
@@ -442,6 +423,41 @@ export function ConversationDetailPage() {
         onCancel={() => setShowResolveConfirm(false)}
         isLoading={resolveMutation.isPending}
       />
+
+      <ConfirmDialog
+        open={showCancelConfirm}
+        title="Cancel order?"
+        message="This cancels the linked order for this conversation."
+        confirmLabel="Cancel order"
+        onConfirm={() => cancelOrderMutation.mutate()}
+        onCancel={() => setShowCancelConfirm(false)}
+        isLoading={cancelOrderMutation.isPending}
+      />
+
+      {showTrackingPrompt ? (
+        <div className="dialog-overlay" role="presentation" onClick={() => setShowTrackingPrompt(false)}>
+          <div className="dialog" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+            <h2>Send tracking code</h2>
+            <label className="form-field">
+              <span>Tracking code</span>
+              <input value={trackingCode} onChange={(event) => setTrackingCode(event.target.value)} />
+            </label>
+            <div className="button-row">
+              <button className="button button--ghost-dark" type="button" onClick={() => setShowTrackingPrompt(false)}>
+                Cancel
+              </button>
+              <button
+                className="button button--primary"
+                type="button"
+                disabled={!trackingCode || sendTrackingMutation.isPending}
+                onClick={() => sendTrackingMutation.mutate(trackingCode)}
+              >
+                Send tracking
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

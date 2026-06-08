@@ -19,12 +19,21 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
-        agent_mode = postgresql.ENUM("copilot", "controlled_autopilot", "human_first", name="agent_mode")
+        with op.get_context().autocommit_block():
+            for value in ("friendly", "formal", "concise"):
+                op.execute(f"ALTER TYPE selling_style ADD VALUE IF NOT EXISTS '{value}'")
+        agent_mode = postgresql.ENUM(
+            "copilot", "controlled_autopilot", "human_first", name="agent_mode", create_type=False
+        )
         agent_mode.create(bind, checkfirst=True)
-        for value in ("friendly", "formal", "concise"):
-            op.execute(f"ALTER TYPE selling_style ADD VALUE IF NOT EXISTS '{value}'")
-        suggested_status = postgresql.ENUM("pending", "approved", "edited", "rejected", "sent", name="suggested_reply_status")
-        suggested_by = postgresql.ENUM("agent", "operator", name="suggested_reply_generated_by")
+        suggested_status = postgresql.ENUM(
+            "pending", "approved", "edited", "rejected", "sent",
+            name="suggested_reply_status",
+            create_type=False,
+        )
+        suggested_by = postgresql.ENUM(
+            "agent", "operator", name="suggested_reply_generated_by", create_type=False
+        )
         suggested_status.create(bind, checkfirst=True)
         suggested_by.create(bind, checkfirst=True)
     else:

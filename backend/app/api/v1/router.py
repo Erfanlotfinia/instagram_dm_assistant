@@ -4,6 +4,7 @@ from app.api.v1.agent_settings import router as agent_settings_router
 from app.api.v1.analytics import router as analytics_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.conversations import router as conversations_router
+from app.api.v1.customers import router as customers_router
 from app.api.v1.decision_traces import router as decision_traces_router
 from app.api.v1.fashion import router as fashion_router
 from app.api.v1.health import router as health_router
@@ -28,6 +29,7 @@ router.include_router(products_router)
 router.include_router(product_selection_router)
 router.include_router(orders_router)
 router.include_router(conversations_router)
+router.include_router(customers_router)
 router.include_router(decision_traces_router)
 router.include_router(semantic_search_router)
 router.include_router(payments_router)

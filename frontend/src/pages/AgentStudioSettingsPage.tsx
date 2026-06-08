@@ -10,11 +10,44 @@ import type { AgentStudioSettings } from '../types/competitive';
 type Mode = AgentStudioSettings['mode'];
 type SellingStyle = AgentStudioSettings['selling_style'];
 
+const MODE_OPTIONS: { id: Mode; label: string; description: string }[] = [
+  {
+    id: 'copilot',
+    label: 'Copilot',
+    description: 'Draft replies for operators. Nothing sends until a human approves.',
+  },
+  {
+    id: 'controlled_autopilot',
+    label: 'Controlled Autopilot',
+    description: 'Auto-send when confidence and safety gates pass; preview when they do not.',
+  },
+  {
+    id: 'human_first',
+    label: 'Human-first',
+    description: 'Prioritize operator handoff with minimal automated sending.',
+  },
+];
+
+const SELLING_STYLE_OPTIONS: { value: SellingStyle; label: string }[] = [
+  { value: 'friendly', label: 'Friendly' },
+  { value: 'formal', label: 'Formal' },
+  { value: 'concise', label: 'Concise' },
+  { value: 'promotional', label: 'Promotional' },
+  { value: 'educational', label: 'Educational' },
+  { value: 'balanced', label: 'Balanced' },
+];
+
 export function AgentStudioSettingsPage() {
   const { selectedShopId } = useShop();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const settings = useQuery({ queryKey: ['agent-settings', selectedShopId], queryFn: () => apiClient.getAgentStudioSettings(selectedShopId), enabled: Boolean(selectedShopId) });
+
+  const settings = useQuery({
+    queryKey: ['agent-settings', selectedShopId],
+    queryFn: () => apiClient.getAgentStudioSettings(selectedShopId),
+    enabled: Boolean(selectedShopId),
+  });
+
   const [mode, setMode] = useState<Mode>('copilot');
   const [brandVoice, setBrandVoice] = useState('');
   const [sellingStyle, setSellingStyle] = useState<SellingStyle>('friendly');
@@ -46,54 +79,249 @@ export function AgentStudioSettingsPage() {
   }, [settings.data]);
 
   const update = useMutation({
-    mutationFn: () => apiClient.updateAgentStudioSettings(selectedShopId, {
-      mode,
-      brand_voice: brandVoice || null,
-      selling_style: sellingStyle,
-      auto_send_enabled: autoSend,
-      preview_required_for_low_confidence: previewLowConfidence,
-      preview_required_for_first_order: previewFirstOrder,
-      preview_required_for_high_value_order: previewHighValue,
-      confidence_threshold_intent: intentThreshold,
-      confidence_threshold_product: productThreshold,
-      confidence_threshold_variant: variantThreshold,
-      confidence_threshold_address: addressThreshold,
-      high_value_order_threshold: highValue,
-    }),
+    mutationFn: () =>
+      apiClient.updateAgentStudioSettings(selectedShopId, {
+        mode,
+        brand_voice: brandVoice || null,
+        selling_style: sellingStyle,
+        auto_send_enabled: autoSend,
+        preview_required_for_low_confidence: previewLowConfidence,
+        preview_required_for_first_order: previewFirstOrder,
+        preview_required_for_high_value_order: previewHighValue,
+        confidence_threshold_intent: intentThreshold,
+        confidence_threshold_product: productThreshold,
+        confidence_threshold_variant: variantThreshold,
+        confidence_threshold_address: addressThreshold,
+        high_value_order_threshold: highValue,
+      }),
     onSuccess: () => {
       showToast('Agent settings saved.', 'success');
       queryClient.invalidateQueries({ queryKey: ['agent-settings', selectedShopId] });
     },
-    onError: (error) => showToast(error instanceof Error ? error.message : 'Failed to save settings', 'error'),
+    onError: (error) =>
+      showToast(error instanceof Error ? error.message : 'Failed to save settings', 'error'),
   });
 
-  function submit(event: FormEvent) { event.preventDefault(); update.mutate(); }
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    update.mutate();
+  }
+
+  const selectedMode = MODE_OPTIONS.find((option) => option.id === mode);
 
   return (
     <div className="page-stack page-stack--wide">
       <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Agent Settings</p>
+        <p className="dashboard-card__eyebrow">Agent studio</p>
         <h1>Automation mode & safety</h1>
-        <p>Choose Copilot, Controlled Autopilot, or Human-first behavior for Instagram fashion orders.</p>
+        <p>
+          Configure how the Instagram DM agent drafts replies, auto-sends messages, and escalates
+          to operators for fashion orders.
+        </p>
         <ShopSelector />
       </section>
-      <section className="dashboard-card dashboard-card--wide">
-        <form className="form-grid" onSubmit={submit} aria-label="Agent Settings form">
-          <label>Mode selector<select aria-label="Mode selector" value={mode} onChange={(e) => setMode(e.target.value as Mode)}><option value="copilot">Copilot</option><option value="controlled_autopilot">Controlled Autopilot</option><option value="human_first">Human-first</option></select></label>
-          <label>Selling style<select value={sellingStyle} onChange={(e) => setSellingStyle(e.target.value as SellingStyle)}><option value="friendly">Friendly</option><option value="formal">Formal</option><option value="concise">Concise</option><option value="promotional">Promotional</option></select></label>
-          <label>Brand voice<textarea value={brandVoice} onChange={(e) => setBrandVoice(e.target.value)} placeholder="Warm, fashion-aware, concise" /></label>
-          <label>Intent confidence threshold<input type="number" min="0" max="1" step="0.01" value={intentThreshold} onChange={(e) => setIntentThreshold(e.target.value)} /></label>
-          <label>Product confidence threshold<input type="number" min="0" max="1" step="0.01" value={productThreshold} onChange={(e) => setProductThreshold(e.target.value)} /></label>
-          <label>Variant confidence threshold<input type="number" min="0" max="1" step="0.01" value={variantThreshold} onChange={(e) => setVariantThreshold(e.target.value)} /></label>
-          <label>Address confidence threshold<input type="number" min="0" max="1" step="0.01" value={addressThreshold} onChange={(e) => setAddressThreshold(e.target.value)} /></label>
-          <label>High-value order threshold<input type="number" min="0" value={highValue} onChange={(e) => setHighValue(e.target.value)} /></label>
-          <label className="checkbox-row"><input type="checkbox" checked={autoSend} onChange={(e) => setAutoSend(e.target.checked)} /> Auto-send enabled</label>
-          <label className="checkbox-row"><input type="checkbox" checked={previewLowConfidence} onChange={(e) => setPreviewLowConfidence(e.target.checked)} /> Preview required for low confidence</label>
-          <label className="checkbox-row"><input type="checkbox" checked={previewFirstOrder} onChange={(e) => setPreviewFirstOrder(e.target.checked)} /> Preview required for first order</label>
-          <label className="checkbox-row"><input type="checkbox" checked={previewHighValue} onChange={(e) => setPreviewHighValue(e.target.checked)} /> Preview required for high-value order</label>
-          <button type="submit" disabled={update.isPending || !selectedShopId}>Save agent settings</button>
+
+      {!selectedShopId ? (
+        <section className="dashboard-card dashboard-card--wide">
+          <p className="empty-state">Select a shop to configure agent behavior.</p>
+        </section>
+      ) : null}
+
+      {selectedShopId && settings.isLoading ? (
+        <section className="dashboard-card dashboard-card--wide">
+          <p className="loading-state">Loading agent settings...</p>
+        </section>
+      ) : null}
+
+      {settings.error ? (
+        <section className="dashboard-card dashboard-card--wide">
+          <p className="form-error">
+            {settings.error instanceof Error ? settings.error.message : 'Failed to load settings'}
+          </p>
+        </section>
+      ) : null}
+
+      {selectedShopId && !settings.isLoading && !settings.error ? (
+        <form className="agent-studio-form" onSubmit={submit} aria-label="Agent Settings form">
+          <section className="dashboard-card dashboard-card--wide">
+            <h2>Automation mode</h2>
+            <p className="analytics-toolbar__summary">
+              Choose how much autonomy the agent has before an operator gets involved.
+            </p>
+
+            <div className="agent-mode-grid" role="radiogroup" aria-label="Automation mode">
+              {MODE_OPTIONS.map((option) => {
+                const isActive = mode === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`agent-mode-card${isActive ? ' agent-mode-card--active' : ''}`}
+                    aria-label={option.label}
+                    aria-pressed={isActive}
+                    onClick={() => setMode(option.id)}
+                  >
+                    <span className="agent-mode-card__label">{option.label}</span>
+                    <span className="agent-mode-card__description">{option.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedMode ? (
+              <p className="match-panel agent-studio-form__mode-summary">{selectedMode.description}</p>
+            ) : null}
+          </section>
+
+          <section className="dashboard-card dashboard-card--wide">
+            <h2>Voice & tone</h2>
+            <p className="analytics-toolbar__summary">
+              Shape how the agent sounds when it replies to customers.
+            </p>
+
+            <div className="filter-grid">
+              <label className="form-field">
+                <span>Selling style</span>
+                <select
+                  value={sellingStyle}
+                  onChange={(event) => setSellingStyle(event.target.value as SellingStyle)}
+                >
+                  {SELLING_STYLE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="form-field form-field--wide">
+                <span>Brand voice</span>
+                <textarea
+                  value={brandVoice}
+                  onChange={(event) => setBrandVoice(event.target.value)}
+                  placeholder="Warm, fashion-aware, concise"
+                  rows={4}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="dashboard-card dashboard-card--wide">
+            <h2>Confidence thresholds</h2>
+            <p className="analytics-toolbar__summary">
+              Minimum model confidence required before the agent acts on each step of the order flow.
+            </p>
+
+            <div className="filter-grid">
+              <label className="form-field">
+                <span>Intent confidence</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={intentThreshold}
+                  onChange={(event) => setIntentThreshold(event.target.value)}
+                />
+              </label>
+              <label className="form-field">
+                <span>Product confidence</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={productThreshold}
+                  onChange={(event) => setProductThreshold(event.target.value)}
+                />
+              </label>
+              <label className="form-field">
+                <span>Variant confidence</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={variantThreshold}
+                  onChange={(event) => setVariantThreshold(event.target.value)}
+                />
+              </label>
+              <label className="form-field">
+                <span>Address confidence</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={addressThreshold}
+                  onChange={(event) => setAddressThreshold(event.target.value)}
+                />
+              </label>
+              <label className="form-field">
+                <span>High-value order threshold</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={highValue}
+                  onChange={(event) => setHighValue(event.target.value)}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="dashboard-card dashboard-card--wide">
+            <h2>Safety gates</h2>
+            <p className="analytics-toolbar__summary">
+              Decide when the agent may send automatically and when a human preview is required.
+            </p>
+
+            <div className="agent-safety-grid">
+              <label className="form-field form-field--checkbox">
+                <input
+                  type="checkbox"
+                  checked={autoSend}
+                  onChange={(event) => setAutoSend(event.target.checked)}
+                />
+                <span>Auto-send enabled</span>
+              </label>
+              <label className="form-field form-field--checkbox">
+                <input
+                  type="checkbox"
+                  checked={previewLowConfidence}
+                  onChange={(event) => setPreviewLowConfidence(event.target.checked)}
+                />
+                <span>Preview required for low confidence</span>
+              </label>
+              <label className="form-field form-field--checkbox">
+                <input
+                  type="checkbox"
+                  checked={previewFirstOrder}
+                  onChange={(event) => setPreviewFirstOrder(event.target.checked)}
+                />
+                <span>Preview required for first order</span>
+              </label>
+              <label className="form-field form-field--checkbox">
+                <input
+                  type="checkbox"
+                  checked={previewHighValue}
+                  onChange={(event) => setPreviewHighValue(event.target.checked)}
+                />
+                <span>Preview required for high-value order</span>
+              </label>
+            </div>
+
+            <div className="button-row">
+              <button
+                className="button button--primary"
+                type="submit"
+                disabled={update.isPending || !selectedShopId}
+              >
+                {update.isPending ? 'Saving…' : 'Save agent settings'}
+              </button>
+            </div>
+          </section>
         </form>
-      </section>
+      ) : null}
     </div>
   );
 }

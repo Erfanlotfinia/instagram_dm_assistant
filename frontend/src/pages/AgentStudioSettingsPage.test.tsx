@@ -58,10 +58,13 @@ describe('AgentStudioSettingsPage', () => {
     );
 
     await screen.findByDisplayValue('Warm and concise');
-    const selector = await screen.findByLabelText(/mode selector/i);
-    expect(selector).toBeInTheDocument();
-    await user.selectOptions(selector, 'controlled_autopilot');
-    await waitFor(() => expect(selector).toHaveValue('controlled_autopilot'));
+    await user.click(screen.getByRole('button', { name: 'Controlled Autopilot' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Controlled Autopilot' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
     await user.click(screen.getByRole('button', { name: /save agent settings/i }));
 
     await waitFor(() => {

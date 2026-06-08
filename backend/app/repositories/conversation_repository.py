@@ -4,7 +4,8 @@ from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.domain.models import Conversation, Customer, Message
+from app.domain.enums import AgentWorkflowState
+from app.domain.models import Conversation, ConversationSlots, Customer, Message, Order, Product
 from app.schemas.conversation import ConversationListFilters
 
 
@@ -13,7 +14,12 @@ class ConversationRepository:
         self.db = db
 
     def get_by_id(self, conversation_id: UUID) -> Conversation | None:
-        return self.db.get(Conversation, conversation_id)
+        stmt = (
+            select(Conversation)
+            .options(joinedload(Conversation.slots), joinedload(Conversation.customer))
+            .where(Conversation.id == conversation_id)
+        )
+        return self.db.scalar(stmt)
 
     def get_for_shop(self, shop_id: UUID, conversation_id: UUID) -> Conversation | None:
         stmt = (
@@ -26,7 +32,12 @@ class ConversationRepository:
     def list_for_shop(self, shop_id: UUID, filters: ConversationListFilters | None = None) -> list[Conversation]:
         stmt = (
             select(Conversation)
-            .options(joinedload(Conversation.customer), joinedload(Conversation.slots), joinedload(Conversation.shop))
+            .options(
+                joinedload(Conversation.customer),
+                joinedload(Conversation.slots),
+                joinedload(Conversation.shop),
+                joinedload(Conversation.assigned_operator),
+            )
             .where(Conversation.shop_id == shop_id)
         )
         if filters is not None:
@@ -36,19 +47,54 @@ class ConversationRepository:
                 stmt = stmt.where(Conversation.handoff_required.is_(filters.handoff_required))
             if filters.assigned_operator_id is not None:
                 stmt = stmt.where(Conversation.assigned_operator_id == filters.assigned_operator_id)
+            if filters.unassigned is True:
+                stmt = stmt.where(Conversation.assigned_operator_id.is_(None))
             if filters.updated_from is not None:
                 stmt = stmt.where(Conversation.updated_at >= filters.updated_from)
             if filters.updated_to is not None:
                 stmt = stmt.where(Conversation.updated_at <= filters.updated_to)
+            if filters.is_simulation is not None:
+                stmt = stmt.where(Conversation.is_simulation.is_(filters.is_simulation))
+            if filters.needs_attention is True:
+                stmt = stmt.where(Conversation.needs_attention.is_(True))
+            if filters.priority_level is not None:
+                stmt = stmt.where(Conversation.priority_level == filters.priority_level)
+            if filters.priority_levels:
+                stmt = stmt.where(Conversation.priority_level.in_(filters.priority_levels))
+            if filters.waiting_for_payment is True:
+                stmt = stmt.where(
+                    Conversation.workflow_state == AgentWorkflowState.WAITING_FOR_PAYMENT
+                )
+            if filters.ready_to_order is True:
+                stmt = stmt.where(
+                    Conversation.workflow_state == AgentWorkflowState.WAITING_FOR_CONFIRMATION
+                )
+            if filters.low_confidence is True:
+                stmt = stmt.where(Conversation.preview_required.is_(True))
             if filters.search:
                 term = f"%{filters.search.strip()}%"
-                stmt = stmt.join(Customer, Customer.id == Conversation.customer_id).where(
+                product_subq = (
+                    select(ConversationSlots.conversation_id)
+                    .join(Product, Product.id == ConversationSlots.product_id)
+                    .where(Product.title.ilike(term))
+                )
+                stmt = stmt.outerjoin(Customer, Customer.id == Conversation.customer_id).outerjoin(
+                    Order, Order.conversation_id == Conversation.id
+                )
+                stmt = stmt.where(
                     or_(
                         Customer.full_name.ilike(term),
                         Customer.instagram_user_id.ilike(term),
+                        Customer.phone.ilike(term),
+                        Order.id.cast(str).ilike(term),
+                        Conversation.id.in_(product_subq),
                     )
                 )
-        stmt = stmt.order_by(Conversation.last_message_at.desc().nullslast(), Conversation.updated_at.desc())
+        stmt = stmt.order_by(
+            Conversation.priority_score.desc(),
+            Conversation.last_message_at.desc().nullslast(),
+            Conversation.updated_at.desc(),
+        )
         return list(self.db.scalars(stmt).unique().all())
 
     def get_open_for_participants(

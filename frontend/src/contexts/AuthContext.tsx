@@ -8,6 +8,7 @@ import {
   type PropsWithChildren,
 } from 'react';
 
+import { queryClient, queryKeys } from '../lib/queryClient';
 import { apiClient } from '../services/apiClient';
 import { tokenStorage } from '../services/tokenStorage';
 import type { User } from '../types/auth';
@@ -52,11 +53,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     tokenStorage.set(response.access_token);
     const currentUser = await apiClient.getMe();
     setUser(currentUser);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.shops });
   }, []);
 
   const logout = useCallback(() => {
     tokenStorage.clear();
     setUser(null);
+    queryClient.removeQueries({ queryKey: queryKeys.shops });
   }, []);
 
   const value = useMemo(

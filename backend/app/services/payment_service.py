@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.domain.enums import (
+    ConversationEventType,
     OrderPaymentStatus,
     OrderStatus,
     PaymentProvider,
@@ -17,6 +18,10 @@ from app.domain.enums import (
 )
 from app.domain.models import Order, Payment, User
 from app.repositories.payment_repository import PaymentRepository
+from app.services.audit_service import AuditService
+from app.services.conversation_event_service import ConversationEventService
+from app.services.conversation_priority_service import ConversationPriorityService
+from app.services.instagram_send_service import InstagramSendService
 from app.services.order_service import OrderService
 from app.services.payment_providers import get_payment_provider
 
@@ -101,6 +106,47 @@ class PaymentService:
 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported callback status")
 
+    def send_payment_link(self, shop_id: UUID, order_id: UUID, user: User) -> Order:
+        order = self.order_service.get_order_for_shop(shop_id, order_id, user)
+        if order.status in {OrderStatus.DRAFT, OrderStatus.WAITING_FOR_CONFIRMATION}:
+            self.order_service._confirm_for_payment(order)
+        if order.status != OrderStatus.WAITING_FOR_PAYMENT:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot send payment link for order in status {order.status.value}",
+            )
+
+        pending = next(
+            (
+                p
+                for p in order.payments
+                if p.status in {PaymentRecordStatus.CREATED, PaymentRecordStatus.PENDING}
+            ),
+            None,
+        )
+        payment = pending or self.initiate_payment(order)
+        if order.conversation_id and payment.payment_url:
+            message_text = f"لینک پرداخت سفارش شما:\n{payment.payment_url}"
+            InstagramSendService(self.db).send_text_message(order.conversation_id, message_text)
+            ConversationEventService(self.db).record(
+                order.conversation_id,
+                ConversationEventType.PAYMENT_LINK_SENT,
+                metadata={"order_id": str(order.id), "payment_id": str(payment.id)},
+                created_by_user_id=user.id,
+            )
+            ConversationPriorityService(self.db).refresh(order.conversation_id)
+
+        AuditService(self.db).log(
+            action="payment_link_sent",
+            entity_type="order",
+            shop_id=shop_id,
+            actor_user_id=user.id,
+            entity_id=str(order.id),
+            metadata={"payment_id": str(payment.id), "payment_url": payment.payment_url},
+        )
+        self.payments.commit()
+        return order
+
     def mark_paid_manually(self, shop_id: UUID, order_id: UUID, user: User) -> Order:
         order = self.order_service.get_order_for_shop(shop_id, order_id, user)
         if order.status not in {OrderStatus.WAITING_FOR_PAYMENT, OrderStatus.CONFIRMED}:
@@ -118,11 +164,18 @@ class PaymentService:
         self.payments.create(payment)
         order = self.order_service.mark_paid_internal(order.id, payment=payment, user=user)
         from app.core.metrics import PAID_ORDERS
-        from app.services.audit_service import AuditService
 
         PAID_ORDERS.inc()
+        if order.conversation_id:
+            ConversationEventService(self.db).record(
+                order.conversation_id,
+                ConversationEventType.PAYMENT_RECEIVED,
+                metadata={"order_id": str(order.id), "payment_id": str(payment.id)},
+                created_by_user_id=user.id,
+            )
+            ConversationPriorityService(self.db).refresh(order.conversation_id)
         AuditService(self.db).log(
-            action="mark_paid",
+            action="manual_payment_confirmed",
             entity_type="order",
             shop_id=shop_id,
             actor_user_id=user.id,

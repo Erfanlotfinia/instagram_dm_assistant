@@ -16,6 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,6 +27,8 @@ from app.domain.enums import (
     AgentRunStatus,
     AgentWorkflowState,
     ConfidenceSource,
+    ConversationEventType,
+    ConversationPriorityLevel,
     ConversationState,
     InstagramAccountStatus,
     InventoryMovementType,
@@ -56,6 +59,16 @@ def enum_values(enum_cls: type[Any]) -> list[str]:
     return [member.value for member in enum_cls]
 
 
+def pg_enum(enum_cls: type[Any], name: str, **kwargs: Any) -> Enum:
+    return PG_ENUM(
+        enum_cls,
+        name=name,
+        create_type=False,
+        values_callable=enum_values,
+        **kwargs,
+    )
+
+
 class User(Base, TimestampMixin):
     __tablename__ = "users"
 
@@ -63,7 +76,7 @@ class User(Base, TimestampMixin):
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role"), nullable=False)
+    role: Mapped[UserRole] = mapped_column(pg_enum(UserRole, name="user_role"), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     shop_memberships: Mapped[list[ShopMember]] = relationship(back_populates="user")
@@ -80,7 +93,7 @@ class Shop(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     status: Mapped[ShopStatus] = mapped_column(
-        Enum(ShopStatus, name="shop_status"), nullable=False, default=ShopStatus.ACTIVE
+        pg_enum(ShopStatus, name="shop_status"), nullable=False, default=ShopStatus.ACTIVE
     )
     default_currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     agent_settings: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
@@ -115,7 +128,7 @@ class ShopMember(Base):
     user_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="shop_member_role"), nullable=False)
+    role: Mapped[UserRole] = mapped_column(pg_enum(UserRole, name="shop_member_role"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
@@ -139,7 +152,7 @@ class InstagramAccount(Base, TimestampMixin):
     token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     webhook_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[InstagramAccountStatus] = mapped_column(
-        Enum(InstagramAccountStatus, name="instagram_account_status"),
+        pg_enum(InstagramAccountStatus, name="instagram_account_status"),
         nullable=False,
         default=InstagramAccountStatus.CONNECTED,
     )
@@ -192,7 +205,7 @@ class Conversation(Base, TimestampMixin):
         PG_UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True
     )
     state: Mapped[ConversationState] = mapped_column(
-        Enum(ConversationState, name="conversation_state"),
+        pg_enum(ConversationState, name="conversation_state"),
         nullable=False,
         default=ConversationState.OPEN,
     )
@@ -204,7 +217,7 @@ class Conversation(Base, TimestampMixin):
     handoff_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     workflow_state: Mapped[AgentWorkflowState] = mapped_column(
-        Enum(AgentWorkflowState, name="agent_workflow_state"),
+        pg_enum(AgentWorkflowState, name="agent_workflow_state"),
         nullable=False,
         default=AgentWorkflowState.IDLE,
     )
@@ -214,6 +227,16 @@ class Conversation(Base, TimestampMixin):
     suggested_outbound: Mapped[str | None] = mapped_column(Text, nullable=True)
     preview_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     preview_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    priority_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0, index=True)
+    priority_level: Mapped[ConversationPriorityLevel] = mapped_column(
+        pg_enum(ConversationPriorityLevel, name="conversation_priority_level"),
+        nullable=False,
+        default=ConversationPriorityLevel.LOW,
+        index=True,
+    )
+    priority_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_operator_action_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    needs_attention: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
 
     shop: Mapped[Shop] = relationship(back_populates="conversations")
     instagram_account: Mapped[InstagramAccount] = relationship(back_populates="conversations")
@@ -236,6 +259,33 @@ class Conversation(Base, TimestampMixin):
     )
     orders: Mapped[list[Order]] = relationship(back_populates="conversation", cascade="all, delete-orphan")
     suggested_replies: Mapped[list[SuggestedReply]] = relationship(back_populates="conversation", cascade="all, delete-orphan")
+    events: Mapped[list[ConversationEvent]] = relationship(
+        back_populates="conversation", cascade="all, delete-orphan"
+    )
+
+
+class ConversationEvent(Base):
+    __tablename__ = "conversation_events"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    conversation_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    event_type: Mapped[ConversationEventType] = mapped_column(
+        pg_enum(ConversationEventType, name="conversation_event_type"), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    event_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    conversation: Mapped[Conversation] = relationship(back_populates="events")
+    created_by: Mapped[User | None] = relationship(foreign_keys=[created_by_user_id])
 
 
 class WebhookEvent(Base, TimestampMixin):
@@ -243,7 +293,7 @@ class WebhookEvent(Base, TimestampMixin):
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     provider: Mapped[WebhookProvider] = mapped_column(
-        Enum(WebhookProvider, name="webhook_provider"), nullable=False
+        pg_enum(WebhookProvider, name="webhook_provider"), nullable=False
     )
     shop_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="SET NULL"), nullable=True, index=True
@@ -257,7 +307,7 @@ class WebhookEvent(Base, TimestampMixin):
     event_type: Mapped[str] = mapped_column(String(128), nullable=False, default="instagram.messaging")
     raw_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     processing_status: Mapped[WebhookProcessingStatus] = mapped_column(
-        Enum(WebhookProcessingStatus, name="webhook_processing_status"),
+        pg_enum(WebhookProcessingStatus, name="webhook_processing_status"),
         nullable=False,
         default=WebhookProcessingStatus.RECEIVED,
     )
@@ -278,15 +328,15 @@ class Message(Base):
         index=True,
     )
     direction: Mapped[MessageDirection] = mapped_column(
-        Enum(MessageDirection, name="message_direction"), nullable=False
+        pg_enum(MessageDirection, name="message_direction"), nullable=False
     )
     channel: Mapped[MessageChannel] = mapped_column(
-        Enum(MessageChannel, name="message_channel"), nullable=False, default=MessageChannel.INSTAGRAM
+        pg_enum(MessageChannel, name="message_channel"), nullable=False, default=MessageChannel.INSTAGRAM
     )
     instagram_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     channel_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     raw_channel_payload_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("raw_channel_payloads.id", ondelete="SET NULL"), nullable=True, index=True)
-    message_type: Mapped[MessageType] = mapped_column(Enum(MessageType, name="message_type"), nullable=False)
+    message_type: Mapped[MessageType] = mapped_column(pg_enum(MessageType, name="message_type"), nullable=False)
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
@@ -311,7 +361,7 @@ class AgentAction(Base):
     output_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     confidence: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
     status: Mapped[AgentActionStatus] = mapped_column(
-        Enum(AgentActionStatus, name="agent_action_status"), nullable=False
+        pg_enum(AgentActionStatus, name="agent_action_status"), nullable=False
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -342,7 +392,7 @@ class AgentRun(Base):
     input_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     output_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     status: Mapped[AgentRunStatus] = mapped_column(
-        Enum(AgentRunStatus, name="agent_run_status"), nullable=False
+        pg_enum(AgentRunStatus, name="agent_run_status"), nullable=False
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -404,7 +454,7 @@ class Product(Base, TimestampMixin):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[ProductStatus] = mapped_column(
-        Enum(ProductStatus, name="product_status"), nullable=False, default=ProductStatus.ACTIVE
+        pg_enum(ProductStatus, name="product_status"), nullable=False, default=ProductStatus.ACTIVE
     )
     base_price: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
@@ -468,7 +518,7 @@ class InstagramProductMap(Base, TimestampMixin):
         PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
     )
     confidence_source: Mapped[ConfidenceSource] = mapped_column(
-        Enum(ConfidenceSource, name="confidence_source"), nullable=False, default=ConfidenceSource.MANUAL
+        pg_enum(ConfidenceSource, name="confidence_source"), nullable=False, default=ConfidenceSource.MANUAL
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -487,7 +537,7 @@ class RawChannelPayload(Base):
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     shop_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=True, index=True)
-    provider: Mapped[MessageChannel] = mapped_column(Enum(MessageChannel, name="message_channel"), nullable=False, index=True)
+    provider: Mapped[MessageChannel] = mapped_column(pg_enum(MessageChannel, name="message_channel"), nullable=False, index=True)
     external_event_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
@@ -503,7 +553,7 @@ class CommentToDmTrigger(Base, TimestampMixin):
     shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
     instagram_account_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("instagram_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     instagram_media_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
-    source_type: Mapped[TriggerSourceType] = mapped_column(Enum(TriggerSourceType, name="trigger_source_type"), nullable=False, default=TriggerSourceType.COMMENT, index=True)
+    source_type: Mapped[TriggerSourceType] = mapped_column(pg_enum(TriggerSourceType, name="trigger_source_type"), nullable=False, default=TriggerSourceType.COMMENT, index=True)
     keyword: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     response_template: Mapped[str] = mapped_column(Text, nullable=False)
     target_product_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -523,7 +573,7 @@ class TriggerEvent(Base):
     conversation_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True)
     customer_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
     matched_keyword: Mapped[str] = mapped_column(String(128), nullable=False)
-    source_type: Mapped[TriggerSourceType] = mapped_column(Enum(TriggerSourceType, name="trigger_source_type"), nullable=False)
+    source_type: Mapped[TriggerSourceType] = mapped_column(pg_enum(TriggerSourceType, name="trigger_source_type"), nullable=False)
     dm_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     paid_order_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("orders.id", ondelete="SET NULL"), nullable=True, index=True)
     revenue_amount: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False, default=0)
@@ -608,7 +658,7 @@ class InventoryMovement(Base):
         index=True,
     )
     movement_type: Mapped[InventoryMovementType] = mapped_column(
-        Enum(InventoryMovementType, name="inventory_movement_type"), nullable=False
+        pg_enum(InventoryMovementType, name="inventory_movement_type"), nullable=False
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -638,7 +688,7 @@ class Order(Base, TimestampMixin):
         index=True,
     )
     status: Mapped[OrderStatus] = mapped_column(
-        Enum(OrderStatus, name="order_status"), nullable=False, default=OrderStatus.DRAFT, index=True
+        pg_enum(OrderStatus, name="order_status"), nullable=False, default=OrderStatus.DRAFT, index=True
     )
     subtotal_amount: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     shipping_amount: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False, default=0)
@@ -646,13 +696,13 @@ class Order(Base, TimestampMixin):
     total_amount: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     payment_status: Mapped[OrderPaymentStatus] = mapped_column(
-        Enum(OrderPaymentStatus, name="order_payment_status"),
+        pg_enum(OrderPaymentStatus, name="order_payment_status"),
         nullable=False,
         default=OrderPaymentStatus.UNPAID,
         index=True,
     )
     shipping_status: Mapped[OrderShippingStatus] = mapped_column(
-        Enum(OrderShippingStatus, name="order_shipping_status"),
+        pg_enum(OrderShippingStatus, name="order_shipping_status"),
         nullable=False,
         default=OrderShippingStatus.NOT_STARTED,
         index=True,
@@ -717,10 +767,10 @@ class Payment(Base, TimestampMixin):
         PG_UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
     )
     provider: Mapped[PaymentProvider] = mapped_column(
-        Enum(PaymentProvider, name="payment_provider"), nullable=False
+        pg_enum(PaymentProvider, name="payment_provider"), nullable=False
     )
     status: Mapped[PaymentRecordStatus] = mapped_column(
-        Enum(PaymentRecordStatus, name="payment_record_status"),
+        pg_enum(PaymentRecordStatus, name="payment_record_status"),
         nullable=False,
         default=PaymentRecordStatus.CREATED,
         index=True,
@@ -741,10 +791,10 @@ class Shipment(Base, TimestampMixin):
         PG_UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
     )
     provider: Mapped[ShipmentProvider] = mapped_column(
-        Enum(ShipmentProvider, name="shipment_provider"), nullable=False, default=ShipmentProvider.MANUAL
+        pg_enum(ShipmentProvider, name="shipment_provider"), nullable=False, default=ShipmentProvider.MANUAL
     )
     status: Mapped[ShipmentStatus] = mapped_column(
-        Enum(ShipmentStatus, name="shipment_status"),
+        pg_enum(ShipmentStatus, name="shipment_status"),
         nullable=False,
         default=ShipmentStatus.PENDING,
         index=True,
@@ -793,8 +843,8 @@ class ShopAgentSettings(Base):
     confidence_threshold_address: Mapped[Any] = mapped_column(Numeric(5, 4), nullable=False, default=0.80)
     high_value_order_threshold: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     brand_voice: Mapped[str | None] = mapped_column(Text, nullable=True)
-    mode: Mapped[AgentMode] = mapped_column(Enum(AgentMode, name="agent_mode"), nullable=False, default=AgentMode.COPILOT)
-    selling_style: Mapped[SellingStyle] = mapped_column(Enum(SellingStyle, name="selling_style"), nullable=False, default=SellingStyle.FRIENDLY)
+    mode: Mapped[AgentMode] = mapped_column(pg_enum(AgentMode, name="agent_mode"), nullable=False, default=AgentMode.COPILOT)
+    selling_style: Mapped[SellingStyle] = mapped_column(pg_enum(SellingStyle, name="selling_style"), nullable=False, default=SellingStyle.FRIENDLY)
     discount_policy_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     handoff_policy_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -811,8 +861,8 @@ class SuggestedReply(Base):
     conversation_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
     message_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True)
     suggested_text: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[SuggestedReplyStatus] = mapped_column(Enum(SuggestedReplyStatus, name="suggested_reply_status"), nullable=False, default=SuggestedReplyStatus.PENDING, index=True)
-    generated_by: Mapped[SuggestedReplyGeneratedBy] = mapped_column(Enum(SuggestedReplyGeneratedBy, name="suggested_reply_generated_by"), nullable=False, default=SuggestedReplyGeneratedBy.AGENT)
+    status: Mapped[SuggestedReplyStatus] = mapped_column(pg_enum(SuggestedReplyStatus, name="suggested_reply_status"), nullable=False, default=SuggestedReplyStatus.PENDING, index=True)
+    generated_by: Mapped[SuggestedReplyGeneratedBy] = mapped_column(pg_enum(SuggestedReplyGeneratedBy, name="suggested_reply_generated_by"), nullable=False, default=SuggestedReplyGeneratedBy.AGENT)
     approved_by_user_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     edited_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
