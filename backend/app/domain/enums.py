@@ -187,7 +187,29 @@ class TriggerSourceType(str, enum.Enum):
     AD_COMMENT = "ad_comment"
 
 
+class AgentMode(str, enum.Enum):
+    COPILOT = "copilot"
+    CONTROLLED_AUTOPILOT = "controlled_autopilot"
+    HUMAN_FIRST = "human_first"
+
+
+class SuggestedReplyStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    EDITED = "edited"
+    REJECTED = "rejected"
+    SENT = "sent"
+
+
+class SuggestedReplyGeneratedBy(str, enum.Enum):
+    AGENT = "agent"
+    OPERATOR = "operator"
+
+
 class SellingStyle(str, enum.Enum):
+    FRIENDLY = "friendly"
+    FORMAL = "formal"
+    CONCISE = "concise"
+    PROMOTIONAL = "promotional"
     EDUCATIONAL = "educational"
     BALANCED = "balanced"
-    PROMOTIONAL = "promotional"

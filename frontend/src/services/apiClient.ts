@@ -8,6 +8,7 @@ import type {
   CustomerUpdate,
   Message,
   MessageCreate,
+  SuggestedReply,
 } from '../types/conversation';
 import type { DashboardMetrics } from '../types/dashboard';
 import type { AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PostPerformanceRow, ResponseTimeAnalytics, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
@@ -140,9 +141,9 @@ export const apiClient = {
   getTriggerPerformance: (shopId: string) =>
     request<TriggerPerformance[]>(`/api/v1/shops/${shopId}/triggers/performance`),
   getAgentStudioSettings: (shopId: string) =>
-    request<AgentStudioSettings>(`/api/v1/shops/${shopId}/agent-studio-settings`),
+    request<AgentStudioSettings>(`/api/v1/shops/${shopId}/agent-settings`),
   updateAgentStudioSettings: (shopId: string, payload: Partial<AgentStudioSettings>) =>
-    request<AgentStudioSettings>(`/api/v1/shops/${shopId}/agent-studio-settings`, { method: 'PATCH', body: JSON.stringify(payload) }),
+    request<AgentStudioSettings>(`/api/v1/shops/${shopId}/agent-settings`, { method: 'PUT', body: JSON.stringify(payload) }),
   runDMSimulator: (shopId: string, payload: DMSimulatorRequest) =>
     request<DMSimulatorResponse>(`/api/v1/shops/${shopId}/simulator/dm`, {
       method: 'POST',
@@ -202,6 +203,14 @@ export const apiClient = {
     ),
   getConversation: (shopId: string, conversationId: string) =>
     request<ConversationDetail>(`/api/v1/shops/${shopId}/conversations/${conversationId}`),
+  listSuggestedReplies: (shopId: string, conversationId?: string) =>
+    request<SuggestedReply[]>(`/api/v1/shops/${shopId}/suggested-replies${buildQuery({ conversation_id: conversationId })}`),
+  approveSuggestedReply: (shopId: string, replyId: string) =>
+    request<SuggestedReply>(`/api/v1/shops/${shopId}/suggested-replies/${replyId}/approve`, { method: 'POST' }),
+  editAndSendSuggestedReply: (shopId: string, replyId: string, editedText: string) =>
+    request<SuggestedReply>(`/api/v1/shops/${shopId}/suggested-replies/${replyId}/edit-and-send`, { method: 'POST', body: JSON.stringify({ edited_text: editedText }) }),
+  rejectSuggestedReply: (shopId: string, replyId: string, reason?: string) =>
+    request<SuggestedReply>(`/api/v1/shops/${shopId}/suggested-replies/${replyId}/reject`, { method: 'POST', body: JSON.stringify({ reason }) }),
   sendConversationMessage: (shopId: string, conversationId: string, payload: MessageCreate) =>
     request<Message>(`/api/v1/shops/${shopId}/conversations/${conversationId}/messages`, {
       method: 'POST',

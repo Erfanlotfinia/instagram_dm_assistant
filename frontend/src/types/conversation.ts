@@ -129,6 +129,7 @@ export interface Conversation {
   last_message_text?: string | null;
   last_message_direction?: MessageDirection | null;
   confidence_score?: number | null;
+  agent_mode?: 'copilot' | 'controlled_autopilot' | 'human_first' | null;
 }
 
 export interface Message {
@@ -145,6 +146,22 @@ export interface MessageCreate {
   text: string;
 }
 
+
+export interface SuggestedReply {
+  id: string;
+  shop_id: string;
+  conversation_id: string;
+  message_id: string | null;
+  suggested_text: string;
+  status: 'pending' | 'approved' | 'edited' | 'rejected' | 'sent';
+  generated_by: 'agent' | 'operator';
+  approved_by_user_id: string | null;
+  edited_text: string | null;
+  reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ConversationDetail extends Conversation {
   messages: Message[];
   slots: ConversationSlots | null;
@@ -153,6 +170,7 @@ export interface ConversationDetail extends Conversation {
   customer?: Customer | null;
   linked_product?: LinkedProductSummary | null;
   linked_order?: LinkedOrderSummary | null;
+  suggested_replies?: SuggestedReply[];
 }
 
 export interface ConversationHandoffResponse {

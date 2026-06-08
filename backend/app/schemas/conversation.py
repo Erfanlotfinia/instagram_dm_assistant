@@ -4,8 +4,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.enums import AgentWorkflowState, ConversationState, MessageDirection, MessageType
+from app.domain.enums import AgentMode, AgentWorkflowState, ConversationState, MessageDirection, MessageType
 from app.schemas.agent import AgentActionRead, AgentRunRead, ConversationSlotsRead
+from app.schemas.suggested_reply import SuggestedReplyRead
 
 
 class CustomerSummary(BaseModel):
@@ -83,6 +84,7 @@ class ConversationRead(BaseModel):
     last_message_text: str | None = None
     last_message_direction: MessageDirection | None = None
     confidence_score: float | None = None
+    agent_mode: AgentMode | None = None
 
 
 class MessageRead(BaseModel):
@@ -109,6 +111,7 @@ class ConversationDetailRead(ConversationRead):
     customer: CustomerRead | None = None
     linked_product: LinkedProductSummary | None = None
     linked_order: LinkedOrderSummary | None = None
+    suggested_replies: list[SuggestedReplyRead] = Field(default_factory=list)
 
 
 class ConversationHandoffResponse(BaseModel):

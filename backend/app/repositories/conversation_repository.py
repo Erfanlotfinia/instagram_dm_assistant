@@ -26,7 +26,7 @@ class ConversationRepository:
     def list_for_shop(self, shop_id: UUID, filters: ConversationListFilters | None = None) -> list[Conversation]:
         stmt = (
             select(Conversation)
-            .options(joinedload(Conversation.customer), joinedload(Conversation.slots))
+            .options(joinedload(Conversation.customer), joinedload(Conversation.slots), joinedload(Conversation.shop))
             .where(Conversation.shop_id == shop_id)
         )
         if filters is not None:

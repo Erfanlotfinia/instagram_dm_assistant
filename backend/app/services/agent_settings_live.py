@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.domain.enums import SellingStyle
+from app.domain.enums import AgentMode, SellingStyle
 
 
 def _as_float(value: Any) -> float:
@@ -10,7 +10,7 @@ def _as_float(value: Any) -> float:
 
 
 def _enum_value(value: Any) -> Any:
-    if isinstance(value, SellingStyle):
+    if isinstance(value, (AgentMode, SellingStyle)):
         return value.value
     return value
 
@@ -18,6 +18,7 @@ def _enum_value(value: Any) -> Any:
 def studio_settings_to_live_overrides(settings: Any) -> dict[str, Any]:
     """Map Agent Studio settings to the legacy live-agent settings contract."""
     return {
+        "mode": _enum_value(settings.mode),
         "auto_send_enabled": bool(settings.auto_send_enabled),
         "preview_required_for_low_confidence": bool(settings.preview_required_for_low_confidence),
         "preview_required_for_first_order": bool(settings.preview_required_for_first_order),
