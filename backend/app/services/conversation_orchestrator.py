@@ -317,7 +317,28 @@ class ConversationOrchestrator:
             confidence=extraction.confidence.slots,
         )
 
+        settings_row = self._get_or_create_agent_settings(conversation.shop_id)
+        decision = AutoSendDecisionService().decide(
+            AutoSendDecisionInput(
+                settings=settings_row,
+                intent_confidence=extraction.confidence.intent,
+                product_confidence=extraction.confidence.product,
+                variant_confidence=extraction.confidence.slots,
+                address_confidence=extraction.confidence.address,
+                order_value=Decimal(active_order.total_amount) if active_order is not None else Decimal("0"),
+                is_first_order=self._is_first_customer_order(conversation),
+                handoff_reason=conversation.handoff_reason if conversation.handoff_required else None,
+                message_risk="simulation" if conversation.is_simulation else None,
+            )
+        )
+        preview_reason = ";".join(decision.reasons) if decision.reasons else None
+        conversation.preview_required = decision.requires_preview
+        conversation.preview_reason = preview_reason
         conversation.suggested_outbound = reply if decision.requires_preview else None
+        if decision.requires_handoff:
+            conversation.handoff_required = True
+            conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
+            conversation.state = ConversationState.PENDING_HANDOFF
 
         self._log_action(
             conversation_id,
