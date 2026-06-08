@@ -28,6 +28,61 @@ const EXAMPLE_MESSAGES = [
   },
 ] as const;
 
+function SimulatorMessagePreview({
+  username,
+  messageText,
+  postUrl,
+}: {
+  username: string | null;
+  messageText: string;
+  postUrl: string;
+}) {
+  const trimmedMessage = messageText.trim();
+  const hasPost = Boolean(postUrl.trim());
+
+  return (
+    <aside className="dm-simulator-preview" aria-label="Message preview">
+      <div className="dm-simulator-preview__header">
+        <div className="dm-simulator-preview__avatar" aria-hidden="true">
+          {username ? username.charAt(0).toUpperCase() : '?'}
+        </div>
+        <div>
+          <p className="dm-simulator-preview__title">Customer preview</p>
+          <p className="dm-simulator-preview__subtitle">
+            {username ? `@${username}` : 'Select an account to preview'}
+          </p>
+        </div>
+      </div>
+
+      <div className="message-thread dm-simulator-preview__thread">
+        {hasPost ? (
+          <div className="dm-simulator-preview__post">
+            <span className="dm-simulator-preview__post-label">Shared post</span>
+            <p className="dm-simulator-preview__post-url">{postUrl.trim()}</p>
+          </div>
+        ) : null}
+
+        {trimmedMessage ? (
+          <div className="message-bubble message-bubble--inbound">
+            <p className="message-bubble__meta">Customer</p>
+            <p className="message-bubble__text" dir="auto">
+              {trimmedMessage}
+            </p>
+          </div>
+        ) : (
+          <p className="dm-simulator-preview__placeholder">
+            Your fake customer message will appear here as you type.
+          </p>
+        )}
+      </div>
+
+      <p className="dm-simulator-preview__footnote">
+        Nothing is sent to Instagram — this is a local preview only.
+      </p>
+    </aside>
+  );
+}
+
 function SimulationResultPanel({ result }: { result: DMSimulatorResponse }) {
   const autoSendAllowed = Boolean(result.auto_send_decision?.auto_send_allowed);
   const requiresPreview = Boolean(result.auto_send_decision?.requires_preview);
@@ -87,7 +142,7 @@ function SimulationResultPanel({ result }: { result: DMSimulatorResponse }) {
         ) : null}
       </dl>
 
-      <div className="match-panel">
+      <div className="match-panel simulator-reply-panel">
         <div className="section-header">
           <h3>Suggested reply</h3>
           {result.suggested_reply ? (
@@ -96,9 +151,18 @@ function SimulationResultPanel({ result }: { result: DMSimulatorResponse }) {
             </button>
           ) : null}
         </div>
-        <p className={result.suggested_reply ? 'simulator-reply' : 'empty-state'}>
-          {result.suggested_reply ?? 'No reply generated'}
-        </p>
+        {result.suggested_reply ? (
+          <div className="message-thread">
+            <div className="message-bubble message-bubble--outbound">
+              <p className="message-bubble__meta">Suggested assistant reply</p>
+              <p className="message-bubble__text simulator-reply" dir="auto">
+                {result.suggested_reply}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="empty-state">No reply generated</p>
+        )}
       </div>
 
       {result.draft_order ? (
@@ -210,6 +274,9 @@ export function DMSimulatorPage() {
     Boolean(selectedShopId && messageText.trim() && (instagramAccountId || accountsQuery.data?.length)) &&
     !runMutation.isPending;
 
+  const selectedAccount = accountsQuery.data?.find((account) => account.id === instagramAccountId);
+  const messageLength = messageText.trim().length;
+
   return (
     <div className="page-stack page-stack--wide">
       <section className="dashboard-card dashboard-card--wide">
@@ -222,107 +289,159 @@ export function DMSimulatorPage() {
         <ShopSelector />
       </section>
 
-      <section className="dashboard-card dashboard-card--wide">
-        <h2>Run a simulated DM</h2>
-        <p className="analytics-toolbar__summary">
-          Pick an Instagram account, enter a fake customer message, and optionally attach a shared
-          post URL.
-        </p>
+      <section className="dashboard-card dashboard-card--wide dm-simulator-card">
+        <div className="section-header section-header--stacked">
+          <div>
+            <h2>Run a simulated DM</h2>
+            <p className="dashboard-card__subtitle">
+              Pick an Instagram account, enter a fake customer message, and optionally attach a
+              shared post URL.
+            </p>
+          </div>
+          <span className="priority-badge priority-badge--medium">Test harness</span>
+        </div>
 
         {!selectedShopId ? (
-          <p className="empty-state">Select a shop to run simulations.</p>
+          <div className="empty-state-panel dm-simulator-empty">
+            <p className="empty-state-panel__title">Select a shop first</p>
+            <p className="empty-state-panel__hint">
+              Choose a shop above to load Instagram accounts and run simulations.
+            </p>
+          </div>
         ) : accountsQuery.isLoading ? (
-          <p className="loading-state">Loading Instagram accounts...</p>
+          <p className="loading-state dm-simulator-loading">Loading Instagram accounts…</p>
         ) : (accountsQuery.data?.length ?? 0) === 0 ? (
-          <p className="empty-state">
-            No Instagram accounts connected. Add one under Instagram Accounts first.
-          </p>
+          <div className="empty-state-panel dm-simulator-empty">
+            <p className="empty-state-panel__title">No Instagram accounts connected</p>
+            <p className="empty-state-panel__hint">
+              Add an account under Instagram Accounts, then return here to test DM flows.
+            </p>
+            <Link className="button button--ghost-dark" to="/instagram-accounts">
+              Go to Instagram Accounts
+            </Link>
+          </div>
         ) : (
           <form className="dm-simulator-form" onSubmit={submit}>
-            <div className="filter-grid">
-              <label className="form-field">
-                <span>Instagram account</span>
-                <select
-                  value={instagramAccountId}
-                  onChange={(event) => setInstagramAccountId(event.target.value)}
-                  required
-                >
-                  <option value="">Select account</option>
-                  {accountsQuery.data?.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      @{account.username}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div className="dm-simulator-layout">
+              <div className="dm-simulator-form__main">
+                <div className="dm-simulator-panel">
+                  <p className="dm-simulator-panel__label">Setup</p>
+                  <div className="filter-grid dm-simulator-setup">
+                    <label className="form-field">
+                      <span>Instagram account</span>
+                      <select
+                        value={instagramAccountId}
+                        onChange={(event) => setInstagramAccountId(event.target.value)}
+                        required
+                      >
+                        <option value="">Select account</option>
+                        {accountsQuery.data?.map((account) => (
+                          <option key={account.id} value={account.id}>
+                            @{account.username}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
 
-              <label className="form-field form-field--wide">
-                <span>Shared Instagram post URL</span>
-                <input
-                  value={postUrl}
-                  onChange={(event) => setPostUrl(event.target.value)}
-                  placeholder="https://www.instagram.com/p/… (optional)"
-                />
-              </label>
+                    <label className="form-field form-field--wide">
+                      <span>
+                        Shared Instagram post URL
+                        <span className="dm-simulator-optional">Optional</span>
+                      </span>
+                      <input
+                        value={postUrl}
+                        onChange={(event) => setPostUrl(event.target.value)}
+                        placeholder="https://www.instagram.com/p/…"
+                        inputMode="url"
+                        autoComplete="off"
+                      />
+                      <span className="dm-simulator-field-hint">
+                        Simulates a customer DM that references a specific post.
+                      </span>
+                    </label>
+                  </div>
+                </div>
 
-              <label className="form-field form-field--wide">
-                <span>Fake customer message</span>
-                <textarea
-                  value={messageText}
-                  onChange={(event) => setMessageText(event.target.value)}
-                  rows={4}
-                  dir="auto"
-                  placeholder="Type what a customer might send in DM…"
-                  required
-                />
-              </label>
-            </div>
+                <div className="dm-simulator-panel dm-simulator-panel--compose">
+                  <div className="dm-simulator-panel__header">
+                    <p className="dm-simulator-panel__label">Compose message</p>
+                    <span className="dm-simulator-char-count" aria-live="polite">
+                      {messageLength} {messageLength === 1 ? 'character' : 'characters'}
+                    </span>
+                  </div>
 
-            <div className="form-field dm-simulator-form__examples">
-              <span>Example messages</span>
-              <div className="filter-chips" role="group" aria-label="Example customer messages">
-                {EXAMPLE_MESSAGES.map((example) => (
-                  <button
-                    key={example.label}
-                    type="button"
-                    className={`filter-chip${messageText === example.text ? ' filter-chip--active' : ''}`}
-                    aria-pressed={messageText === example.text}
-                    onClick={() => setMessageText(example.text)}
-                  >
-                    {example.label}
-                  </button>
-                ))}
+                  <label className="form-field dm-simulator-compose">
+                    <span className="visually-hidden">Fake customer message</span>
+                    <textarea
+                      value={messageText}
+                      onChange={(event) => setMessageText(event.target.value)}
+                      rows={5}
+                      dir="auto"
+                      placeholder="Type what a customer might send in DM…"
+                      required
+                    />
+                  </label>
+
+                  <div className="form-field dm-simulator-form__examples">
+                    <span>Quick examples</span>
+                    <div className="filter-chips" role="group" aria-label="Example customer messages">
+                      {EXAMPLE_MESSAGES.map((example) => (
+                        <button
+                          key={example.label}
+                          type="button"
+                          className={`filter-chip${messageText === example.text ? ' filter-chip--active' : ''}`}
+                          aria-pressed={messageText === example.text}
+                          onClick={() => setMessageText(example.text)}
+                        >
+                          {example.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
+
+              <SimulatorMessagePreview
+                username={selectedAccount?.username ?? null}
+                messageText={messageText}
+                postUrl={postUrl}
+              />
             </div>
 
-            <div className="button-row">
-              <button className="button button--primary" type="submit" disabled={!canRun}>
-                {runMutation.isPending ? 'Running…' : 'Run simulator'}
-              </button>
-              <button className="button button--ghost-dark" type="button" onClick={resetForm}>
-                Clear form
-              </button>
-              <button
-                className="button button--ghost-dark"
-                type="button"
-                disabled={resetMutation.isPending || !selectedShopId}
-                onClick={() => setResetDialogOpen(true)}
-              >
-                Reset simulation data
-              </button>
+            {runMutation.isPending ? (
+              <p className="loading-state dm-simulator-status" role="status">
+                Running simulation through the orchestrator…
+              </p>
+            ) : null}
+
+            {runMutation.error ? (
+              <p className="form-error dm-simulator-status">
+                {runMutation.error instanceof Error ? runMutation.error.message : 'Simulation failed'}
+              </p>
+            ) : null}
+
+            <div className="dm-simulator-actions">
+              <div className="button-row dm-simulator-actions__primary">
+                <button className="button button--primary" type="submit" disabled={!canRun}>
+                  {runMutation.isPending ? 'Running…' : 'Run simulator'}
+                </button>
+                <button className="button button--ghost-dark" type="button" onClick={resetForm}>
+                  Clear form
+                </button>
+              </div>
+              <div className="button-row dm-simulator-actions__secondary">
+                <button
+                  className="button button--ghost-dark"
+                  type="button"
+                  disabled={resetMutation.isPending || !selectedShopId}
+                  onClick={() => setResetDialogOpen(true)}
+                >
+                  Reset simulation data
+                </button>
+              </div>
             </div>
           </form>
         )}
-
-        {runMutation.isPending ? (
-          <p className="loading-state">Running simulation through the orchestrator…</p>
-        ) : null}
-
-        {runMutation.error ? (
-          <p className="form-error">
-            {runMutation.error instanceof Error ? runMutation.error.message : 'Simulation failed'}
-          </p>
-        ) : null}
       </section>
 
       {runMutation.data ? <SimulationResultPanel result={runMutation.data} /> : null}

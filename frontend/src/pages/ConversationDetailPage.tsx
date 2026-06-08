@@ -6,8 +6,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { z } from 'zod';
 
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { ConversationEventsTimeline } from '../components/conversations/ConversationEventsTimeline';
-import { CustomerProfilePanel } from '../components/conversations/CustomerProfilePanel';
+import { ConversationContextPanel } from '../components/conversations/ConversationContextPanel';
 import { MessageThread } from '../components/conversations/MessageThread';
 import { OperatorQuickActions } from '../components/conversations/OperatorQuickActions';
 import { PriorityBadge } from '../components/conversations/PriorityBadge';
@@ -17,13 +16,49 @@ import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { queryKeys } from '../lib/queryClient';
 import { apiClient } from '../services/apiClient';
-import type { CustomerUpdate } from '../types/conversation';
+import type { AgentWorkflowState, ConversationState, CustomerUpdate } from '../types/conversation';
 
 const messageSchema = z.object({
   text: z.string().min(1, 'Message is required').max(4000),
 });
 
 type MessageFormValues = z.infer<typeof messageSchema>;
+
+const STATE_LABELS: Record<ConversationState, string> = {
+  open: 'Open',
+  closed: 'Closed',
+  pending_handoff: 'Pending handoff',
+  archived: 'Archived',
+};
+
+const WORKFLOW_LABELS: Record<AgentWorkflowState, string> = {
+  idle: 'Idle',
+  waiting_for_product: 'Waiting for product',
+  waiting_for_variant: 'Waiting for variant',
+  waiting_for_customer_info: 'Waiting for customer info',
+  waiting_for_confirmation: 'Waiting for confirmation',
+  waiting_for_payment: 'Waiting for payment',
+  paid: 'Paid',
+  sent_to_shipping: 'Sent to shipping',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  human_handoff: 'Human handoff',
+};
+
+function customerDisplayName(conversation: {
+  customer?: { full_name?: string | null; instagram_user_id?: string } | null;
+  customer_id: string;
+}): string {
+  return (
+    conversation.customer?.full_name ??
+    conversation.customer?.instagram_user_id ??
+    conversation.customer_id
+  );
+}
+
+function customerInitial(name: string): string {
+  return name.charAt(0).toUpperCase();
+}
 
 export function ConversationDetailPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -242,176 +277,125 @@ export function ConversationDetailPage() {
     );
   }
 
-  const confidence = conversation.slots?.confidence ?? conversation.agent_runs?.[0]?.output_json?.confidence;
+  const confidence =
+    (conversation.slots?.confidence as Record<string, unknown> | undefined) ??
+    (conversation.agent_runs?.[0]?.output_json?.confidence as Record<string, unknown> | undefined);
+
+  const displayName = customerDisplayName(conversation);
+  const stateLabel = STATE_LABELS[conversation.state] ?? conversation.state;
+  const workflowLabel = WORKFLOW_LABELS[conversation.workflow_state] ?? conversation.workflow_state;
 
   return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Conversation</p>
-        <div className="conversation-header">
-          <div>
-            <h1>
-              {conversation.customer?.full_name ??
-                conversation.customer?.instagram_user_id ??
-                conversation.customer_id}
-            </h1>
-            <p>
-              {conversation.state} · {conversation.workflow_state} ·{' '}
-              <PriorityBadge
-                level={conversation.priority_level}
-                score={conversation.priority_score}
-                reason={conversation.priority_reason}
-              />
-            </p>
-          </div>
-          <OperatorQuickActions
-            hasOrder={Boolean(conversation.linked_order)}
-            orderStatus={conversation.linked_order?.status}
-            paymentStatus={conversation.linked_order?.payment_status}
-            onTakeOver={() => takeOverMutation.mutate()}
-            onRelease={() => releaseMutation.mutate()}
-            onResolve={() => setShowResolveConfirm(true)}
-            onCreateOrder={() => createOrderMutation.mutate()}
-            onSendPaymentLink={() => sendPaymentLinkMutation.mutate()}
-            onMarkPaid={() => markPaidMutation.mutate()}
-            onSendTracking={() => setShowTrackingPrompt(true)}
-            onCancelOrder={() => setShowCancelConfirm(true)}
-            isLoading={isMutating}
-          />
-        </div>
-        <Link className="table-link" to="/conversations">
-          Back to conversations
-        </Link>
-      </section>
+    <div className="conversation-workspace">
+      <header className="conversation-workspace__header dashboard-card dashboard-card--wide">
+        <div className="conversation-workspace__identity">
+          <Link className="conversation-workspace__back" to="/conversations">
+            ← Back to conversations
+          </Link>
 
-      <div className="operator-layout">
-        <div className="operator-layout__main">
-          <section className="dashboard-card">
-            <h2>Message timeline</h2>
-            <MessageThread messages={conversation.messages} isAdmin={isAdmin} />
-          </section>
-
-          <section className="dashboard-card">
-            <h2>Send manual message</h2>
-            <form
-              className="inline-form"
-              onSubmit={messageForm.handleSubmit((values) => sendMessageMutation.mutate(values))}
-            >
-              <label className="form-field">
-                <span>Message</span>
-                <textarea rows={3} {...messageForm.register('text')} />
-                {messageForm.formState.errors.text ? (
-                  <span className="field-error">{messageForm.formState.errors.text.message}</span>
+          <div className="conversation-workspace__profile">
+            <div className="conversation-workspace__avatar" aria-hidden="true">
+              {customerInitial(displayName)}
+            </div>
+            <div>
+              <p className="dashboard-card__eyebrow">Conversation</p>
+              <h1 className="conversation-workspace__title">{displayName}</h1>
+              <div className="conversation-workspace__badges">
+                <span className="status-pill status-pill--neutral">{stateLabel}</span>
+                <span className="status-pill status-pill--neutral">{workflowLabel}</span>
+                <PriorityBadge
+                  level={conversation.priority_level}
+                  score={conversation.priority_score}
+                  reason={conversation.priority_reason}
+                />
+                {conversation.handoff_required ? (
+                  <span className="status-pill status-pill--warning">Handoff required</span>
                 ) : null}
-              </label>
+                {conversation.agent_paused ? (
+                  <span className="status-pill status-pill--accent">Agent paused</span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <OperatorQuickActions
+          hasOrder={Boolean(conversation.linked_order)}
+          orderStatus={conversation.linked_order?.status}
+          paymentStatus={conversation.linked_order?.payment_status}
+          onTakeOver={() => takeOverMutation.mutate()}
+          onRelease={() => releaseMutation.mutate()}
+          onResolve={() => setShowResolveConfirm(true)}
+          onCreateOrder={() => createOrderMutation.mutate()}
+          onSendPaymentLink={() => sendPaymentLinkMutation.mutate()}
+          onMarkPaid={() => markPaidMutation.mutate()}
+          onSendTracking={() => setShowTrackingPrompt(true)}
+          onCancelOrder={() => setShowCancelConfirm(true)}
+          isLoading={isMutating}
+        />
+      </header>
+
+      <div className="conversation-workspace__body">
+        <section className="conversation-chat dashboard-card">
+          <h2 className="conversation-chat__title">Message timeline</h2>
+
+          <div className="conversation-chat__thread">
+            <MessageThread messages={conversation.messages} isAdmin={isAdmin} />
+          </div>
+
+          <SuggestedReplyPanel
+            reply={pendingSuggestedReply}
+            editedText={editedSuggestedText}
+            previewReason={conversation.preview_reason}
+            onEdit={setEditedSuggestedText}
+            onApprove={() => approveSuggestedMutation.mutate(pendingSuggestedReply!.id)}
+            onEditAndSend={() =>
+              editSuggestedMutation.mutate({
+                replyId: pendingSuggestedReply!.id,
+                text: editedSuggestedText,
+              })
+            }
+            onReject={() => rejectSuggestedMutation.mutate(pendingSuggestedReply!.id)}
+            isApproving={approveSuggestedMutation.isPending}
+            isEditing={editSuggestedMutation.isPending}
+            isRejecting={rejectSuggestedMutation.isPending}
+          />
+
+          <form
+            className="conversation-chat__composer"
+            onSubmit={messageForm.handleSubmit((values) => sendMessageMutation.mutate(values))}
+          >
+            <label className="form-field conversation-chat__compose-field">
+              <span className="visually-hidden">Message</span>
+              <textarea
+                rows={3}
+                placeholder="Write a manual reply to the customer…"
+                dir="auto"
+                {...messageForm.register('text')}
+              />
+              {messageForm.formState.errors.text ? (
+                <span className="field-error">{messageForm.formState.errors.text.message}</span>
+              ) : null}
+            </label>
+            <div className="conversation-chat__composer-actions">
               <button
                 className="button button--primary"
                 type="submit"
                 disabled={sendMessageMutation.isPending}
               >
-                {sendMessageMutation.isPending ? 'Sending...' : 'Send message'}
+                {sendMessageMutation.isPending ? 'Sending…' : 'Send message'}
               </button>
-            </form>
-          </section>
+            </div>
+          </form>
+        </section>
 
-          <section className="dashboard-card">
-            <h2>Suggested reply</h2>
-            <SuggestedReplyPanel
-              reply={pendingSuggestedReply}
-              editedText={editedSuggestedText}
-              previewReason={conversation.preview_reason}
-              onEdit={setEditedSuggestedText}
-              onApprove={() => approveSuggestedMutation.mutate(pendingSuggestedReply!.id)}
-              onEditAndSend={() =>
-                editSuggestedMutation.mutate({
-                  replyId: pendingSuggestedReply!.id,
-                  text: editedSuggestedText,
-                })
-              }
-              onReject={() => rejectSuggestedMutation.mutate(pendingSuggestedReply!.id)}
-              isApproving={approveSuggestedMutation.isPending}
-              isEditing={editSuggestedMutation.isPending}
-              isRejecting={rejectSuggestedMutation.isPending}
-            />
-          </section>
-        </div>
-
-        <aside className="operator-layout__side">
-          <section className="dashboard-card">
-            <h2>Customer profile</h2>
-            <CustomerProfilePanel
-              profile={conversation.customer_profile ?? null}
-              onSave={(values) => updateCustomerMutation.mutate(values)}
-              isSaving={updateCustomerMutation.isPending}
-            />
-          </section>
-
-          <section className="dashboard-card">
-            <h2>Extracted slots</h2>
-            {conversation.slots ? (
-              <div className="detail-grid">
-                <p>Product: {conversation.linked_product?.title ?? conversation.slots.product_id ?? '—'}</p>
-                <p>Variant: {conversation.slots.product_variant_id ?? '—'}</p>
-                <p>
-                  Color / Size / Qty: {conversation.slots.color ?? '—'} / {conversation.slots.size ?? '—'} /{' '}
-                  {conversation.slots.quantity ?? '—'}
-                </p>
-                <p>Missing: {conversation.slots.missing_fields.join(', ') || 'none'}</p>
-              </div>
-            ) : (
-              <p className="empty-state">No extracted slots yet.</p>
-            )}
-            {confidence ? (
-              <p>
-                Confidence — intent: {String((confidence as Record<string, unknown>).intent ?? '—')} · slots:{' '}
-                {String((confidence as Record<string, unknown>).slots ?? '—')}
-              </p>
-            ) : null}
-          </section>
-
-          <section className="dashboard-card">
-            <h2>Inventory</h2>
-            {conversation.inventory_status ? (
-              <p>
-                {conversation.inventory_status.in_stock ? 'In stock' : 'Out of stock'} · Available:{' '}
-                {conversation.inventory_status.available_quantity ?? '—'}
-              </p>
-            ) : (
-              <p className="empty-state">No variant selected.</p>
-            )}
-          </section>
-
-          <section className="dashboard-card">
-            <h2>Current order</h2>
-            {conversation.linked_order ? (
-              <div className="detail-grid">
-                <p>
-                  <Link
-                    className="table-link"
-                    to={`/orders/${conversation.linked_order.id}?shopId=${shopId}`}
-                  >
-                    {conversation.linked_order.id.slice(0, 8)}
-                  </Link>
-                </p>
-                <p>Status: {conversation.linked_order.status}</p>
-                <p>Payment: {conversation.linked_order.payment_status}</p>
-                <p>Total: {conversation.linked_order.total_amount}</p>
-              </div>
-            ) : (
-              <p className="empty-state">No active order.</p>
-            )}
-          </section>
-
-          <section className="dashboard-card">
-            <h2>Decision trace</h2>
-            <p>{conversation.decision_trace_summary ?? 'No agent actions yet.'}</p>
-          </section>
-
-          <section className="dashboard-card">
-            <h2>Conversation events</h2>
-            <ConversationEventsTimeline events={conversation.events ?? []} />
-          </section>
-        </aside>
+        <ConversationContextPanel
+          conversation={conversation}
+          shopId={shopId}
+          confidence={confidence}
+          onSaveCustomer={(values) => updateCustomerMutation.mutate(values)}
+          isSavingCustomer={updateCustomerMutation.isPending}
+        />
       </div>
 
       <ConfirmDialog

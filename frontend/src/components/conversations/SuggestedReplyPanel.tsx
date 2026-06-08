@@ -26,20 +26,31 @@ export function SuggestedReplyPanel({
   isRejecting,
 }: SuggestedReplyPanelProps) {
   if (!reply) {
-    return <p className="empty-state">No pending suggested reply.</p>;
+    return null;
   }
 
+  const reason = reply.reason ?? previewReason ?? 'Preview required';
+
   return (
-    <div className="suggested-reply-card" aria-label="Suggested reply card">
-      <p>
-        <strong>Reason:</strong> {reply.reason ?? previewReason ?? 'Preview required'}
-      </p>
-      <p>{reply.suggested_text}</p>
-      <label className="form-field">
+    <section className="suggested-reply-banner" aria-label="Suggested reply card">
+      <div className="suggested-reply-banner__header">
+        <div>
+          <p className="suggested-reply-banner__eyebrow">Agent suggestion</p>
+          <p className="suggested-reply-banner__reason">{reason}</p>
+        </div>
+        <span className="status-pill status-pill--accent">Needs review</span>
+      </div>
+
+      <blockquote className="suggested-reply-banner__quote" dir="auto">
+        {reply.suggested_text}
+      </blockquote>
+
+      <label className="form-field suggested-reply-banner__edit">
         <span>Edit before sending</span>
-        <textarea rows={4} value={editedText} onChange={(event) => onEdit(event.target.value)} />
+        <textarea rows={3} value={editedText} onChange={(event) => onEdit(event.target.value)} dir="auto" />
       </label>
-      <div className="button-row">
+
+      <div className="suggested-reply-banner__actions">
         <button
           className="button button--primary"
           type="button"
@@ -52,7 +63,7 @@ export function SuggestedReplyPanel({
           className="button button--ghost-dark"
           type="button"
           onClick={onEditAndSend}
-          disabled={!editedText || isEditing}
+          disabled={!editedText.trim() || isEditing}
         >
           Edit and send
         </button>
@@ -65,6 +76,6 @@ export function SuggestedReplyPanel({
           Reject
         </button>
       </div>
-    </div>
+    </section>
   );
 }

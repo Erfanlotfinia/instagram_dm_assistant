@@ -34,39 +34,57 @@ export function OperatorQuickActions({
   const canCancel = hasOrder && orderStatus !== 'cancelled' && orderStatus !== 'completed';
 
   return (
-    <div className="button-row button-row--wrap" aria-label="Quick actions">
-      <button className="button button--primary" type="button" onClick={onTakeOver} disabled={isLoading}>
-        Take over
-      </button>
-      <button className="button button--ghost-dark" type="button" onClick={onRelease} disabled={isLoading}>
-        Release to agent
-      </button>
-      <button className="button button--ghost-dark" type="button" onClick={onResolve} disabled={isLoading}>
-        Mark resolved
-      </button>
-      <button className="button button--ghost-dark" type="button" onClick={onCreateOrder} disabled={isLoading}>
-        Create order
-      </button>
-      {canSendPayment ? (
-        <button className="button button--ghost-dark" type="button" onClick={onSendPaymentLink} disabled={isLoading}>
-          Send payment link
-        </button>
-      ) : null}
-      {canMarkPaid ? (
-        <button className="button button--ghost-dark" type="button" onClick={onMarkPaid} disabled={isLoading}>
-          Mark paid
-        </button>
-      ) : null}
-      {canShip ? (
-        <button className="button button--ghost-dark" type="button" onClick={onSendTracking} disabled={isLoading}>
-          Send tracking
-        </button>
-      ) : null}
-      {canCancel ? (
-        <button className="button button--danger" type="button" onClick={onCancelOrder} disabled={isLoading}>
-          Cancel order
-        </button>
-      ) : null}
+    <div className="conversation-actions" aria-label="Quick actions">
+      <div className="conversation-actions__group">
+        <span className="conversation-actions__label">Handoff</span>
+        <div className="conversation-actions__buttons">
+          <button className="button button--primary" type="button" onClick={onTakeOver} disabled={isLoading}>
+            Take over
+          </button>
+          <button className="button button--ghost-dark" type="button" onClick={onRelease} disabled={isLoading}>
+            Release to agent
+          </button>
+          <button className="button button--ghost-dark" type="button" onClick={onResolve} disabled={isLoading}>
+            Mark resolved
+          </button>
+        </div>
+      </div>
+
+      <div className="conversation-actions__divider" aria-hidden="true" />
+
+      <div className="conversation-actions__group">
+        <span className="conversation-actions__label">Order</span>
+        <div className="conversation-actions__buttons">
+          <button className="button button--ghost-dark" type="button" onClick={onCreateOrder} disabled={isLoading}>
+            Create order
+          </button>
+          {canSendPayment ? (
+            <button
+              className="button button--ghost-dark"
+              type="button"
+              onClick={onSendPaymentLink}
+              disabled={isLoading}
+            >
+              Send payment link
+            </button>
+          ) : null}
+          {canMarkPaid ? (
+            <button className="button button--ghost-dark" type="button" onClick={onMarkPaid} disabled={isLoading}>
+              Mark paid
+            </button>
+          ) : null}
+          {canShip ? (
+            <button className="button button--ghost-dark" type="button" onClick={onSendTracking} disabled={isLoading}>
+              Send tracking
+            </button>
+          ) : null}
+          {canCancel ? (
+            <button className="button button--danger" type="button" onClick={onCancelOrder} disabled={isLoading}>
+              Cancel order
+            </button>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
