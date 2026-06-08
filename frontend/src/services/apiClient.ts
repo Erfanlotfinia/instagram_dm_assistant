@@ -24,6 +24,7 @@ import type { DashboardMetrics } from '../types/dashboard';
 import type { AgentPerformanceMetrics, AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PaginatedLostDemand, PaginatedOperatorPerformance, PostPerformanceRow, ResponseTimeAnalytics, SimulatorRunSummary, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
 import type { SemanticSearchResponse } from '../types/semanticSearch';
 import type { LoginRequest, TokenResponse, User } from '../types/auth';
+import type { TRLValidationRun, TRLValidationScenarioResult } from '../types/trlValidation';
 import type { FailedJobListResponse, HealthResponse, ReadinessResponse } from '../types/health';
 import type { ColorAlias, SizeAlias, UnavailableDemandLog, VariantResolverResult } from '../types/fashion';
 import type { InstagramAccount, InstagramAccountCreate } from '../types/instagramAccount';
@@ -164,6 +165,24 @@ export const apiClient = {
     request<SimulatorRunSummary[]>(`/api/v1/shops/${shopId}/simulator/runs`),
   resetDMSimulator: (shopId: string) =>
     request<{ deleted_conversations: number }>(`/api/v1/shops/${shopId}/simulator/reset`, { method: 'DELETE' }),
+  runTRLValidation: (shopId: string, payload: { reset_demo_data?: boolean; scenario_limit?: number | null } = {}) =>
+    request<TRLValidationRun>(`/api/v1/shops/${shopId}/trl-validation/run`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  listTRLValidationRuns: (shopId: string) =>
+    request<TRLValidationRun[]>(`/api/v1/shops/${shopId}/trl-validation/runs`),
+  getTRLValidationRun: (shopId: string, runId: string) =>
+    request<TRLValidationRun>(`/api/v1/shops/${shopId}/trl-validation/runs/${runId}`),
+  listTRLValidationScenarios: (shopId: string, runId: string, passed?: boolean) =>
+    request<TRLValidationScenarioResult[]>(
+      `/api/v1/shops/${shopId}/trl-validation/runs/${runId}/scenarios${buildQuery({ passed: passed === undefined ? undefined : String(passed) })}`,
+    ),
+  resetTRLValidation: (shopId: string) =>
+    request<{ deleted_runs: number; deleted_conversations: number; deleted_orders: number }>(
+      `/api/v1/shops/${shopId}/trl-validation/reset`,
+      { method: 'DELETE' },
+    ),
   getAnalyticsFunnel: (shopId: string, dateFrom?: string, dateTo?: string) =>
     request<FunnelAnalytics>(
       `/api/v1/shops/${shopId}/analytics/funnel${buildQuery({ date_from: dateFrom, date_to: dateTo })}`,

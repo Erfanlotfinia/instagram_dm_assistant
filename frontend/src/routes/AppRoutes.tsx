@@ -28,6 +28,7 @@ import { UpsellRulesPage } from '../pages/UpsellRulesPage';
 import { SemanticSearchPage } from '../pages/SemanticSearchPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { TriggerRulesPage } from '../pages/TriggerRulesPage';
+import { TRLValidationPage } from '../pages/TRLValidationPage';
 import { UnavailableDemandPage } from '../pages/UnavailableDemandPage';
 import { VariantResolverPage } from '../pages/VariantResolverPage';
 import { ShopsPage } from '../pages/ShopsPage';
@@ -66,6 +67,14 @@ export function AppRoutes() {
         element={
           <AuthenticatedShell>
             <DMSimulatorPage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/trl-validation"
+        element={
+          <AuthenticatedShell>
+            <TRLValidationPage />
           </AuthenticatedShell>
         }
       />
