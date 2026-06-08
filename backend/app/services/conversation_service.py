@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.roles import has_minimum_role
-from app.domain.enums import ConversationState, UserRole
+from app.domain.enums import ConversationState, SuggestedReplyStatus, UserRole
 from app.domain.enums import AgentWorkflowState
 from app.repositories.agent_action_repository import AgentActionRepository
 from app.repositories.agent_run_repository import AgentRunRepository
@@ -29,10 +29,13 @@ from app.schemas.conversation import (
     MessageRead,
 )
 from app.schemas.order import OrderRead
+from app.schemas.suggested_reply import SuggestedReplyRead
 from app.services.audit_service import AuditService
 from app.services.instagram_send_service import InstagramSendService
 from app.services.order_service import OrderService
 from app.services.shop_service import ShopService
+from app.domain.models import SuggestedReply
+from sqlalchemy import select
 
 
 class ConversationService:
@@ -115,6 +118,15 @@ class ConversationService:
             AgentActionRead.model_validate(action)
             for action in self.agent_actions.list_for_conversation(conversation.id)
         ]
+        suggested_stmt = (
+            select(SuggestedReply)
+            .where(
+                SuggestedReply.conversation_id == conversation.id,
+                SuggestedReply.status == SuggestedReplyStatus.PENDING,
+            )
+            .order_by(SuggestedReply.created_at.desc())
+        )
+        detail.suggested_replies = [SuggestedReplyRead.model_validate(item) for item in self.db.scalars(suggested_stmt).all()]
         return detail
 
     def send_manual_message(
@@ -293,4 +305,6 @@ class ConversationService:
     def _to_conversation_read(conversation) -> ConversationRead:
         read = ConversationRead.model_validate(conversation)
         read.confidence_score = ConversationService._extract_confidence(conversation)
+        if conversation.shop is not None and conversation.shop.agent_studio_settings is not None:
+            read.agent_mode = conversation.shop.agent_studio_settings.mode
         return read

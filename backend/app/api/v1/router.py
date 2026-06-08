@@ -14,6 +14,7 @@ from app.api.v1.product_selection import router as product_selection_router
 from app.api.v1.products import router as products_router
 from app.api.v1.shops import router as shops_router
 from app.api.v1.semantic_search import router as semantic_search_router
+from app.api.v1.suggested_replies import router as suggested_replies_router
 from app.api.v1.simulator import router as simulator_router
 from app.api.v1.triggers import router as triggers_router
 from app.api.v1.webhooks import router as webhooks_router
@@ -38,3 +39,4 @@ router.include_router(simulator_router)
 router.include_router(triggers_router)
 router.include_router(analytics_router)
 router.include_router(agent_settings_router)
+router.include_router(suggested_replies_router)

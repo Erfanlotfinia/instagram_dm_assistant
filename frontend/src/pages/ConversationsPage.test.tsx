@@ -18,6 +18,8 @@ vi.mock('../services/apiClient', () => ({
         customer_id: 'cust-1',
         state: 'open',
         handoff_required: true,
+        preview_required: true,
+        agent_mode: 'human_first',
         customer: { id: 'cust-1', instagram_user_id: 'ig-1', full_name: 'Ali' },
         last_message_text: 'Hello',
         confidence_score: 0.85,
@@ -47,6 +49,9 @@ describe('ConversationsPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Ali' })).toBeInTheDocument();
       expect(screen.getByText('Hello')).toBeInTheDocument();
+      expect(screen.getByText('Preview required')).toBeInTheDocument();
+      expect(screen.getByText('Human handoff')).toBeInTheDocument();
+      expect(screen.getByText('Human-first')).toBeInTheDocument();
     });
   });
 });

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -15,7 +16,7 @@ from app.domain.enums import (
     AgentWorkflowState,
     ConversationState,
 )
-from app.domain.models import AgentAction, AgentDecisionAudit, AgentRun, Conversation, Message, Order, Product, ProductVariant
+from app.domain.models import AgentAction, AgentDecisionAudit, AgentRun, Conversation, Message, Order, Product, ProductVariant, ShopAgentSettings
 from app.integrations.openai_client import LiveOpenAIChatClient, OpenAIChatClient
 from app.integrations.qdrant_client import LiveQdrantClient, QdrantClient
 from app.repositories.agent_action_repository import AgentActionRepository
@@ -28,6 +29,8 @@ from app.repositories.variant_repository import VariantRepository
 from app.schemas.agent import AgentExtractionInput, AgentExtractionResult, ExtractionConfidence
 from app.schemas.instagram_product_map import ResolveInstagramProductRequest
 from app.services.agent_settings_live import resolve_live_agent_settings
+from app.services.audit_service import AuditService
+from app.services.auto_send_decision_service import AutoSendDecisionInput, AutoSendDecisionService
 from app.services.handoff_service import evaluate_handoff
 from app.services.instagram_product_resolver import InstagramProductResolver
 from app.services.instagram_send_service import InstagramSendService
@@ -36,6 +39,7 @@ from app.services.order_service import OrderService
 from app.services.payment_service import PaymentService
 from app.services.product_semantic_search_service import ProductSemanticSearchService
 from app.services.response_generation_service import ReplyFacts, ResponseGenerationService
+from app.services.suggested_reply_service import SuggestedReplyService
 from app.services.variant_resolver import VariantResolver
 from app.services.slot_merge_service import compute_missing_fields, merge_extracted_slots, slots_to_dict
 from app.services.state_machine_service import (
@@ -208,15 +212,9 @@ class ConversationOrchestrator:
                     preview_high_value_orders
                     and high_value_threshold > 0
                     and float(active_order.total_amount) >= high_value_threshold
-                    and not conversation.handoff_required
                 ):
-                    conversation.handoff_required = True
-                    conversation.handoff_reason = "High-value order requires approval"
-                    conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
-                    conversation.state = ConversationState.PENDING_HANDOFF
                     active_order.risk_flags = list({*(active_order.risk_flags or []), "high_value_order"})
                     active_order.approval_source = "operator_required"
-                    HANDOFF_COUNT.inc()
             if (
                 active_order is not None
                 and conversation.workflow_state == AgentWorkflowState.WAITING_FOR_PAYMENT
@@ -286,27 +284,50 @@ class ConversationOrchestrator:
             confidence=extraction.confidence.slots,
         )
 
-        preview_required, preview_reason = self._preview_decision(conversation, extraction.confidence, handoff.required)
-        conversation.preview_required = preview_required
+        settings_row = self._get_or_create_agent_settings(conversation.shop_id)
+        decision = AutoSendDecisionService().decide(
+            AutoSendDecisionInput(
+                settings=settings_row,
+                intent_confidence=extraction.confidence.intent,
+                product_confidence=extraction.confidence.product,
+                variant_confidence=extraction.confidence.slots,
+                address_confidence=extraction.confidence.address,
+                order_value=Decimal(active_order.total_amount) if active_order is not None else Decimal("0"),
+                is_first_order=self._is_first_customer_order(conversation),
+                handoff_reason=conversation.handoff_reason if conversation.handoff_required else None,
+                message_risk="simulation" if conversation.is_simulation else None,
+            )
+        )
+        preview_reason = ";".join(decision.reasons) if decision.reasons else None
+        conversation.preview_required = decision.requires_preview
         conversation.preview_reason = preview_reason
-        conversation.suggested_outbound = reply if preview_required else None
-        if preview_required or conversation.is_simulation:
-            self._log_action(
-                conversation_id,
-                "preview_outbound",
-                {"reply": reply},
-                {"preview_required": preview_required, "reason": preview_reason, "simulation": conversation.is_simulation},
-                confidence=extraction.confidence.intent,
-            )
-        else:
+        conversation.suggested_outbound = reply if decision.requires_preview else None
+        if decision.requires_handoff:
+            conversation.handoff_required = True
+            conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
+            conversation.state = ConversationState.PENDING_HANDOFF
+
+        self._log_action(
+            conversation_id,
+            "auto_send_decision",
+            {"reply": reply},
+            {
+                "auto_send_allowed": decision.auto_send_allowed,
+                "requires_preview": decision.requires_preview,
+                "requires_handoff": decision.requires_handoff,
+                "reasons": decision.reasons,
+            },
+            confidence=extraction.confidence.intent,
+        )
+        if decision.auto_send_allowed and not conversation.is_simulation:
             outbound = self.send_service.send_text_message(conversation_id, reply, commit=False)
-            self._log_action(
-                conversation_id,
-                "send_outbound",
-                {"reply": reply},
-                {"message_id": str(outbound.id)},
-                confidence=None,
-            )
+            AuditService(self.db).log(action="message_auto_sent", entity_type="conversation", shop_id=conversation.shop_id, entity_id=str(conversation.id), metadata={"message_id": str(outbound.id)})
+            self._log_action(conversation_id, "send_outbound", {"reply": reply}, {"message_id": str(outbound.id)}, confidence=None)
+        else:
+            SuggestedReplyService(self.db).create_agent_suggestion(shop_id=conversation.shop_id, conversation_id=conversation.id, message_id=message.id, text=reply, reason=preview_reason)
+            action = "handoff_required" if decision.requires_handoff else "message_blocked_due_to_confidence" if decision.requires_preview else "suggested_reply_created"
+            AuditService(self.db).log(action=action, entity_type="conversation", shop_id=conversation.shop_id, entity_id=str(conversation.id), metadata={"reasons": decision.reasons})
+            self._log_action(conversation_id, "preview_outbound", {"reply": reply}, {"preview_required": decision.requires_preview, "reason": preview_reason, "simulation": conversation.is_simulation}, confidence=extraction.confidence.intent)
 
         self._audit_decision(
             conversation=conversation,
@@ -431,6 +452,15 @@ class ConversationOrchestrator:
         if error_message:
             FAILED_AGENT_RUNS.inc()
         return self.agent_runs.create(run)
+
+
+    def _get_or_create_agent_settings(self, shop_id: UUID) -> ShopAgentSettings:
+        settings = self.db.get(ShopAgentSettings, shop_id)
+        if settings is None:
+            settings = ShopAgentSettings(shop_id=shop_id)
+            self.db.add(settings)
+            self.db.flush()
+        return settings
 
 
     def _preview_decision(
