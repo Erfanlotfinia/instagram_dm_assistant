@@ -138,6 +138,7 @@ export function ConversationsPage() {
                 <th>Last message</th>
                 <th>Confidence</th>
                 <th>Handoff</th>
+                <th>Badges</th>
                 <th>Last update</th>
               </tr>
             </thead>
@@ -162,6 +163,15 @@ export function ConversationsPage() {
                       : '—'}
                   </td>
                   <td>{conversation.handoff_required ? 'yes' : 'no'}</td>
+                  <td>
+                    <div className="button-row" aria-label="Conversation badges">
+                      {!conversation.preview_required && !conversation.handoff_required ? <span className="status-pill">Auto</span> : null}
+                      {conversation.preview_required ? <span className="status-pill">Preview required</span> : null}
+                      {conversation.handoff_required ? <span className="status-pill">Human handoff</span> : null}
+                      {conversation.agent_mode === 'copilot' ? <span className="status-pill">Copilot</span> : null}
+                      {conversation.agent_mode === 'human_first' ? <span className="status-pill">Human-first</span> : null}
+                    </div>
+                  </td>
                   <td>{new Date(conversation.updated_at).toLocaleString()}</td>
                 </tr>
               ))}

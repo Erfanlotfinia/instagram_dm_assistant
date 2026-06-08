@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 from app.domain.enums import (
     AgentActionStatus,
+    AgentMode,
     AgentRunStatus,
     AgentWorkflowState,
     ConfidenceSource,
@@ -41,6 +42,8 @@ from app.domain.enums import (
     ShipmentStatus,
     ShopStatus,
     SellingStyle,
+    SuggestedReplyGeneratedBy,
+    SuggestedReplyStatus,
     TriggerSourceType,
     UserRole,
     WebhookProcessingStatus,
@@ -94,6 +97,7 @@ class Shop(Base, TimestampMixin):
     orders: Mapped[list[Order]] = relationship(back_populates="shop", cascade="all, delete-orphan")
     trigger_rules: Mapped[list[CommentToDmTrigger]] = relationship(back_populates="shop", cascade="all, delete-orphan")
     agent_studio_settings: Mapped[ShopAgentSettings | None] = relationship(back_populates="shop", cascade="all, delete-orphan", uselist=False)
+    suggested_replies: Mapped[list[SuggestedReply]] = relationship(back_populates="shop", cascade="all, delete-orphan")
 
 
 class ShopMember(Base):
@@ -227,6 +231,7 @@ class Conversation(Base, TimestampMixin):
         uselist=False,
     )
     orders: Mapped[list[Order]] = relationship(back_populates="conversation", cascade="all, delete-orphan")
+    suggested_replies: Mapped[list[SuggestedReply]] = relationship(back_populates="conversation", cascade="all, delete-orphan")
 
 
 class WebhookEvent(Base, TimestampMixin):
@@ -784,13 +789,36 @@ class ShopAgentSettings(Base):
     confidence_threshold_address: Mapped[Any] = mapped_column(Numeric(5, 4), nullable=False, default=0.80)
     high_value_order_threshold: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     brand_voice: Mapped[str | None] = mapped_column(Text, nullable=True)
-    selling_style: Mapped[SellingStyle] = mapped_column(Enum(SellingStyle, name="selling_style"), nullable=False, default=SellingStyle.BALANCED)
+    mode: Mapped[AgentMode] = mapped_column(Enum(AgentMode, name="agent_mode"), nullable=False, default=AgentMode.COPILOT)
+    selling_style: Mapped[SellingStyle] = mapped_column(Enum(SellingStyle, name="selling_style"), nullable=False, default=SellingStyle.FRIENDLY)
     discount_policy_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     handoff_policy_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     shop: Mapped[Shop] = relationship(back_populates="agent_studio_settings")
+
+
+class SuggestedReply(Base):
+    __tablename__ = "suggested_replies"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    conversation_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    message_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True)
+    suggested_text: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[SuggestedReplyStatus] = mapped_column(Enum(SuggestedReplyStatus, name="suggested_reply_status"), nullable=False, default=SuggestedReplyStatus.PENDING, index=True)
+    generated_by: Mapped[SuggestedReplyGeneratedBy] = mapped_column(Enum(SuggestedReplyGeneratedBy, name="suggested_reply_generated_by"), nullable=False, default=SuggestedReplyGeneratedBy.AGENT)
+    approved_by_user_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    edited_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    shop: Mapped[Shop] = relationship(back_populates="suggested_replies")
+    conversation: Mapped[Conversation] = relationship(back_populates="suggested_replies")
+    message: Mapped[Message | None] = relationship()
+    approved_by_user: Mapped[User | None] = relationship()
 
 
 class AgentDecisionAudit(Base):

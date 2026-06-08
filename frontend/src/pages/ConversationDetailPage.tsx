@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -39,6 +39,7 @@ export function ConversationDetailPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showResolveConfirm, setShowResolveConfirm] = useState(false);
+  const [editedSuggestedText, setEditedSuggestedText] = useState('');
 
   const conversationQuery = useQuery({
     queryKey: queryKeys.conversation(shopId, conversationId ?? ''),
@@ -131,6 +132,32 @@ export function ConversationDetailPage() {
     onError: (error) => showToast(error instanceof Error ? error.message : 'Order creation failed', 'error'),
   });
 
+  const approveSuggestedMutation = useMutation({
+    mutationFn: (replyId: string) => apiClient.approveSuggestedReply(shopId, replyId),
+    onSuccess: () => { showToast('Suggested reply approved and sent.', 'success'); invalidateConversation(); },
+    onError: (error) => showToast(error instanceof Error ? error.message : 'Approve failed', 'error'),
+  });
+
+  const editSuggestedMutation = useMutation({
+    mutationFn: ({ replyId, text }: { replyId: string; text: string }) => apiClient.editAndSendSuggestedReply(shopId, replyId, text),
+    onSuccess: () => { showToast('Edited reply sent.', 'success'); setEditedSuggestedText(''); invalidateConversation(); },
+    onError: (error) => showToast(error instanceof Error ? error.message : 'Edit and send failed', 'error'),
+  });
+
+  const rejectSuggestedMutation = useMutation({
+    mutationFn: (replyId: string) => apiClient.rejectSuggestedReply(shopId, replyId, 'Rejected by operator'),
+    onSuccess: () => { showToast('Suggested reply rejected.', 'success'); invalidateConversation(); },
+    onError: (error) => showToast(error instanceof Error ? error.message : 'Reject failed', 'error'),
+  });
+
+  const pendingSuggestedReply = conversation?.suggested_replies?.[0];
+
+  useEffect(() => {
+    if (conversation) {
+      setEditedSuggestedText(pendingSuggestedReply?.suggested_text ?? conversation.suggested_outbound ?? '');
+    }
+  }, [conversation, pendingSuggestedReply?.id, pendingSuggestedReply?.suggested_text]);
+
   if (!shopId) {
     return (
       <section className="dashboard-card">
@@ -163,6 +190,7 @@ export function ConversationDetailPage() {
 
   const latestRun = conversation.agent_runs?.[0];
   const confidence = conversation.slots?.confidence ?? latestRun?.output_json?.confidence;
+  const suggestedText = editedSuggestedText;
 
   return (
     <div className="page-stack page-stack--wide">
@@ -343,14 +371,24 @@ export function ConversationDetailPage() {
       </section>
 
       <section className="dashboard-card dashboard-card--wide">
-        <h2>Suggested reply approval</h2>
-        <form className="inline-form" onSubmit={messageForm.handleSubmit((values) => sendMessageMutation.mutate(values))}>
-          <label className="form-field">
-            <span>Edit before sending</span>
-            <textarea rows={4} {...messageForm.register('text')} defaultValue={conversation.suggested_outbound ?? ''} />
-          </label>
-          <button className="button button--primary" type="submit">Approve / send edited reply</button>
-        </form>
+        <h2>Suggested reply card</h2>
+        {pendingSuggestedReply ? (
+          <div className="empty-state" aria-label="Suggested reply card">
+            <p><strong>Reason:</strong> {pendingSuggestedReply.reason ?? conversation.preview_reason ?? 'Preview required'}</p>
+            <p>{pendingSuggestedReply.suggested_text}</p>
+            <label className="form-field">
+              <span>Edit before sending</span>
+              <textarea rows={4} value={suggestedText} onChange={(event) => setEditedSuggestedText(event.target.value)} />
+            </label>
+            <div className="button-row">
+              <button className="button button--primary" type="button" onClick={() => approveSuggestedMutation.mutate(pendingSuggestedReply.id)} disabled={approveSuggestedMutation.isPending}>Approve and send</button>
+              <button className="button button--ghost-dark" type="button" onClick={() => editSuggestedMutation.mutate({ replyId: pendingSuggestedReply.id, text: suggestedText })} disabled={!suggestedText || editSuggestedMutation.isPending}>Edit and send</button>
+              <button className="button button--danger" type="button" onClick={() => rejectSuggestedMutation.mutate(pendingSuggestedReply.id)} disabled={rejectSuggestedMutation.isPending}>Reject</button>
+            </div>
+          </div>
+        ) : (
+          <p className="empty-state">No pending suggested reply.</p>
+        )}
       </section>
 
       <section className="dashboard-card dashboard-card--wide">

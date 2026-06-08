@@ -100,6 +100,7 @@ export interface TriggerPerformance {
 
 export interface AgentStudioSettings {
   shop_id: string;
+  mode: 'copilot' | 'controlled_autopilot' | 'human_first';
   auto_send_enabled: boolean;
   preview_required_for_low_confidence: boolean;
   preview_required_for_first_order: boolean;
@@ -110,7 +111,7 @@ export interface AgentStudioSettings {
   confidence_threshold_address: string;
   high_value_order_threshold: string;
   brand_voice: string | null;
-  selling_style: 'educational' | 'balanced' | 'promotional';
+  selling_style: 'friendly' | 'formal' | 'concise' | 'promotional' | 'educational' | 'balanced';
   discount_policy_json: Record<string, unknown>;
   handoff_policy_json: Record<string, unknown>;
 }

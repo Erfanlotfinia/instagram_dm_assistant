@@ -6,11 +6,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.domain.enums import SellingStyle
+from app.domain.enums import AgentMode, SellingStyle
 
 
 class ShopAgentStudioSettingsRead(BaseModel):
     shop_id: UUID
+    mode: AgentMode = AgentMode.COPILOT
     auto_send_enabled: bool = True
     preview_required_for_low_confidence: bool = True
     preview_required_for_first_order: bool = True
@@ -21,7 +22,7 @@ class ShopAgentStudioSettingsRead(BaseModel):
     confidence_threshold_address: Decimal = Decimal("0.80")
     high_value_order_threshold: Decimal = Decimal("0")
     brand_voice: str | None = None
-    selling_style: SellingStyle = SellingStyle.BALANCED
+    selling_style: SellingStyle = SellingStyle.FRIENDLY
     discount_policy_json: dict = Field(default_factory=dict)
     handoff_policy_json: dict = Field(default_factory=dict)
     created_at: datetime
@@ -31,6 +32,7 @@ class ShopAgentStudioSettingsRead(BaseModel):
 
 
 class ShopAgentStudioSettingsUpdate(BaseModel):
+    mode: AgentMode | None = None
     auto_send_enabled: bool | None = None
     preview_required_for_low_confidence: bool | None = None
     preview_required_for_first_order: bool | None = None
@@ -53,9 +55,12 @@ class AutoSendDecisionRequest(BaseModel):
     address_confidence: float = 1.0
     order_total: Decimal = Decimal("0")
     is_first_order: bool = False
+    handoff_reason: str | None = None
+    message_risk: str | None = None
 
 
 class AutoSendDecisionRead(BaseModel):
     auto_send_allowed: bool
     preview_required: bool
+    requires_handoff: bool = False
     reasons: list[str] = Field(default_factory=list)
