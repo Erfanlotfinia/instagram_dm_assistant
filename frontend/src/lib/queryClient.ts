@@ -29,5 +29,7 @@ export const queryKeys = {
   orderCorrectness: (orderId: string) => ['orders', orderId, 'correctness'] as const,
   orderTimeline: (orderId: string) => ['orders', orderId, 'timeline'] as const,
   instagramMaps: (shopId: string) => ['shops', shopId, 'instagram-maps'] as const,
+  catalogProducts: (shopId?: string | null, search?: string, page?: number) =>
+    ['shops', shopId ?? 'none', 'catalog-products', search ?? '', page ?? 1] as const,
   shopMembers: (shopId: string) => ['shops', shopId, 'members'] as const,
 };

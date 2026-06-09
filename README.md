@@ -59,7 +59,8 @@ Required backend variables:
 - `REDIS_URL` — Redis connection string for locks, rate limits, and state support.
 - `RABBITMQ_URL` — RabbitMQ AMQP URL for inbound message jobs.
 - `QDRANT_URL` — Qdrant API URL for product semantic search.
-- `OPENAI_API_KEY` — OpenAI API key used by the LLM and embedding integrations.
+- `OPENAI_API_KEY` — API key for the LLM and embedding integrations (AvalAI or OpenAI).
+- `OPENAI_API_BASE_URL` — OpenAI-compatible API base URL (default: `https://api.avalai.ir/v1`).
 - `APP_ENV` / `LOG_LEVEL` — runtime environment and logging level.
 - `JWT_SECRET_KEY` — at least 32 random bytes recommended in production.
 - `TOKEN_ENCRYPTION_KEY` — secret used to derive the Fernet key for Instagram token encryption.

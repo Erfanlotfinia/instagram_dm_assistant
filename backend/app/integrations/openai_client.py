@@ -17,6 +17,15 @@ class OpenAIEmbeddingClient(Protocol):
     def embed_text(self, text: str) -> list[float]: ...
 
 
+def build_openai_client(settings: Settings):
+    from openai import OpenAI
+
+    kwargs: dict[str, str] = {"api_key": settings.openai_api_key}
+    if settings.openai_api_base_url:
+        kwargs["base_url"] = settings.openai_api_base_url.rstrip("/")
+    return OpenAI(**kwargs)
+
+
 class LiveOpenAIChatClient:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
@@ -25,9 +34,7 @@ class LiveOpenAIChatClient:
         if not self.settings.openai_api_key:
             raise RuntimeError("OPENAI_API_KEY is not configured")
 
-        from openai import OpenAI
-
-        client = OpenAI(api_key=self.settings.openai_api_key)
+        client = build_openai_client(self.settings)
         response = client.chat.completions.create(
             model=self.settings.openai_model,
             messages=[
@@ -51,9 +58,7 @@ class LiveOpenAIEmbeddingClient:
         if not self.settings.openai_api_key:
             raise RuntimeError("OPENAI_API_KEY is not configured")
 
-        from openai import OpenAI
-
-        client = OpenAI(api_key=self.settings.openai_api_key)
+        client = build_openai_client(self.settings)
         response = client.embeddings.create(
             model=self.settings.openai_embedding_model,
             input=text,

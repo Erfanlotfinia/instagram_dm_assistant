@@ -42,6 +42,23 @@ All shop-scoped routes require membership in the shop.
 | `/api/v1/webhooks/instagram` | Meta inbound webhook |
 | `/api/v1/webhooks/meta` | Meta webhook alias with idempotent ingestion |
 | `/api/v1/payments/mock/*` | Dev payment simulation |
+| `/api/v1/catalog/*` | Catalog import, reindex, normalized products, alias editing |
+| `/api/v1/resolve/*` | Product/variant resolver, traces, operator feedback |
+
+## Catalog intelligence
+
+| Method | Path | Body / query |
+|--------|------|--------------|
+| POST | `/api/v1/catalog/import` | `{ shop_id, rows[] }` |
+| POST | `/api/v1/catalog/reindex` | `{ shop_id, product_ids?, batch_size? }` |
+| GET | `/api/v1/catalog/products?shop_id=` | pagination + search |
+| PATCH | `/api/v1/catalog/products/{id}/aliases?shop_id=` | `{ add[], remove[] }` |
+| POST | `/api/v1/resolve/product` | message text + media refs + context |
+| POST | `/api/v1/resolve/variant` | message text + product candidates + slots |
+| GET | `/api/v1/resolve/{trace_id}?shop_id=` | resolver trace |
+| POST | `/api/v1/resolve/{trace_id}/feedback` | operator correction |
+
+See [catalog-intelligence-architecture.md](./catalog-intelligence-architecture.md) for indexing and resolver design.
 
 ## Rate limits (when enabled)
 

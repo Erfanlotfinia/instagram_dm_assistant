@@ -1,0 +1,29 @@
+[
+  {
+    "id": "golden-black-dress-m",
+    "shop_fixture": "demo",
+    "message_text": "میخوام اون لباس مشکی سایز M",
+    "product_title": "Black Evening Dress",
+    "variant": {"color": "Black", "size": "M", "sku": "BED-BLK-M"},
+    "expected_product_match": true,
+    "expected_variant_top1": true
+  },
+  {
+    "id": "golden-red-blouse-l",
+    "shop_fixture": "demo",
+    "message_text": "red blouse size L please",
+    "product_title": "Red Silk Blouse",
+    "variant": {"color": "Red", "size": "L", "sku": "RSB-RED-L"},
+    "expected_product_match": true,
+    "expected_variant_top1": true
+  },
+  {
+    "id": "golden-navy-jacket-xl",
+    "shop_fixture": "demo",
+    "message_text": "سرمه ای xl",
+    "product_title": "Navy Blazer",
+    "variant": {"color": "Navy", "size": "XL", "sku": "NB-NVY-XL"},
+    "expected_product_match": true,
+    "expected_variant_top1": true
+  }
+]

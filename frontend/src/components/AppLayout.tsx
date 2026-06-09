@@ -41,6 +41,7 @@ const navGroups: NavGroup[] = [
   {
     label: 'Catalog intelligence',
     items: [
+      { to: '/catalog-copilot', label: 'Catalog Copilot' },
       { to: '/fashion-dictionary', label: 'Fashion Dictionary' },
       { to: '/variant-resolver', label: 'Variant Resolver' },
     ],

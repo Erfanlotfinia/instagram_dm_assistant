@@ -26,6 +26,8 @@ from app.domain.enums import (
     AgentMode,
     AgentRunStatus,
     AgentWorkflowState,
+    CatalogAliasSource,
+    CatalogImportJobStatus,
     ConfidenceSource,
     ConversationEventType,
     ConversationPriorityLevel,
@@ -49,6 +51,9 @@ from app.domain.enums import (
     PaymentProvider,
     PaymentRecordStatus,
     ProductStatus,
+    ResolverConfidenceBand,
+    ResolverFeedbackAction,
+    ResolverTraceType,
     ShipmentProvider,
     ShipmentStatus,
     ShopStatus,
@@ -57,6 +62,7 @@ from app.domain.enums import (
     SuggestedReplyStatus,
     TriggerSourceType,
     UserRole,
+    VariantAliasType,
     PilotEventSeverity,
     WebhookDedupeOutcome,
     WebhookProcessingStatus,
@@ -1383,3 +1389,216 @@ class TRLValidationScenarioResult(Base):
     run: Mapped[TRLValidationRun] = relationship(back_populates="scenario_results")
     conversation: Mapped[Conversation | None] = relationship()
     order: Mapped[Order | None] = relationship()
+
+
+class ProductNormalized(Base, TimestampMixin):
+    __tablename__ = "products_normalized"
+    __table_args__ = (UniqueConstraint("product_id", name="uq_products_normalized_product_id"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    product_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    normalized_title: Mapped[str] = mapped_column(String(512), nullable=False)
+    brand: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    color: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    size: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    material: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    collection: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    synonym_candidates: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    qdrant_point_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    qdrant_variant_point_ids: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False, default=dict)
+    embedding_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    embedding_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    dense_vector_dim: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_normalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    product: Mapped[Product] = relationship()
+    aliases: Mapped[list[ProductAlias]] = relationship(back_populates="normalized_product", cascade="all, delete-orphan")
+
+
+class ProductAlias(Base, TimestampMixin):
+    __tablename__ = "product_aliases"
+    __table_args__ = (
+        UniqueConstraint("shop_id", "alias_text", name="uq_product_aliases_shop_alias"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    product_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    normalized_product_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("products_normalized.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    alias_text: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
+    language: Mapped[str] = mapped_column(String(16), nullable=False, default="und")
+    source: Mapped[CatalogAliasSource] = mapped_column(
+        pg_enum(CatalogAliasSource, name="catalog_alias_source"), nullable=False, default=CatalogAliasSource.MANUAL
+    )
+    confidence: Mapped[Any] = mapped_column(Numeric(5, 4), nullable=False, default=1.0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    normalized_product: Mapped[ProductNormalized | None] = relationship(back_populates="aliases")
+    product: Mapped[Product] = relationship()
+
+
+class VariantAlias(Base, TimestampMixin):
+    __tablename__ = "variant_aliases"
+    __table_args__ = (
+        UniqueConstraint("shop_id", "variant_id", "alias_text", name="uq_variant_aliases_shop_variant_alias"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    variant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("product_variants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    alias_text: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    alias_type: Mapped[VariantAliasType] = mapped_column(
+        pg_enum(VariantAliasType, name="variant_alias_type"), nullable=False, default=VariantAliasType.COMBINED
+    )
+    language: Mapped[str] = mapped_column(String(16), nullable=False, default="und")
+    source: Mapped[CatalogAliasSource] = mapped_column(
+        pg_enum(CatalogAliasSource, name="catalog_alias_source"), nullable=False, default=CatalogAliasSource.MANUAL
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    variant: Mapped[ProductVariant] = relationship()
+
+
+class CatalogImportJob(Base, TimestampMixin):
+    __tablename__ = "catalog_import_jobs"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status: Mapped[CatalogImportJobStatus] = mapped_column(
+        pg_enum(CatalogImportJobStatus, name="catalog_import_job_status"),
+        nullable=False,
+        default=CatalogImportJobStatus.PENDING,
+        index=True,
+    )
+    source_format: Mapped[str] = mapped_column(String(32), nullable=False, default="json")
+    total_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    processed_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    checkpoint: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+
+class ResolverTrace(Base):
+    __tablename__ = "resolver_traces"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    trace_type: Mapped[ResolverTraceType] = mapped_column(
+        pg_enum(ResolverTraceType, name="resolver_trace_type"), nullable=False, index=True
+    )
+    conversation_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    input_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    top_candidates: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    matched_aliases: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    rules_fired: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    missing_slots: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    confidence_band: Mapped[ResolverConfidenceBand] = mapped_column(
+        pg_enum(ResolverConfidenceBand, name="resolver_confidence_band"), nullable=False, index=True
+    )
+    confidence_score: Mapped[Any] = mapped_column(Numeric(5, 4), nullable=False, default=0)
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    qdrant_query_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    feedback_entries: Mapped[list[ResolverFeedback]] = relationship(
+        back_populates="trace", cascade="all, delete-orphan"
+    )
+
+
+class ResolverFeedback(Base):
+    __tablename__ = "resolver_feedback"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    trace_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("resolver_traces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action: Mapped[ResolverFeedbackAction] = mapped_column(
+        pg_enum(ResolverFeedbackAction, name="resolver_feedback_action"), nullable=False, index=True
+    )
+    operator_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    original_product_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
+    corrected_product_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
+    original_variant_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True)
+    corrected_variant_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    trace: Mapped[ResolverTrace] = relationship(back_populates="feedback_entries")
+    operator: Mapped[User] = relationship()
+
+
+class BrandSizeMap(Base, TimestampMixin):
+    __tablename__ = "brand_size_maps"
+    __table_args__ = (
+        UniqueConstraint("shop_id", "brand", "raw_size", name="uq_brand_size_maps_shop_brand_raw"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    brand: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    raw_size: Mapped[str] = mapped_column(String(64), nullable=False)
+    normalized_size: Mapped[str] = mapped_column(String(64), nullable=False)
+    gender: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class MediaProductLink(Base, TimestampMixin):
+    __tablename__ = "media_product_links"
+    __table_args__ = (
+        UniqueConstraint("shop_id", "media_id", "product_id", name="uq_media_product_links_shop_media_product"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    media_id: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    media_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    product_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    link_source: Mapped[str] = mapped_column(String(64), nullable=False, default="manual")
+    confidence: Mapped[Any] = mapped_column(Numeric(5, 4), nullable=False, default=1.0)
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    product: Mapped[Product] = relationship()

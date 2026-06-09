@@ -15,9 +15,20 @@ class Settings(BaseSettings):
     rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672/"
     qdrant_url: str = "http://qdrant:6333"
     openai_api_key: str = ""
+    openai_api_base_url: str = Field(
+        default="https://api.avalai.ir/v1",
+        description="OpenAI-compatible API base URL (AvalAI gateway by default)",
+    )
     openai_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
     qdrant_collection_name: str = "products"
+    qdrant_variants_collection_name: str = "variants"
+    catalog_import_batch_size: int = Field(default=25, ge=1)
+    catalog_reindex_batch_size: int = Field(default=50, ge=1)
+    resolver_default_high_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
+    resolver_default_medium_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
+    hybrid_fusion_strategy: str = "rrf"
+    hybrid_rrf_k: int = Field(default=60, ge=1)
     agent_intent_confidence_threshold: float = 0.65
     agent_slots_confidence_threshold: float = 0.60
     agent_max_failures: int = 2

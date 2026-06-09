@@ -9,6 +9,7 @@ def test_settings_load_from_environment(monkeypatch) -> None:
     monkeypatch.setenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
     monkeypatch.setenv("QDRANT_URL", "http://localhost:6333")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_API_BASE_URL", "https://api.avalai.ir/v1")
     monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-key-value")
 
     settings = Settings()
@@ -20,5 +21,6 @@ def test_settings_load_from_environment(monkeypatch) -> None:
     assert settings.rabbitmq_url.startswith("amqp://")
     assert settings.qdrant_url == "http://localhost:6333"
     assert settings.openai_api_key == "test-key"
+    assert settings.openai_api_base_url == "https://api.avalai.ir/v1"
     assert settings.jwt_secret_key == "test-secret-key-value"
     assert not settings.is_production

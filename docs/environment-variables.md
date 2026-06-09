@@ -35,7 +35,8 @@
 
 | Variable | Description |
 |----------|-------------|
-| `OPENAI_API_KEY` | OpenAI API key |
+| `OPENAI_API_KEY` | OpenAI-compatible API key (AvalAI or OpenAI) |
+| `OPENAI_API_BASE_URL` | OpenAI-compatible API base URL (default: `https://api.avalai.ir/v1`) |
 | `OPENAI_MODEL` | Chat model for extraction |
 | `OPENAI_EMBEDDING_MODEL` | Embedding model for semantic search |
 

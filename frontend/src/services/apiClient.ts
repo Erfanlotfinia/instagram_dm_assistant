@@ -25,7 +25,8 @@ import type {
 import type { DashboardMetrics } from '../types/dashboard';
 import type { AgentPerformanceMetrics, AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PaginatedLostDemand, PaginatedOperatorPerformance, PostPerformanceRow, ResponseTimeAnalytics, SimulatorRunSummary, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
 import type { SemanticSearchResponse } from '../types/semanticSearch';
-import type { LoginRequest, TokenResponse, User } from '../types/auth';
+import type { CatalogImportJob, CatalogImportRequest, CatalogProductListResponse, CatalogReindexRequest, ProductAliasesPatchRequest, ProductNormalized } from '../types/catalog';
+import type { ResolveProductResponse, ResolveVariantResponse, ResolverFeedback, ResolverFeedbackRequest, ResolverTrace } from '../types/resolve';
 import type { TRLRiskMetrics, TRLValidationRun, TRLValidationScenarioResult } from '../types/trlValidation';
 import type { PilotActionResponse, PilotEventLog, PilotMetrics, PilotReadinessResponse, PilotSettings } from '../types/pilot';
 import type { FailedJobListResponse, HealthResponse, ReadinessResponse } from '../types/health';
@@ -62,7 +63,14 @@ import type {
 } from '../types/shop';
 import { tokenStorage } from './tokenStorage';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+
+function apiUrl(path: string): string {
+  if (API_BASE_URL) {
+    return `${API_BASE_URL}${path}`;
+  }
+  return path;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -84,17 +92,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...init,
     headers,
+  }).catch((error: unknown) => {
+    if (error instanceof TypeError) {
+      throw new ApiError(
+        'Cannot reach the API server. Start the backend (port 8800) or check VITE_API_BASE_URL.',
+        0,
+      );
+    }
+    throw error;
   });
 
   if (!response.ok) {
     let detail = `API request failed with status ${response.status}`;
     try {
-      const body = (await response.json()) as { detail?: string };
+      const body = (await response.json()) as { detail?: string | Array<{ msg?: string; loc?: string[] }> };
       if (typeof body.detail === 'string') {
         detail = body.detail;
+      } else if (Array.isArray(body.detail)) {
+        detail = body.detail.map((item) => item.msg ?? JSON.stringify(item)).join('; ');
       }
     } catch {
       // ignore JSON parse errors
@@ -109,11 +127,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function buildQuery(params: Record<string, string | undefined>): string {
+function buildQuery(params: Record<string, string | number | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== '') {
-      search.set(key, value);
+      search.set(key, String(value));
     }
   }
   const query = search.toString();
@@ -544,5 +562,44 @@ export const apiClient = {
         operator_decision: 'rejected',
         reason,
       }),
+    }),
+  importCatalog: (payload: CatalogImportRequest) =>
+    request<CatalogImportJob>('/api/v1/catalog/import', { method: 'POST', body: JSON.stringify(payload) }),
+  reindexCatalog: (shopId: string, payload: Omit<CatalogReindexRequest, 'shop_id'> = {}) =>
+    request<{ job_id: string; shop_id: string; status: string; total_products: number; indexed_products: number }>(
+      '/api/v1/catalog/reindex',
+      { method: 'POST', body: JSON.stringify({ shop_id: shopId, ...payload }) },
+    ),
+  listCatalogProducts: (shopId: string, params: { page?: number; page_size?: number; search?: string } = {}) =>
+    request<CatalogProductListResponse>(
+      `/api/v1/catalog/products${buildQuery({ shop_id: shopId, page: params.page, page_size: params.page_size, search: params.search })}`,
+    ),
+  patchProductAliases: (shopId: string, productId: string, payload: ProductAliasesPatchRequest) =>
+    request<{ product_id: string; aliases: ProductNormalized['aliases'] }>(
+      `/api/v1/catalog/products/${productId}/aliases${buildQuery({ shop_id: shopId })}`,
+      { method: 'PATCH', body: JSON.stringify(payload) },
+    ),
+  resolveProduct: (shopId: string, payload: { message_text: string; limit?: number }) =>
+    request<ResolveProductResponse>('/api/v1/resolve/product', {
+      method: 'POST',
+      body: JSON.stringify({ shop_id: shopId, ...payload }),
+    }),
+  resolveVariant: (shopId: string, payload: {
+    message_text: string;
+    product_id?: string;
+    raw_color?: string;
+    raw_size?: string;
+    limit?: number;
+  }) =>
+    request<ResolveVariantResponse>('/api/v1/resolve/variant', {
+      method: 'POST',
+      body: JSON.stringify({ shop_id: shopId, ...payload }),
+    }),
+  getResolverTrace: (shopId: string, traceId: string) =>
+    request<ResolverTrace>(`/api/v1/resolve/${traceId}${buildQuery({ shop_id: shopId })}`),
+  submitResolverFeedback: (shopId: string, traceId: string, payload: Omit<ResolverFeedbackRequest, 'shop_id'>) =>
+    request<ResolverFeedback>(`/api/v1/resolve/${traceId}/feedback${buildQuery({ shop_id: shopId })}`, {
+      method: 'POST',
+      body: JSON.stringify({ shop_id: shopId, ...payload }),
     }),
 };

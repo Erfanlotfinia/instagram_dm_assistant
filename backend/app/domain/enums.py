@@ -315,3 +315,48 @@ class PilotEventSeverity(str, enum.Enum):
     WARNING = "warning"
     ERROR = "error"
     CRITICAL = "critical"
+
+
+class CatalogImportJobStatus(str, enum.Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class CatalogAliasSource(str, enum.Enum):
+    MANUAL = "manual"
+    IMPORT = "import"
+    GENERATED = "generated"
+    OPERATOR_FEEDBACK = "operator_feedback"
+
+
+class VariantAliasType(str, enum.Enum):
+    COLOR = "color"
+    SIZE = "size"
+    SKU = "sku"
+    COMBINED = "combined"
+
+
+class ResolverTraceType(str, enum.Enum):
+    PRODUCT = "product"
+    VARIANT = "variant"
+
+
+class ResolverConfidenceBand(str, enum.Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class ResolverFeedbackAction(str, enum.Enum):
+    ACCEPT_AI = "accept_ai"
+    CORRECT_PRODUCT = "correct_product"
+    CORRECT_VARIANT = "correct_variant"
+    TAXONOMY_ISSUE = "taxonomy_issue"
+
+
+class HybridFusionStrategy(str, enum.Enum):
+    RRF = "rrf"
+    DBSF = "dbsf"
