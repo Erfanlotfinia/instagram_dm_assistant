@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.domain.enums import AgentIntent, MessageChannel, MessageDirection, MessageType
@@ -168,11 +168,33 @@ class TRLValidationRunner:
         ig = self.db.scalar(select(InstagramAccount).where(InstagramAccount.shop_id == shop_id).limit(1))
         if ig is None:
             raise ValueError("Shop has no Instagram account for TRL validation")
-        customer = Customer(shop_id=shop_id, instagram_user_id=f"trl_{scenario['scenario_id']}", full_name="TRL Customer")
-        self.db.add(customer); self.db.flush()
-        conv = Conversation(shop_id=shop_id, instagram_account_id=ig.id, customer_id=customer.id, channel_provider="instagram", channel_conversation_id=f"trl:{run_id}:{scenario['scenario_id']}", channel_customer_id=customer.instagram_user_id, is_simulation=True)
+        customer_key = f"trl:{run_id}:{scenario['scenario_id']}"
+        customer = self.db.scalar(
+            select(Customer).where(Customer.shop_id == shop_id, Customer.instagram_user_id == customer_key)
+        )
+        if customer is None:
+            customer = Customer(shop_id=shop_id, instagram_user_id=customer_key, full_name="TRL Customer")
+            self.db.add(customer); self.db.flush()
+        conv = Conversation(
+            shop_id=shop_id,
+            instagram_account_id=ig.id,
+            customer_id=customer.id,
+            channel_provider="instagram",
+            channel_conversation_id=f"trl:{run_id}:{scenario['scenario_id']}",
+            channel_customer_id=customer.instagram_user_id,
+            is_simulation=True,
+        )
         self.db.add(conv); self.db.flush()
-        msg = Message(conversation_id=conv.id, direction=MessageDirection.INBOUND, channel=MessageChannel.INSTAGRAM, instagram_message_id=f"trl:{run_id}:{scenario['scenario_id']}", message_type=MessageType.SHARED_POST if scenario.get("shared_post_url") else MessageType.TEXT, text=scenario["message_text"], raw_payload={"_meta": {"shared_post_url": scenario.get("shared_post_url"), "simulation": True}}, is_simulation=True)
+        msg = Message(
+            conversation_id=conv.id,
+            direction=MessageDirection.INBOUND,
+            channel=MessageChannel.INSTAGRAM,
+            instagram_message_id=f"trl:{run_id}:{scenario['scenario_id']}",
+            message_type=MessageType.SHARED_POST if scenario.get("shared_post_url") else MessageType.TEXT,
+            text=scenario["message_text"],
+            raw_payload={"_meta": {"shared_post_url": scenario.get("shared_post_url"), "simulation": True}},
+            is_simulation=True,
+        )
         self.db.add(msg); self.db.commit()
         started = time.perf_counter()
         orchestrator = ConversationOrchestrator(self.db, llm_service=RuleBasedTRLExtractionService(), semantic_search=DeterministicSemanticSearch(self.db), allow_simulated_order_side_effects=True)
@@ -229,17 +251,75 @@ class TRLValidationRunner:
         return row
 
     def reset(self, shop_id: UUID) -> dict[str, int]:
-        run_ids = [r.id for r in self.db.scalars(select(TRLValidationRun).where(TRLValidationRun.shop_id == shop_id))]
+        run_ids = [
+            r.id
+            for r in self.db.scalars(select(TRLValidationRun).where(TRLValidationRun.shop_id == shop_id))
+        ]
         deleted_runs = len(run_ids)
-        deleted_orders = self.db.query(Order).filter(Order.shop_id == shop_id, Order.is_simulation).delete()
-        conv_ids = [c.id for c in self.db.scalars(select(Conversation).where(Conversation.shop_id == shop_id, Conversation.is_simulation))]
-        deleted_conversations = len(conv_ids)
+
+        linked_conversation_ids = []
+        if run_ids:
+            linked_conversation_ids = [
+                row[0]
+                for row in self.db.execute(
+                    select(TRLValidationScenarioResult.conversation_id).where(
+                        TRLValidationScenarioResult.run_id.in_(run_ids),
+                        TRLValidationScenarioResult.conversation_id.is_not(None),
+                    )
+                ).all()
+                if row[0] is not None
+            ]
+
+        trl_ownership_predicates = [Conversation.channel_conversation_id.like("trl:%")]
+        if linked_conversation_ids:
+            trl_ownership_predicates.append(Conversation.id.in_(linked_conversation_ids))
+        trl_conversation_stmt = select(Conversation).where(
+            Conversation.shop_id == shop_id,
+            or_(*trl_ownership_predicates),
+        )
+        trl_conversations = list(self.db.scalars(trl_conversation_stmt).all())
+        conv_ids = [conversation.id for conversation in trl_conversations]
+        customer_ids = [conversation.customer_id for conversation in trl_conversations if conversation.customer_id is not None]
+
+        deleted_orders = 0
+        if conv_ids:
+            deleted_orders = (
+                self.db.query(Order)
+                .filter(Order.shop_id == shop_id, Order.conversation_id.in_(conv_ids))
+                .delete(synchronize_session=False)
+            )
+
         if run_ids:
             self.db.execute(delete(TRLValidationRun).where(TRLValidationRun.id.in_(run_ids)))
+        deleted_conversations = 0
         if conv_ids:
-            self.db.execute(delete(Conversation).where(Conversation.id.in_(conv_ids)))
+            deleted_conversations = (
+                self.db.query(Conversation)
+                .filter(Conversation.id.in_(conv_ids))
+                .delete(synchronize_session=False)
+            )
+
+        deleted_customers = 0
+        for customer_id in set(customer_ids):
+            has_remaining_conversation = self.db.scalar(
+                select(Conversation.id).where(Conversation.customer_id == customer_id).limit(1)
+            )
+            if has_remaining_conversation is None:
+                customer = self.db.get(Customer, customer_id)
+                if customer is not None and (
+                    customer.instagram_user_id.startswith("trl:")
+                    or customer.instagram_user_id.startswith("trl_")
+                ):
+                    self.db.delete(customer)
+                    deleted_customers += 1
+
         self.db.commit()
-        return {"deleted_runs": deleted_runs, "deleted_conversations": deleted_conversations, "deleted_orders": deleted_orders}
+        return {
+            "deleted_runs": deleted_runs,
+            "deleted_conversations": deleted_conversations,
+            "deleted_orders": deleted_orders,
+            "deleted_customers": deleted_customers,
+        }
 
     def list_runs(self, shop_id: UUID) -> list[TRLValidationRun]:
         return list(self.db.scalars(select(TRLValidationRun).where(TRLValidationRun.shop_id == shop_id).order_by(TRLValidationRun.started_at.desc())).all())

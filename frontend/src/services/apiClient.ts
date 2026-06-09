@@ -193,7 +193,7 @@ export const apiClient = {
       `/api/v1/shops/${shopId}/trl-validation/runs/${runId}/scenarios${buildQuery({ passed: passed === undefined ? undefined : String(passed) })}`,
     ),
   resetTRLValidation: (shopId: string) =>
-    request<{ deleted_runs: number; deleted_conversations: number; deleted_orders: number }>(
+    request<{ deleted_runs: number; deleted_conversations: number; deleted_orders: number; deleted_customers?: number }>(
       `/api/v1/shops/${shopId}/trl-validation/reset`,
       { method: 'DELETE' },
     ),

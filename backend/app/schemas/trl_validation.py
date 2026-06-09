@@ -16,6 +16,7 @@ class TRLValidationResetResponse(BaseModel):
     deleted_runs: int
     deleted_conversations: int
     deleted_orders: int
+    deleted_customers: int = 0
 
 
 class TRLValidationRunRead(BaseModel):
