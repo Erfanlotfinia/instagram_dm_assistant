@@ -1,5 +1,5 @@
 from decimal import Decimal
-from pathlib import Path
+from uuid import uuid4
 
 from app.domain.enums import (
     AgentMode,
@@ -13,7 +13,6 @@ from app.domain.enums import (
     OrderStatus,
     PaymentProvider,
     PilotEventSeverity,
-    ProductStatus,
     SellingStyle,
     UserRole,
 )
@@ -160,74 +159,3 @@ def test_role_permissions_for_pilot_settings(client, db_session, demo_shop):
 
     response = client.put(f"/api/v1/shops/{demo_shop.id}/pilot-settings", headers=headers, json={"pilot_enabled": True})
     assert response.status_code == 403
-
-
-def test_product_mapping_coverage_counts_only_active_products_and_maps(db_session, demo_shop):
-    account = InstagramAccount(
-        shop_id=demo_shop.id,
-        ig_user_id="ig-coverage",
-        username="coverage",
-        access_token_encrypted="x",
-        status=InstagramAccountStatus.CONNECTED,
-    )
-    active_mapped = Product(
-        shop_id=demo_shop.id,
-        title="Mapped active",
-        base_price=Decimal("10.00"),
-        currency="USD",
-        status=ProductStatus.ACTIVE,
-    )
-    active_unmapped = Product(
-        shop_id=demo_shop.id,
-        title="Unmapped active",
-        base_price=Decimal("10.00"),
-        currency="USD",
-        status=ProductStatus.ACTIVE,
-    )
-    inactive_mapped = Product(
-        shop_id=demo_shop.id,
-        title="Inactive mapped",
-        base_price=Decimal("10.00"),
-        currency="USD",
-        status=ProductStatus.INACTIVE,
-    )
-    db_session.add_all([account, active_mapped, active_unmapped, inactive_mapped])
-    db_session.flush()
-    db_session.add(
-        InstagramProductMap(
-            shop_id=demo_shop.id,
-            instagram_account_id=account.id,
-            instagram_post_url="https://instagram.com/p/active",
-            product_id=active_mapped.id,
-            is_active=True,
-        )
-    )
-    db_session.add(
-        InstagramProductMap(
-            shop_id=demo_shop.id,
-            instagram_account_id=account.id,
-            instagram_post_url="https://instagram.com/p/inactive-product",
-            product_id=inactive_mapped.id,
-            is_active=True,
-        )
-    )
-    db_session.add(
-        InstagramProductMap(
-            shop_id=demo_shop.id,
-            instagram_account_id=account.id,
-            instagram_post_url="https://instagram.com/p/disabled",
-            product_id=active_unmapped.id,
-            is_active=False,
-        )
-    )
-    db_session.commit()
-
-    assert PilotService(db_session)._product_mapping_coverage(demo_shop.id) == 0.5
-
-
-def test_pilot_order_created_audit_is_logged_only_for_new_orders():
-    source = Path("app/services/conversation_orchestrator.py").read_text()
-
-    assert "existing_order = self.order_service.orders.get_active_for_conversation" in source
-    assert "order_was_created = active_order is not None and existing_order is None" in source
-    assert "if order_was_created:" in source

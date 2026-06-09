@@ -292,31 +292,11 @@ class PilotService:
         ]
 
     def _product_mapping_coverage(self, shop_id: UUID) -> float:
-        active_products = int(
-            self.db.scalar(
-                select(func.count(Product.id)).where(
-                    Product.shop_id == shop_id,
-                    Product.status == ProductStatus.ACTIVE,
-                )
-            )
-            or 0
-        )
+        active_products = int(self.db.scalar(select(func.count(Product.id)).where(Product.shop_id == shop_id, Product.status == ProductStatus.ACTIVE)) or 0)
         if active_products == 0:
             return 0.0
-        mapped = int(
-            self.db.scalar(
-                select(func.count(func.distinct(InstagramProductMap.product_id)))
-                .join(Product, Product.id == InstagramProductMap.product_id)
-                .where(
-                    InstagramProductMap.shop_id == shop_id,
-                    InstagramProductMap.is_active.is_(True),
-                    Product.shop_id == shop_id,
-                    Product.status == ProductStatus.ACTIVE,
-                )
-            )
-            or 0
-        )
-        return min(mapped / active_products, 1.0)
+        mapped = int(self.db.scalar(select(func.count(func.distinct(InstagramProductMap.product_id))).where(InstagramProductMap.shop_id == shop_id)) or 0)
+        return mapped / active_products
 
     def _trl_summary(self, run: TRLValidationRun | None) -> dict | None:
         if run is None:

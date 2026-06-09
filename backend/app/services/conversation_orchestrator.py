@@ -298,15 +298,8 @@ class ConversationOrchestrator:
             )
             order_was_created = active_order is not None and existing_order is None
             if active_order is not None:
-                if order_was_created:
-                    CREATED_ORDERS.inc()
-                    AuditService(self.db).log(
-                        action="pilot_auto_order_created",
-                        entity_type="order",
-                        shop_id=conversation.shop_id,
-                        entity_id=str(active_order.id),
-                        metadata={"conversation_id": str(conversation.id)},
-                    )
+                CREATED_ORDERS.inc()
+                AuditService(self.db).log(action="pilot_auto_order_created", entity_type="order", shop_id=conversation.shop_id, entity_id=str(active_order.id), metadata={"conversation_id": str(conversation.id)})
                 high_value_threshold = float(live_agent_settings.get("high_value_order_threshold", 500.0))
                 preview_high_value_orders = live_agent_settings.get("preview_required_for_high_value_order", True)
                 if (
