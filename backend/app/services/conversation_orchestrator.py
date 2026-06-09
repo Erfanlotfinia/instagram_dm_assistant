@@ -277,9 +277,29 @@ class ConversationOrchestrator:
         pilot_order_allowed, pilot_order_reasons = pilot_service.enforce_order_allowed(
             conversation.shop_id, product.id if product is not None else None
         )
-        if pilot_order_reasons:
-            combined_reasons.extend(pilot_order_reasons)
-        order_side_effects_allowed = decision.auto_send_allowed and not risk_score.requires_preview and not risk_score.requires_handoff and pilot_order_allowed and (not conversation.is_simulation or self.allow_simulated_order_side_effects)
+        base_order_side_effects_allowed = (
+            decision.auto_send_allowed
+            and not risk_score.requires_preview
+            and not risk_score.requires_handoff
+            and (not conversation.is_simulation or self.allow_simulated_order_side_effects)
+        )
+        draft_order_candidate = (
+            product is not None
+            and variant is not None
+            and self.order_service.can_create_draft(slots, variant)
+        )
+        pilot_order_blocks_progression = (
+            bool(pilot_order_reasons)
+            and base_order_side_effects_allowed
+            and (extraction.intent == AgentIntent.CANCEL_ORDER or draft_order_candidate)
+        )
+        pilot_order_preview_reasons = list(pilot_order_reasons) if pilot_order_blocks_progression else []
+        if pilot_order_preview_reasons:
+            combined_reasons.extend(pilot_order_preview_reasons)
+            preview_reason = ";".join(combined_reasons)
+            conversation.preview_required = True
+            conversation.preview_reason = preview_reason
+        order_side_effects_allowed = base_order_side_effects_allowed and pilot_order_allowed
 
         if order_side_effects_allowed and extraction.intent == AgentIntent.CANCEL_ORDER:
             active_order = self.order_service.cancel_active_for_conversation(
@@ -290,7 +310,7 @@ class ConversationOrchestrator:
             order_side_effects_allowed
             and product is not None
             and variant is not None
-            and self.order_service.can_create_draft(slots, variant)
+            and draft_order_candidate
         ):
             existing_order = self.order_service.orders.get_active_for_conversation(conversation.id)
             active_order = self.order_service.upsert_draft_from_conversation(
@@ -426,11 +446,12 @@ class ConversationOrchestrator:
                 message_risk="simulation" if conversation.is_simulation and not self.allow_simulated_order_side_effects else None,
             )
         )
-        combined_reasons = [*decision.reasons, *risk_score.risk_reasons]
+        combined_reasons = [*decision.reasons, *risk_score.risk_reasons, *pilot_order_preview_reasons]
         preview_reason = ";".join(combined_reasons) if combined_reasons else None
-        conversation.preview_required = decision.requires_preview or risk_score.requires_preview
+        force_preview = decision.requires_preview or risk_score.requires_preview or bool(pilot_order_preview_reasons)
+        conversation.preview_required = force_preview
         conversation.preview_reason = preview_reason
-        conversation.suggested_outbound = reply if (decision.requires_preview or risk_score.requires_preview) else None
+        conversation.suggested_outbound = reply if force_preview else None
         if decision.requires_handoff or risk_score.requires_handoff:
             conversation.handoff_required = True
             conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
@@ -456,9 +477,11 @@ class ConversationOrchestrator:
         if pilot_send_reasons:
             combined_reasons.extend(pilot_send_reasons)
             preview_reason = ";".join(combined_reasons)
+            force_preview = True
             conversation.preview_required = True
             conversation.preview_reason = preview_reason
-        if decision.auto_send_allowed and not risk_score.requires_preview and not risk_score.requires_handoff and pilot_send_allowed and not conversation.is_simulation:
+            conversation.suggested_outbound = reply
+        if decision.auto_send_allowed and not force_preview and not risk_score.requires_handoff and pilot_send_allowed and not conversation.is_simulation:
             outbound = self.send_service.send_text_message(
                 conversation_id, reply, commit=False, is_simulation=False
             )
@@ -473,9 +496,9 @@ class ConversationOrchestrator:
                 reason=preview_reason,
                 is_simulation=conversation.is_simulation,
             )
-            action = "handoff_required" if (decision.requires_handoff or risk_score.requires_handoff) else "message_blocked_due_to_confidence" if (decision.requires_preview or risk_score.requires_preview) else "suggested_reply_created"
+            action = "handoff_required" if (decision.requires_handoff or risk_score.requires_handoff) else "message_blocked_due_to_confidence" if force_preview else "suggested_reply_created"
             AuditService(self.db).log(action=action, entity_type="conversation", shop_id=conversation.shop_id, entity_id=str(conversation.id), metadata={"reasons": combined_reasons})
-            self._log_action(conversation_id, "preview_outbound", {"reply": reply}, {"preview_required": decision.requires_preview or risk_score.requires_preview, "reason": preview_reason, "simulation": conversation.is_simulation}, confidence=extraction.confidence.intent)
+            self._log_action(conversation_id, "preview_outbound", {"reply": reply}, {"preview_required": force_preview, "reason": preview_reason, "simulation": conversation.is_simulation}, confidence=extraction.confidence.intent)
 
         self._create_decision_trace(
             conversation=conversation,
