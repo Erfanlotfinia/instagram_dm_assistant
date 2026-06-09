@@ -390,3 +390,115 @@ Key differentiators versus Meta Business Agent, Manychat, Chatfuel, Gorgias, Sle
 - Fashion/order analytics for funnel, post conversion, unavailable demand, handoff, and response time.
 
 See `docs/competitor-research-mvp.md` for the detailed demo scenario and operator guide.
+
+## TRL validation and pilot readiness
+
+Formal TRL evidence documentation lives in [`docs/trl/`](docs/trl/). See the [TRL Assessment Report](docs/trl/trl_assessment_report.md) for the current TRL estimate and gaps.
+
+### Run TRL validation
+
+1. Start the stack and apply migrations:
+
+```bash
+docker compose up --build
+docker compose exec backend alembic upgrade head
+```
+
+2. Seed the TRL demo shop (20 products, 500+ variants, post mappings, Persian aliases):
+
+```bash
+docker compose exec backend python -m app.scripts.seed_trl_demo_data
+```
+
+3. Sign in to the admin panel as `trl-admin@example.com` / `Password123!` and select shop **TRL Fashion Demo Shop** (`trl-fashion-demo`).
+
+4. Run validation via API or UI:
+
+```bash
+# API (replace shop_id and token)
+curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"reset_demo_data": false}' \
+  http://localhost:8000/api/v1/shops/<shop_id>/trl-validation/run
+```
+
+Or open **TRL Validation** in the sidebar (`/trl-validation`) and click **Run validation**. The runner executes 100 labeled scenarios from `backend/app/tests/fixtures/trl_scenarios.json` using a rule-based LLM substitute and records metrics in `trl_validation_runs`.
+
+5. Export a markdown summary:
+
+```bash
+docker compose exec backend python -m app.scripts.generate_trl_report
+docker compose exec backend python -m app.scripts.generate_trl_report --output /tmp/trl_report.md
+```
+
+Archive exports under `docs/trl/runs/` for TRL 5 evidence (not committed by default).
+
+### Seed TRL demo data
+
+```bash
+docker compose exec backend python -m app.scripts.seed_trl_demo_data
+# Reset and re-seed:
+docker compose exec backend python -c "from app.scripts.seed_trl_demo_data import seed_trl_demo_data; print(seed_trl_demo_data(reset=True))"
+```
+
+Credentials: `trl-admin@example.com` / `trl-operator@example.com`, password `Password123!`.
+
+### Open TRL validation dashboard
+
+- URL: <http://localhost:5173/trl-validation>
+- Requires shop membership on `trl-fashion-demo` (or any shop with TRL runs)
+- Shows run history, threshold pass/fail, scenario results, risk metrics, failed-scenario drill-down
+
+### Check pilot readiness
+
+```bash
+curl -H "Authorization: Bearer <token>" \
+  http://localhost:8000/api/v1/shops/<shop_id>/pilot-readiness
+```
+
+Admin UI: <http://localhost:5173/pilot-readiness> — criteria, checklist, metrics, and event log. The shop is considered TRL 6 pilot-ready only when `ready_for_trl6_pilot` is `true`.
+
+See [Pilot Plan](docs/trl/pilot_plan.md) and [Operational Readiness Checklist](docs/trl/operational_readiness_checklist.md).
+
+### Emergency stop
+
+Immediately blocks auto-send and auto-order progression when pilot mode is enabled:
+
+```bash
+curl -X POST -H "Authorization: Bearer <token>" \
+  http://localhost:8000/api/v1/shops/<shop_id>/pilot/emergency-stop
+
+curl -X POST -H "Authorization: Bearer <token>" \
+  http://localhost:8000/api/v1/shops/<shop_id>/pilot/resume
+```
+
+Or use **Emergency stop** / **Resume** on the Pilot Readiness page. Test before admitting real customer traffic; readiness requires at least one `emergency_stop` pilot event.
+
+### Interpret TRL metrics
+
+| Metric | Meaning |
+|--------|---------|
+| `intent_accuracy` | Fraction of scenarios where detected intent matches expected |
+| `slot_extraction_accuracy` | Color/size/quantity extraction accuracy |
+| `product_resolution_accuracy` | Product linked when scenario expects resolution |
+| `variant_resolution_accuracy` | SKU/variant resolved when expected |
+| `false_order_creation_count` | Orders created when scenario expected none |
+| `handoff_precision` / `handoff_recall` | Human handoff detection quality |
+| `thresholds_passed` | Per-metric pass against `THRESHOLDS` in `trl_validation_runner.py` |
+
+**Caveats:** Some thresholds (`invalid_llm_json_handled_rate`, `duplicate_webhook_idempotency_rate`, `critical_security_tests_pass_rate`, payment/inventory counts) are stubbed in the runner until independently measured. TRL 5 sign-off requires a full 100-scenario run with exported report — see [validation run template](docs/trl/validation_run_template.md).
+
+Threshold definitions:
+
+```text
+intent_accuracy ≥ 90%
+slot_extraction_accuracy ≥ 85%
+product_resolution_accuracy ≥ 90%
+variant_resolution_accuracy ≥ 85%
+false_order_creation_count ≤ 0
+```
+
+Run backend TRL tests:
+
+```bash
+cd backend && pytest app/tests/test_trl_validation.py app/tests/test_pilot_readiness.py -v
+```

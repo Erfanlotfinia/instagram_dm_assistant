@@ -154,9 +154,15 @@ export const apiClient = {
     request<PilotSettings>(`/api/v1/shops/${shopId}/pilot-settings`, { method: 'PUT', body: JSON.stringify(payload) }),
   getPilotReadiness: (shopId: string) => request<PilotReadinessResponse>(`/api/v1/shops/${shopId}/pilot-readiness`),
   activatePilotEmergencyStop: (shopId: string) =>
-    request<PilotActionResponse>(`/api/v1/shops/${shopId}/pilot/emergency-stop`, { method: 'POST' }),
+    request<PilotActionResponse>(`/api/v1/shops/${shopId}/pilot/emergency-stop`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   resumePilot: (shopId: string) =>
-    request<PilotActionResponse>(`/api/v1/shops/${shopId}/pilot/resume`, { method: 'POST' }),
+    request<PilotActionResponse>(`/api/v1/shops/${shopId}/pilot/resume`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   getPilotMetrics: (shopId: string) => request<PilotMetrics>(`/api/v1/shops/${shopId}/pilot/metrics`),
   getPilotEvents: (shopId: string) => request<PilotEventLog>(`/api/v1/shops/${shopId}/pilot/events`),
 
@@ -168,8 +174,35 @@ export const apiClient = {
     request<TriggerPerformance[]>(`/api/v1/shops/${shopId}/triggers/performance`),
   getAgentRiskSettings: (shopId: string) =>
     request<AgentRiskSettings>(`/api/v1/shops/${shopId}/agent-risk-settings`),
-  updateAgentRiskSettings: (shopId: string, payload: Partial<AgentRiskSettings>) =>
-    request<AgentRiskSettings>(`/api/v1/shops/${shopId}/agent-risk-settings`, { method: 'PUT', body: JSON.stringify(payload) }),
+  updateAgentRiskSettings: (shopId: string, payload: Partial<AgentRiskSettings>) => {
+    const {
+      shop_id: _shopId,
+      intent_confidence_threshold,
+      slot_confidence_threshold,
+      product_confidence_threshold,
+      variant_confidence_threshold,
+      address_confidence_threshold,
+      high_value_order_threshold,
+      handoff_for_high_risk,
+      handoff_for_low_variant_confidence,
+      preview_required_for_high_value_order,
+    } = payload;
+
+    return request<AgentRiskSettings>(`/api/v1/shops/${shopId}/agent-risk-settings`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...(intent_confidence_threshold != null ? { intent_confidence_threshold } : {}),
+        ...(slot_confidence_threshold != null ? { slot_confidence_threshold } : {}),
+        ...(product_confidence_threshold != null ? { product_confidence_threshold } : {}),
+        ...(variant_confidence_threshold != null ? { variant_confidence_threshold } : {}),
+        ...(address_confidence_threshold != null ? { address_confidence_threshold } : {}),
+        ...(high_value_order_threshold != null ? { high_value_order_threshold } : {}),
+        ...(handoff_for_high_risk != null ? { handoff_for_high_risk } : {}),
+        ...(handoff_for_low_variant_confidence != null ? { handoff_for_low_variant_confidence } : {}),
+        ...(preview_required_for_high_value_order != null ? { preview_required_for_high_value_order } : {}),
+      }),
+    });
+  },
   listDecisionTraces: (shopId: string) =>
     request<AgentDecisionTrace[]>(`/api/v1/shops/${shopId}/decision-traces`),
   getDecisionTrace: (shopId: string, traceId: string) =>
@@ -192,7 +225,10 @@ export const apiClient = {
   runTRLValidation: (shopId: string, payload: { reset_demo_data?: boolean; scenario_limit?: number | null } = {}) =>
     request<TRLValidationRun>(`/api/v1/shops/${shopId}/trl-validation/run`, {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        reset_demo_data: payload.reset_demo_data ?? false,
+        ...(payload.scenario_limit != null ? { scenario_limit: payload.scenario_limit } : {}),
+      }),
     }),
   listTRLValidationRuns: (shopId: string) =>
     request<TRLValidationRun[]>(`/api/v1/shops/${shopId}/trl-validation/runs`),

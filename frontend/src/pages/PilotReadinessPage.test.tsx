@@ -10,7 +10,8 @@ import { ToastProvider } from '../contexts/ToastContext';
 import { PilotReadinessPage } from './PilotReadinessPage';
 
 const mocks = vi.hoisted(() => {
-  const pilotSettings = {
+  const state = { emergency_stop_enabled: true };
+  const pilotSettings = () => ({
     shop_id: 's1',
     pilot_enabled: true,
     pilot_name: 'June Pilot',
@@ -21,11 +22,12 @@ const mocks = vi.hoisted(() => {
     require_operator_approval_for_first_50_orders: true,
     allowed_instagram_account_ids: ['ig1'],
     allowed_product_ids: null,
-    emergency_stop_enabled: true,
+    emergency_stop_enabled: state.emergency_stop_enabled,
     created_at: '2026-06-09T00:00:00Z',
     updated_at: '2026-06-09T00:00:00Z',
-  };
+  });
   return {
+    state,
     pilotSettings,
     activatePilotEmergencyStop: vi.fn(),
     resumePilot: vi.fn(),
@@ -36,11 +38,11 @@ vi.mock('../services/apiClient', () => ({
   apiClient: {
     getMe: vi.fn().mockResolvedValue({ id: 'u1', email: 'a@test.com', full_name: 'Admin', role: 'owner' }),
     listShops: vi.fn().mockResolvedValue([{ id: 's1', name: 'Demo', slug: 'demo', status: 'active' }]),
-    getPilotReadiness: vi.fn().mockResolvedValue({
+    getPilotReadiness: vi.fn().mockImplementation(async () => ({
       shop_id: 's1',
       ready_for_trl6_pilot: false,
       latest_trl_validation: { status: 'failed' },
-      pilot_settings: mocks.pilotSettings,
+      pilot_settings: mocks.pilotSettings(),
       warnings: ['Latest TRL validation run passed thresholds'],
       checklist: [
         { key: 'instagram_webhook_connected', label: 'Instagram webhook connected', passed: true, detail: null },
@@ -50,7 +52,7 @@ vi.mock('../services/apiClient', () => ({
         { key: 'latest_trl_validation', label: 'Latest TRL validation run passed thresholds', passed: false, detail: 'failed' },
         { key: 'emergency_stop_tested', label: 'Emergency stop tested', passed: true, detail: null },
       ],
-    }),
+    })),
     getPilotMetrics: vi.fn().mockResolvedValue({
       inbound_messages: 12,
       auto_sent_messages: 4,
@@ -67,10 +69,27 @@ vi.mock('../services/apiClient', () => ({
       operator_takeover_count: 1,
     }),
     getPilotEvents: vi.fn().mockResolvedValue({
-      events: [{ id: 'e1', shop_id: 's1', event_type: 'emergency_stop', severity: 'critical', title: 'Emergency stop activated', description: 'Stopped', metadata: null, created_at: '2026-06-09T00:00:00Z' }],
+      events: [
+        {
+          id: 'e1',
+          shop_id: 's1',
+          event_type: 'emergency_stop',
+          severity: 'critical',
+          title: 'Emergency stop activated',
+          description: 'Stopped',
+          metadata: null,
+          created_at: '2026-06-09T00:00:00Z',
+        },
+      ],
     }),
-    activatePilotEmergencyStop: mocks.activatePilotEmergencyStop.mockResolvedValue({ pilot_settings: mocks.pilotSettings, event: {} }),
-    resumePilot: mocks.resumePilot.mockResolvedValue({ pilot_settings: { ...mocks.pilotSettings, emergency_stop_enabled: false }, event: {} }),
+    activatePilotEmergencyStop: mocks.activatePilotEmergencyStop.mockImplementation(async () => {
+      mocks.state.emergency_stop_enabled = true;
+      return { pilot_settings: mocks.pilotSettings(), event: {} };
+    }),
+    resumePilot: mocks.resumePilot.mockImplementation(async () => {
+      mocks.state.emergency_stop_enabled = false;
+      return { pilot_settings: mocks.pilotSettings(), event: {} };
+    }),
   },
 }));
 
@@ -97,7 +116,7 @@ describe('PilotReadinessPage', () => {
 
     expect(await screen.findByRole('heading', { name: /trl 6 pilot readiness/i })).toBeInTheDocument();
     expect(await screen.findByText(/pilot mode active/i)).toBeInTheDocument();
-    expect(screen.getByText(/emergency stop active/i)).toBeInTheDocument();
+    expect(screen.getByText(/auto-send and auto-order progression are disabled/i)).toBeInTheDocument();
     expect(screen.getByText(/validation outdated/i)).toBeInTheDocument();
     expect(screen.getByText(/failed jobs present/i)).toBeInTheDocument();
     expect(screen.getByText(/Instagram webhook connected/i)).toBeInTheDocument();
@@ -105,17 +124,21 @@ describe('PilotReadinessPage', () => {
     expect(screen.getByText(/Inbound messages/i)).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText(/Emergency stop activated/i)).toBeInTheDocument();
+    expect(screen.getByText(/Readiness assessment/i)).toBeInTheDocument();
   });
 
-  it('runs emergency stop and resume flows', async () => {
+  it('runs emergency stop through confirm dialog and resume flow', async () => {
     const user = userEvent.setup();
     renderPage();
 
-    await screen.findByRole('button', { name: /emergency stop/i });
-    await user.click(screen.getByRole('button', { name: /emergency stop/i }));
-    await user.click(screen.getByRole('button', { name: /resume pilot/i }));
-
-    await waitFor(() => expect(mocks.activatePilotEmergencyStop).toHaveBeenCalledWith('s1'));
+    const resumeButton = await screen.findByRole('button', { name: /^resume pilot$/i });
+    await user.click(resumeButton);
     await waitFor(() => expect(mocks.resumePilot).toHaveBeenCalledWith('s1'));
+
+    const stopButton = await screen.findByRole('button', { name: /^emergency stop$/i });
+    await waitFor(() => expect(stopButton).not.toBeDisabled());
+    await user.click(stopButton);
+    await user.click(await screen.findByRole('button', { name: /activate emergency stop/i }));
+    await waitFor(() => expect(mocks.activatePilotEmergencyStop).toHaveBeenCalledWith('s1'));
   });
 });

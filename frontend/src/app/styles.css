@@ -2491,6 +2491,157 @@ a {
   grid-template-columns: 1fr;
 }
 
+/* ── TRL validation page ── */
+
+.trl-validation-controls__grid {
+  margin-top: 0.5rem;
+}
+
+.trl-validation-status {
+  margin: 0.75rem 0 0;
+}
+
+.trl-validation-actions__primary {
+  margin-bottom: 0;
+}
+
+.trl-run-picker {
+  max-width: 28rem;
+  margin: 1rem 0;
+}
+
+.trl-category-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trl-category-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.65rem;
+  background: #f6f8fc;
+}
+
+.trl-scenario-detail__grid {
+  margin-top: 1rem;
+}
+
+.trl-scenario-detail__failures {
+  margin-top: 1rem;
+}
+
+.trl-scenario-detail__failures ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.checklist {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checklist li {
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.65rem;
+  background: #f6f8fc;
+}
+
+.data-table tbody tr[role='button'] {
+  cursor: pointer;
+}
+
+.data-table tbody tr[role='button']:hover {
+  background: #f0f4ff;
+}
+
+/* ── Pilot readiness page ── */
+
+.pilot-safeguards__actions {
+  margin-bottom: 0;
+}
+
+.pilot-status-alerts {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.pilot-checklist__item--failed {
+  background: #fff8f0;
+}
+
+.pilot-checklist__item--passed {
+  background: #f6f8fc;
+}
+
+.pilot-checklist__detail {
+  color: #6d7690;
+}
+
+.pilot-warnings {
+  margin-top: 1rem;
+}
+
+.pilot-warnings ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.pilot-metrics-groups {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.pilot-metrics-group h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: #6d7690;
+}
+
+/* ── Risk settings page ── */
+
+.risk-settings-summary {
+  margin: 1rem 0 0;
+  color: #6d7690;
+  font-size: 0.92rem;
+}
+
+.risk-settings-links {
+  margin-top: 1rem;
+  margin-bottom: 0;
+}
+
+.risk-settings-field-hint {
+  display: block;
+  margin-top: 0.35rem;
+  color: #6d7690;
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.risk-settings-policy.form-field--checkbox {
+  align-items: flex-start;
+}
+
+.risk-settings-policy.form-field--checkbox span {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.risk-settings-actions {
+  margin-top: 1.25rem;
+  margin-bottom: 0;
+}
+
 @media (max-width: 960px) {
   .conversation-workspace__body {
     grid-template-columns: 1fr;
