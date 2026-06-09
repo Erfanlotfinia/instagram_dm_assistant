@@ -70,7 +70,7 @@ describe('OrderDetailPage', () => {
       </QueryClientProvider>,
     );
 
-    const markPaidButton = await screen.findByRole('button', { name: /mark as paid/i });
+    const markPaidButton = await screen.findByRole('button', { name: /mark paid/i });
     await user.click(markPaidButton);
     const confirmButton = await screen.findByRole('button', { name: /confirm paid/i });
     await user.click(confirmButton);

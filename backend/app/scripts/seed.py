@@ -26,6 +26,7 @@ from app.domain.models import (
 from app.repositories.shop_repository import ShopMemberRepository, ShopRepository
 from app.repositories.user_repository import UserRepository
 from app.scripts.seed_demo_data import seed_rich_demo_data
+from app.scripts.seed_trl_demo_data import DEMO_SHOP_SLUG as TRL_SHOP_SLUG, seed_trl_demo_data
 from app.services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
@@ -126,6 +127,41 @@ def _seed_product_catalog(db, shop: Shop, account: InstagramAccount) -> None:
         logger.info("Created demo Instagram product map: %s", DEMO_POST_URL)
 
 
+def _link_admin_to_trl_shop(db, admin) -> None:
+    shop = db.scalar(select(Shop).where(Shop.slug == TRL_SHOP_SLUG))
+    if shop is None:
+        return
+    existing = db.scalar(
+        select(ShopMember).where(ShopMember.shop_id == shop.id, ShopMember.user_id == admin.id)
+    )
+    if existing is None:
+        db.add(ShopMember(shop_id=shop.id, user_id=admin.id, role=UserRole.OWNER))
+        logger.info("Linked %s to TRL demo shop %s", DEFAULT_ADMIN_EMAIL, TRL_SHOP_SLUG)
+
+
+def _index_semantic_search_products(db) -> None:
+    from app.core.config import get_settings
+    from app.integrations.openai_client import LiveOpenAIEmbeddingClient, MockOpenAIEmbeddingClient
+    from app.repositories.product_repository import ProductRepository
+    from app.repositories.variant_repository import VariantRepository
+    from app.services.product_semantic_search_service import ProductSemanticSearchService
+
+    settings = get_settings()
+    embedding_client = (
+        LiveOpenAIEmbeddingClient(settings)
+        if settings.openai_api_key
+        else MockOpenAIEmbeddingClient()
+    )
+    search = ProductSemanticSearchService(db, settings=settings, embedding_client=embedding_client)
+    products = ProductRepository(db).list_active(limit=1000)
+    variants = VariantRepository(db)
+    count = 0
+    for product in products:
+        search.index_product(product, variants.list_for_product(product.id))
+        count += 1
+    logger.info("Indexed %s products for semantic search (Qdrant)", count)
+
+
 def seed() -> None:
     db = SessionLocal()
     try:
@@ -164,6 +200,10 @@ def seed() -> None:
         account = _seed_instagram_account(db, shop)
         _seed_product_catalog(db, shop, account)
         seed_rich_demo_data(db, admin, shop, account)
+        trl_summary = seed_trl_demo_data(reset=False, db=db)
+        logger.info("TRL demo shop seeded: %s", trl_summary)
+        _link_admin_to_trl_shop(db, admin)
+        _index_semantic_search_products(db)
         db.commit()
     finally:
         db.close()

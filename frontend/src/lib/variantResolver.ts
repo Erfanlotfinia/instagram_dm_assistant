@@ -10,6 +10,10 @@ const MISMATCH_LABELS: Record<string, string> = {
   size_unavailable: 'Size not available for this product',
   variant_combination_unavailable: 'Color/size combination not found',
   insufficient_stock: 'Insufficient stock',
+  out_of_stock: 'Out of stock',
+  variant_not_found: 'Variant not found',
+  color_not_found: 'Color not found',
+  size_not_found: 'Size not found',
 };
 
 export type NormalizedVariantResolverResult = VariantResolverResult & {
@@ -33,6 +37,23 @@ export function normalizeResolverResult(raw: VariantResolverResult): NormalizedV
 
 export function formatMismatchReason(reason: string): string {
   return MISMATCH_LABELS[reason] ?? reason.replaceAll('_', ' ');
+}
+
+export type DemandReasonTone = 'success' | 'warning' | 'danger' | 'neutral';
+
+export function demandReasonTone(reason: string): DemandReasonTone {
+  if (reason === 'out_of_stock' || reason === 'insufficient_stock') {
+    return 'warning';
+  }
+  if (
+    reason === 'variant_not_found' ||
+    reason === 'color_not_found' ||
+    reason === 'size_not_found' ||
+    reason === 'product_not_found'
+  ) {
+    return 'danger';
+  }
+  return 'neutral';
 }
 
 export function formatConfidence(value: number | undefined): string {

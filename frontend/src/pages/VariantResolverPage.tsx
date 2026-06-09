@@ -296,7 +296,7 @@ export function VariantResolverPage() {
   return (
     <div className="page-stack page-stack--wide">
       <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Sprint A tooling</p>
+        <p className="dashboard-card__eyebrow">Catalog intelligence</p>
         <h1>Variant resolver test</h1>
         <p>
           Test backend-only normalization, variant matching, stock checks, and alternatives without

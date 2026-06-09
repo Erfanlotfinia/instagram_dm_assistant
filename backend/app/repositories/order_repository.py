@@ -25,7 +25,7 @@ class OrderRepository:
             )
             .where(Order.id == order_id, Order.shop_id == shop_id)
         )
-        return self.db.scalar(stmt)
+        return self.db.scalars(stmt).unique().one_or_none()
 
     def get_active_for_conversation(self, conversation_id: UUID) -> Order | None:
         active_statuses = {

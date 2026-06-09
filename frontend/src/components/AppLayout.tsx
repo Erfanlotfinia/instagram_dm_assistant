@@ -4,36 +4,75 @@ import type { PropsWithChildren } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useShop } from '../contexts/ShopContext';
 
+type NavItem = { to: string; label: string };
+type NavGroup = { label?: string; items: NavItem[] };
+
+const navGroups: NavGroup[] = [
+  {
+    items: [{ to: '/', label: 'Dashboard' }],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { to: '/conversations', label: 'Conversations' },
+      { to: '/orders', label: 'Orders' },
+      { to: '/products', label: 'Products' },
+      { to: '/instagram-mapping', label: 'Post Mapping' },
+    ],
+  },
+  {
+    label: 'Insights',
+    items: [
+      { to: '/analytics', label: 'Analytics' },
+      { to: '/post-revenue', label: 'Post Revenue' },
+      { to: '/unavailable-demand', label: 'Unavailable Demand' },
+    ],
+  },
+  {
+    label: 'Automation',
+    items: [
+      { to: '/agent-studio', label: 'Agent Studio' },
+      { to: '/triggers', label: 'Trigger Rules' },
+      { to: '/recovery-rules', label: 'Recovery Rules' },
+      { to: '/upsell-rules', label: 'Upsell Rules' },
+      { to: '/risk-settings', label: 'Risk Settings' },
+    ],
+  },
+  {
+    label: 'Catalog intelligence',
+    items: [
+      { to: '/fashion-dictionary', label: 'Fashion Dictionary' },
+      { to: '/variant-resolver', label: 'Variant Resolver' },
+    ],
+  },
+  {
+    label: 'Setup & testing',
+    items: [
+      { to: '/onboarding', label: 'Onboarding' },
+      { to: '/simulator', label: 'DM Simulator' },
+      { to: '/pilot-readiness', label: 'Pilot Readiness' },
+      { to: '/trl-validation', label: 'TRL Validation' },
+    ],
+  },
+  {
+    label: 'Administration',
+    items: [
+      { to: '/shops', label: 'Shops' },
+      { to: '/instagram-accounts', label: 'Instagram Accounts' },
+      { to: '/settings', label: 'Settings' },
+      { to: '/system-health', label: 'System Health' },
+    ],
+  },
+];
+
 export function AppLayout({ children }: PropsWithChildren) {
   const { user, logout } = useAuth();
   const { selectedShop } = useShop();
   const location = useLocation();
 
-  const navItems = [
-    { to: '/', label: 'Dashboard' },
-    { to: '/onboarding', label: 'Onboarding' },
-    { to: '/simulator', label: 'DM Simulator' },
-    { to: '/trl-validation', label: 'TRL Validation' },
-    { to: '/pilot-readiness', label: 'Pilot Readiness' },
-    { to: '/analytics', label: 'Analytics' },
-    { to: '/fashion-dictionary', label: 'Fashion Dictionary' },
-    { to: '/variant-resolver', label: 'Variant Resolver' },
-    { to: '/unavailable-demand', label: 'Unavailable Demand' },
-    { to: '/triggers', label: 'Trigger Rules' },
-    { to: '/agent-studio', label: 'Agent Studio' },
-    { to: '/risk-settings', label: 'Risk Settings' },
-    { to: '/recovery-rules', label: 'Recovery Rules' },
-    { to: '/upsell-rules', label: 'Upsell Rules' },
-    { to: '/post-revenue', label: 'Post Revenue' },
-    { to: '/conversations', label: 'Conversations' },
-    { to: '/orders', label: 'Orders' },
-    { to: '/products', label: 'Products' },
-    { to: '/instagram-mapping', label: 'Post Mapping' },
-    { to: '/instagram-accounts', label: 'Instagram Accounts' },
-    { to: '/shops', label: 'Shops' },
-    { to: '/settings', label: 'Settings' },
-    { to: '/system-health', label: 'System Health' },
-  ];
+  function isActive(path: string): boolean {
+    return location.pathname === path || location.pathname.startsWith(`${path}/`);
+  }
 
   return (
     <div className="app-shell">
@@ -41,18 +80,19 @@ export function AppLayout({ children }: PropsWithChildren) {
         <h1 className="sidebar__brand">DM Assistant</h1>
         {selectedShop ? <p className="sidebar__shop">{selectedShop.name}</p> : null}
         <nav className="sidebar__nav">
-          {navItems.map((item) => (
-            <Link
-              key={item.to}
-              className={`sidebar__link${
-                location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
-                  ? ' sidebar__link--active'
-                  : ''
-              }`}
-              to={item.to}
-            >
-              {item.label}
-            </Link>
+          {navGroups.map((group) => (
+            <div key={group.label ?? 'home'} className="sidebar__nav-group">
+              {group.label ? <p className="sidebar__nav-label">{group.label}</p> : null}
+              {group.items.map((item) => (
+                <Link
+                  key={item.to}
+                  className={`sidebar__link${isActive(item.to) ? ' sidebar__link--active' : ''}`}
+                  to={item.to}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="sidebar__footer">

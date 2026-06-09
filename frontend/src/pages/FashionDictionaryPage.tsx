@@ -227,7 +227,7 @@ export function FashionDictionaryPage() {
   return (
     <div className="page-stack page-stack--wide">
       <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Sprint A tooling</p>
+        <p className="dashboard-card__eyebrow">Catalog intelligence</p>
         <h1>Fashion dictionary</h1>
         <p>
           Manage deterministic color and size aliases used by the variant resolver. Shop-specific

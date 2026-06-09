@@ -35,7 +35,15 @@ from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.inventory_repository import InventoryRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.variant_repository import VariantRepository
-from app.schemas.order import OrderCancelRequest, OrderListFilters, OrderRead, OrderTimelineEvent
+from app.schemas.order import (
+    OrderCancelRequest,
+    OrderItemRead,
+    OrderListFilters,
+    OrderRead,
+    OrderTimelineEvent,
+    PaymentRead,
+    ShipmentRead,
+)
 from app.services.shop_service import ShopService
 from app.services.slot_merge_service import compute_missing_fields
 
@@ -408,6 +416,9 @@ class OrderService:
 
     def _to_read(self, order: Order) -> OrderRead:
         data = OrderRead.model_validate(order)
+        data.items = [OrderItemRead.model_validate(item) for item in order.items]
+        data.payments = [PaymentRead.model_validate(payment) for payment in order.payments]
+        data.shipments = [ShipmentRead.model_validate(shipment) for shipment in order.shipments]
         data.timeline = self.build_timeline(order)
         return data
 

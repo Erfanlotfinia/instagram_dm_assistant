@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.enums import (
     AgentMode,
+    AgentRunStatus,
     AgentWorkflowState,
     ConfidenceSource,
     ConversationPriorityLevel,
@@ -27,7 +28,11 @@ from app.domain.enums import (
     OrderRecoveryStatus,
     OrderShippingStatus,
     OrderStatus,
+    PaymentProvider,
+    PaymentRecordStatus,
     ProductStatus,
+    ShipmentProvider,
+    ShipmentStatus,
     SellingStyle,
     SuggestedReplyGeneratedBy,
     SuggestedReplyStatus,
@@ -36,6 +41,9 @@ from app.domain.enums import (
     UserRole,
 )
 from app.domain.models import (
+    AbandonedOrderRecoveryRule,
+    AgentDecisionTrace,
+    AgentRun,
     ColorAlias,
     CommentToDmTrigger,
     Conversation,
@@ -47,7 +55,9 @@ from app.domain.models import (
     Message,
     Order,
     OrderItem,
+    Payment,
     Product,
+    Shipment,
     ProductUpsell,
     ProductVariant,
     Shop,
@@ -471,6 +481,177 @@ def _seed_failed_jobs(
     logger.info("Seeded demo failed jobs for system health UI")
 
 
+def _seed_recovery_rule(db: Session, shop_id: UUID) -> None:
+    if db.scalar(
+        select(AbandonedOrderRecoveryRule).where(AbandonedOrderRecoveryRule.shop_id == shop_id).limit(1)
+    ) is not None:
+        return
+    db.add(
+        AbandonedOrderRecoveryRule(
+            shop_id=shop_id,
+            trigger_after_minutes=60,
+            max_attempts=2,
+            message_template=(
+                "Hi {customer_name}, your order ({order_total} {currency}) is still waiting for payment. "
+                "Reply here if you need help completing checkout."
+            ),
+            is_active=True,
+        )
+    )
+    logger.info("Seeded abandoned-order recovery rule")
+
+
+def _seed_decision_traces(
+    db: Session,
+    *,
+    conv_order_ready: Conversation,
+    conv_handoff: Conversation,
+    hoodie: Product,
+    hoodie_variant: ProductVariant | None,
+) -> None:
+    if db.scalar(select(AgentDecisionTrace).limit(1)) is not None:
+        return
+
+    specs = [
+        (
+            conv_order_ready,
+            "demo-msg-ali-in-1",
+            AgentWorkflowState.WAITING_FOR_CONFIRMATION,
+            "buy_product",
+            {"color": "مشکی", "size": "L", "quantity": 1},
+            {"color": "black", "size": "L", "quantity": 1},
+            {"intent": 0.92, "variant": 0.91, "requires_preview": False, "requires_handoff": False, "risk_reasons": []},
+            False,
+            "Resolved hoodie variant HD-BLK-L; awaiting customer confirmation.",
+        ),
+        (
+            conv_handoff,
+            "demo-msg-sara-in-1",
+            AgentWorkflowState.HUMAN_HANDOFF,
+            "buy_product",
+            {"color": "XL", "quantity": 1},
+            {"color": "xl", "quantity": 1},
+            {"intent": 0.7, "variant": 0.42, "requires_preview": True, "requires_handoff": True, "risk_reasons": ["low_variant_confidence"]},
+            True,
+            "Variant XL not confidently resolved; routed to operator handoff.",
+        ),
+    ]
+    for conversation, message_key, next_state, intent, extracted, normalized, risk_score, handoff, summary in specs:
+        message = db.scalar(select(Message).where(Message.instagram_message_id == message_key))
+        if message is None:
+            continue
+        agent_run = AgentRun(
+            conversation_id=conversation.id,
+            input_message_id=message.id,
+            model_name="demo-seed-agent",
+            prompt_version="seed-v1",
+            input_json={"message_text": message.text},
+            output_json={"intent": intent},
+            status=AgentRunStatus.SUCCESS,
+            is_simulation=False,
+        )
+        db.add(agent_run)
+        db.flush()
+        db.add(
+            AgentDecisionTrace(
+                conversation_id=conversation.id,
+                message_id=message.id,
+                agent_run_id=agent_run.id,
+                intent=intent,
+                extracted_slots=extracted,
+                normalized_slots=normalized,
+                product_candidates=[{"product_id": str(hoodie.id), "title": hoodie.title, "score": 0.88}],
+                selected_product_id=hoodie.id,
+                variant_resolution={
+                    "variant_id": str(hoodie_variant.id) if hoodie_variant is not None else None,
+                    "sku": hoodie_variant.sku if hoodie_variant is not None else None,
+                    "confidence": risk_score.get("variant", 0.5),
+                },
+                inventory_result={"available": hoodie_variant is not None},
+                risk_score=risk_score,
+                order_action={"order_id": None, "status": None},
+                next_state=next_state.value,
+                auto_send_allowed=not handoff,
+                human_handoff_required=handoff,
+                reasoning_summary=summary,
+            )
+        )
+    logger.info("Seeded agent decision traces for risk and conversation detail views")
+
+
+def _ensure_order_fulfillment_records(
+    db: Session,
+    order: Order,
+    *,
+    payment_status: OrderPaymentStatus,
+    shipping_status: OrderShippingStatus,
+    reference_key: str,
+    order_status: OrderStatus | None = None,
+) -> None:
+    """Backfill Payment and Shipment rows so order detail pages show fulfillment info."""
+    now = datetime.now(UTC)
+    resolved_status = order_status or order.status
+
+    if db.scalar(select(Payment).where(Payment.order_id == order.id).limit(1)) is None:
+        record_status: PaymentRecordStatus | None = None
+        if payment_status == OrderPaymentStatus.PAID:
+            record_status = PaymentRecordStatus.PAID
+        elif payment_status == OrderPaymentStatus.PENDING:
+            record_status = PaymentRecordStatus.PENDING
+        elif resolved_status == OrderStatus.EXPIRED:
+            record_status = PaymentRecordStatus.CANCELLED
+        elif (
+            payment_status == OrderPaymentStatus.UNPAID
+            and resolved_status == OrderStatus.WAITING_FOR_CONFIRMATION
+        ):
+            record_status = PaymentRecordStatus.CREATED
+
+        if record_status is not None:
+            db.add(
+                Payment(
+                    order_id=order.id,
+                    provider=PaymentProvider.MOCK,
+                    status=record_status,
+                    payment_url=f"http://localhost:8800/api/v1/payments/mock/pay/demo-{reference_key}",
+                    provider_reference=f"demo-pay-{reference_key}",
+                    callback_processed_at=now - timedelta(hours=2) if record_status == PaymentRecordStatus.PAID else None,
+                    raw_payload={"seed": True, "reference_key": reference_key},
+                )
+            )
+
+    if shipping_status in {
+        OrderShippingStatus.PREPARING,
+        OrderShippingStatus.SHIPPED,
+        OrderShippingStatus.DELIVERED,
+    }:
+        if db.scalar(select(Shipment).where(Shipment.order_id == order.id).limit(1)) is None:
+            shipment_status = ShipmentStatus.PREPARING
+            if shipping_status == OrderShippingStatus.SHIPPED:
+                shipment_status = ShipmentStatus.SHIPPED
+            elif shipping_status == OrderShippingStatus.DELIVERED:
+                shipment_status = ShipmentStatus.DELIVERED
+            tracking_suffix = reference_key.replace("demo-order-", "").upper()[:8]
+            db.add(
+                Shipment(
+                    order_id=order.id,
+                    provider=ShipmentProvider.MANUAL,
+                    status=shipment_status,
+                    tracking_code=(
+                        f"DEMO-{tracking_suffix}"
+                        if shipment_status in {ShipmentStatus.SHIPPED, ShipmentStatus.DELIVERED}
+                        else None
+                    ),
+                    tracking_url=(
+                        f"https://tracking.example.com/{tracking_suffix.lower()}"
+                        if shipment_status in {ShipmentStatus.SHIPPED, ShipmentStatus.DELIVERED}
+                        else None
+                    ),
+                    shipped_at=now - timedelta(hours=1) if shipment_status != ShipmentStatus.PREPARING else None,
+                    delivered_at=now - timedelta(minutes=30) if shipment_status == ShipmentStatus.DELIVERED else None,
+                )
+            )
+
+
 def _ensure_order_with_item(
     db: Session,
     *,
@@ -495,6 +676,13 @@ def _ensure_order_with_item(
     if existing is not None:
         if existing.recovery_status != recovery_status:
             existing.recovery_status = recovery_status
+        _ensure_order_fulfillment_records(
+            db,
+            existing,
+            payment_status=payment_status,
+            shipping_status=shipping_status,
+            reference_key=reference_key,
+        )
         return existing
 
     order = Order(
@@ -531,7 +719,53 @@ def _ensure_order_with_item(
             total_price=variant.price,
         )
     )
+    _ensure_order_fulfillment_records(
+        db,
+        order,
+        payment_status=payment_status,
+        shipping_status=shipping_status,
+        reference_key=reference_key,
+    )
     return order
+
+
+def _backfill_demo_order_fulfillment(db: Session, shop_id: UUID) -> None:
+    """Ensure payment/shipment rows exist for every order in the shop (idempotent)."""
+    now = datetime.now(UTC)
+    orders = db.scalars(select(Order).where(Order.shop_id == shop_id)).all()
+    for order in orders:
+        reference_key = order.notes or f"order-{str(order.id)[:8]}"
+        _ensure_order_fulfillment_records(
+            db,
+            order,
+            payment_status=order.payment_status,
+            shipping_status=order.shipping_status,
+            reference_key=reference_key,
+            order_status=order.status,
+        )
+
+        # Showcase a fully shipped order in the demo UI.
+        if reference_key == "demo-order-paid-hoodie":
+            order.status = OrderStatus.SHIPPED
+            order.shipping_status = OrderShippingStatus.SHIPPED
+            shipment = db.scalar(select(Shipment).where(Shipment.order_id == order.id).limit(1))
+            if shipment is None:
+                _ensure_order_fulfillment_records(
+                    db,
+                    order,
+                    payment_status=order.payment_status,
+                    shipping_status=OrderShippingStatus.SHIPPED,
+                    reference_key=reference_key,
+                    order_status=order.status,
+                )
+                shipment = db.scalar(select(Shipment).where(Shipment.order_id == order.id).limit(1))
+            if shipment is not None:
+                shipment.status = ShipmentStatus.SHIPPED
+                shipment.tracking_code = "DEMO-HOODIE-TRK"
+                shipment.tracking_url = "https://tracking.example.com/hoodie"
+                shipment.shipped_at = now - timedelta(hours=1)
+
+    logger.info("Backfilled payment and shipment records for %s demo orders", len(orders))
 
 
 def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: InstagramAccount) -> None:
@@ -569,9 +803,18 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
                 confidence_threshold_variant=Decimal("0.85"),
                 confidence_threshold_address=Decimal("0.80"),
                 high_value_order_threshold=Decimal("500"),
+                risk_policy_json={
+                    "handoff_for_high_risk": True,
+                    "handoff_for_low_variant_confidence": True,
+                },
             )
         )
         logger.info("Created shop agent studio settings")
+    elif agent_settings is not None and not agent_settings.risk_policy_json:
+        agent_settings.risk_policy_json = {
+            "handoff_for_high_risk": True,
+            "handoff_for_low_variant_confidence": True,
+        }
 
     shops = ShopRepository(db)
     members = ShopMemberRepository(db)
@@ -1035,6 +1278,17 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
         ali=ali,
         sara=sara,
     )
+
+    _seed_recovery_rule(db, shop.id)
+    _seed_decision_traces(
+        db,
+        conv_order_ready=conv_order_ready,
+        conv_handoff=conv_handoff,
+        hoodie=hoodie,
+        hoodie_variant=hoodie_variant,
+    )
+
+    _backfill_demo_order_fulfillment(db, shop.id)
 
     db.flush()
     logger.info("Rich demo data seeded for shop %s", shop.slug)
