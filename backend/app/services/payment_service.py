@@ -15,6 +15,7 @@ from app.domain.enums import (
     OrderStatus,
     PaymentProvider,
     PaymentRecordStatus,
+    PilotEventSeverity,
 )
 from app.domain.models import Order, Payment, User
 from app.repositories.payment_repository import PaymentRepository
@@ -24,6 +25,7 @@ from app.services.conversation_priority_service import ConversationPriorityServi
 from app.services.instagram_send_service import InstagramSendService
 from app.services.order_service import OrderService
 from app.services.payment_providers import get_payment_provider
+from app.services.pilot_service import PilotService
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +97,7 @@ class PaymentService:
             order = self.order_service.get_order_internal(payment.order_id)
             if order:
                 order.payment_status = OrderPaymentStatus.FAILED
+                PilotService(self.db).log_event(order.shop_id, "payment_callback_error", PilotEventSeverity.ERROR, "Payment callback failed", description=f"Payment callback status {callback_status.value}", metadata={"payment_id": str(payment.id), "order_id": str(order.id)})
             self.payments.commit()
             logger.info(
                 "Mock payment callback failed order=%s payment=%s status=%s",

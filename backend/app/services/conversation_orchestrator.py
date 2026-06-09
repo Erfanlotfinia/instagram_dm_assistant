@@ -42,6 +42,7 @@ from app.services.llm_extraction_service import LLMExtractionService, mask_sensi
 from app.services.order_service import OrderService
 from app.services.agent_risk_scoring_service import AgentRiskScoringInput, AgentRiskScoringService
 from app.services.payment_service import PaymentService
+from app.services.pilot_service import PilotService
 from app.services.product_semantic_search_service import ProductSemanticSearchService
 from app.services.response_generation_service import ReplyFacts, ResponseGenerationService
 from app.services.suggested_reply_service import SuggestedReplyService
@@ -272,7 +273,13 @@ class ConversationOrchestrator:
             conversation.state = ConversationState.PENDING_HANDOFF
 
         payment_url: str | None = None
-        order_side_effects_allowed = decision.auto_send_allowed and not risk_score.requires_preview and not risk_score.requires_handoff and (not conversation.is_simulation or self.allow_simulated_order_side_effects)
+        pilot_service = PilotService(self.db)
+        pilot_order_allowed, pilot_order_reasons = pilot_service.enforce_order_allowed(
+            conversation.shop_id, product.id if product is not None else None
+        )
+        if pilot_order_reasons:
+            combined_reasons.extend(pilot_order_reasons)
+        order_side_effects_allowed = decision.auto_send_allowed and not risk_score.requires_preview and not risk_score.requires_handoff and pilot_order_allowed and (not conversation.is_simulation or self.allow_simulated_order_side_effects)
 
         if order_side_effects_allowed and extraction.intent == AgentIntent.CANCEL_ORDER:
             active_order = self.order_service.cancel_active_for_conversation(
@@ -290,6 +297,7 @@ class ConversationOrchestrator:
             )
             if active_order is not None:
                 CREATED_ORDERS.inc()
+                AuditService(self.db).log(action="pilot_auto_order_created", entity_type="order", shop_id=conversation.shop_id, entity_id=str(active_order.id), metadata={"conversation_id": str(conversation.id)})
                 high_value_threshold = float(live_agent_settings.get("high_value_order_threshold", 500.0))
                 preview_high_value_orders = live_agent_settings.get("preview_required_for_high_value_order", True)
                 if (
@@ -440,7 +448,15 @@ class ConversationOrchestrator:
             confidence=extraction.confidence.intent,
         )
         outbound = None
-        if decision.auto_send_allowed and not risk_score.requires_preview and not risk_score.requires_handoff and not conversation.is_simulation:
+        pilot_send_allowed, pilot_send_reasons = PilotService(self.db).enforce_auto_send_allowed(
+            conversation.shop_id, conversation.instagram_account_id
+        )
+        if pilot_send_reasons:
+            combined_reasons.extend(pilot_send_reasons)
+            preview_reason = ";".join(combined_reasons)
+            conversation.preview_required = True
+            conversation.preview_reason = preview_reason
+        if decision.auto_send_allowed and not risk_score.requires_preview and not risk_score.requires_handoff and pilot_send_allowed and not conversation.is_simulation:
             outbound = self.send_service.send_text_message(
                 conversation_id, reply, commit=False, is_simulation=False
             )
