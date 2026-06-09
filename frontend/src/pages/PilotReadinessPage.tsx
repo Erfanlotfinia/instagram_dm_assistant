@@ -8,6 +8,7 @@ import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { apiClient } from '../services/apiClient';
 import type { PilotChecklistItem, PilotEvent, PilotMetrics } from '../types/pilot';
+import type { EmergencyStopScopePreview } from '../types/trust';
 
 type EventFilter = 'all' | PilotEvent['severity'];
 
@@ -137,6 +138,8 @@ export function PilotReadinessPage() {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [stopReason, setStopReason] = useState('');
+  const [scopePreview, setScopePreview] = useState<EmergencyStopScopePreview | null>(null);
   const [eventFilter, setEventFilter] = useState<EventFilter>('all');
 
   const readinessQuery = useQuery({
@@ -169,15 +172,19 @@ export function PilotReadinessPage() {
   };
 
   const stopMutation = useMutation({
-    mutationFn: () => apiClient.activatePilotEmergencyStop(selectedShopId!),
+    mutationFn: () => apiClient.activatePilotModeEmergencyStop(selectedShopId!, stopReason || undefined),
     onSuccess: async (data) => {
       showToast('Emergency stop activated', 'success');
+      setScopePreview(data.scope_preview);
       setStopDialogOpen(false);
       queryClient.setQueryData(['pilot-readiness', selectedShopId], (current) =>
         current ? { ...current, pilot_settings: data.pilot_settings } : current,
       );
       await queryClient.invalidateQueries({ queryKey: ['pilot-events', selectedShopId] });
       await queryClient.invalidateQueries({ queryKey: ['pilot-readiness', selectedShopId] });
+      if (data.incident_id) {
+        showToast(`Incident opened: ${data.incident_id}`, 'info');
+      }
     },
     onError: (error: Error) => showToast(error.message, 'error'),
   });
@@ -269,6 +276,12 @@ export function PilotReadinessPage() {
           ) : null}
           {settings?.emergency_stop_enabled ? (
             <div className="alert alert--error">Emergency stop active: auto-send and auto-order progression are disabled.</div>
+          ) : null}
+          {scopePreview ? (
+            <div className="alert alert--warning">
+              Last emergency stop affected {scopePreview.active_conversation_count} active conversation(s),{' '}
+              {scopePreview.simulation_conversation_count} simulation conversation(s).
+            </div>
           ) : null}
           {settings && !settings.pilot_enabled ? (
             <div className="alert alert--warning">Auto-send disabled for pilot traffic until pilot mode is enabled.</div>
@@ -517,12 +530,24 @@ export function PilotReadinessPage() {
       <ConfirmDialog
         open={stopDialogOpen}
         title="Activate emergency stop?"
-        message="This immediately disables auto-send and auto-order progression for the selected shop. Resume pilot when the issue is resolved."
+        message="This immediately disables auto-send and auto-order progression for the selected shop. Review scope before confirming."
         confirmLabel="Activate emergency stop"
         onConfirm={() => stopMutation.mutate()}
         onCancel={() => setStopDialogOpen(false)}
         isLoading={stopMutation.isPending}
       />
+      {stopDialogOpen ? (
+        <section className="dashboard-card dashboard-card--wide">
+          <h3>Scope preview</h3>
+          <p className="dashboard-card__subtitle">
+            Active conversations remain open but automation will not write orders or send messages.
+          </p>
+          <label className="form-field">
+            <span>Reason</span>
+            <textarea value={stopReason} onChange={(e) => setStopReason(e.target.value)} rows={3} />
+          </label>
+        </section>
+      ) : null}
     </div>
   );
 }

@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.enums import UserRole
-from app.domain.models import InstagramAccount, Shop, ShopMember, User
+from app.domain.models import Shop, ShopMember, User
 from app.repositories.shop_repository import ShopMemberRepository, ShopRepository
 from app.schemas.shop import (
     InstagramAccountStatusSummary,

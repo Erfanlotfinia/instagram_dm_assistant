@@ -65,7 +65,7 @@ def pilot_emergency_stop(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> PilotActionResponse:
     service = PilotService(db)
-    settings, event = service.set_emergency_stop(shop_id, True, user_id=current_user.id)
+    settings, event, scope_preview = service.set_emergency_stop(shop_id, True, user_id=current_user.id)
     return PilotActionResponse(pilot_settings=service.to_settings_read(settings), event=service.to_event_read(event))
 
 
@@ -77,7 +77,7 @@ def pilot_resume(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> PilotActionResponse:
     service = PilotService(db)
-    settings, event = service.set_emergency_stop(shop_id, False, user_id=current_user.id)
+    settings, event, _scope = service.set_emergency_stop(shop_id, False, user_id=current_user.id)
     return PilotActionResponse(pilot_settings=service.to_settings_read(settings), event=service.to_event_read(event))
 
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.domain.models import ConversationSlots
-from app.schemas.agent import AgentExtractionResult, ExtractedSlots
+from app.schemas.agent import AgentExtractionResult
 
 CUSTOMER_SLOT_FIELDS = ("customer_name", "phone", "city", "address", "postal_code")
 VARIANT_SLOT_FIELDS = ("color", "size", "quantity")
@@ -37,8 +37,8 @@ def slots_to_dict(slots: ConversationSlots) -> dict[str, Any]:
 
 def _slots_to_dict(slots: ConversationSlots) -> dict[str, Any]:
     return {
-        "product_id": slots.product_id,
-        "product_variant_id": slots.product_variant_id,
+        "product_id": str(slots.product_id) if slots.product_id else None,
+        "product_variant_id": str(slots.product_variant_id) if slots.product_variant_id else None,
         "instagram_post_url": slots.instagram_post_url,
         "color": slots.color,
         "normalized_color": slots.normalized_color,

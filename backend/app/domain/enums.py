@@ -360,3 +360,61 @@ class ResolverFeedbackAction(str, enum.Enum):
 class HybridFusionStrategy(str, enum.Enum):
     RRF = "rrf"
     DBSF = "dbsf"
+
+
+class SimulatorRunStatus(str, enum.Enum):
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class SimulatorRunSourceType(str, enum.Enum):
+    MANUAL = "manual"
+    SCENARIO_PACK = "scenario_pack"
+    INCIDENT_REPLAY = "incident_replay"
+
+
+class TraceEventType(str, enum.Enum):
+    RETRIEVAL_EVIDENCE = "retrieval_evidence"
+    SLOTS_EXTRACTED = "slots_extracted"
+    CONFIDENCE_BAND = "confidence_band"
+    POLICY_CHECK = "policy_check"
+    ACTION_ATTEMPTED = "action_attempted"
+    ACTION_BLOCKED = "action_blocked"
+
+
+class PilotOperatingMode(str, enum.Enum):
+    SHADOW = "shadow"
+    COPILOT = "copilot"
+    AUTONOMOUS_LOW_RISK = "autonomous_low_risk"
+
+
+class PilotModeScope(str, enum.Enum):
+    GLOBAL = "global"
+    CATEGORY = "category"
+    CAMPAIGN = "campaign"
+
+
+class ScenarioPackType(str, enum.Enum):
+    HANDCRAFTED = "handcrafted"
+    SYNTHETIC = "synthetic"
+    INCIDENT_REPLAY = "incident_replay"
+
+
+class IncidentSeverity(str, enum.Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class IncidentStatus(str, enum.Enum):
+    OPEN = "open"
+    MITIGATED = "mitigated"
+    RESOLVED = "resolved"
+
+
+class IncidentTrigger(str, enum.Enum):
+    EMERGENCY_STOP = "emergency_stop"
+    POLICY_BREACH = "policy_breach"
+    MANUAL = "manual"

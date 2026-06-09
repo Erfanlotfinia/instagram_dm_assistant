@@ -24,6 +24,8 @@ import { ProductDetailPage } from '../pages/ProductDetailPage';
 import { ProductsPage } from '../pages/ProductsPage';
 import { PostRevenueAnalyticsPage } from '../pages/PostRevenueAnalyticsPage';
 import { PilotReadinessPage } from '../pages/PilotReadinessPage';
+import { PilotControlCenterPage } from '../pages/PilotControlCenterPage';
+import { IncidentTimelinePage } from '../pages/IncidentTimelinePage';
 import { RecoveryRulesPage } from '../pages/RecoveryRulesPage';
 import { RiskSettingsPage } from '../pages/RiskSettingsPage';
 import { SystemHealthPage } from '../pages/SystemHealthPage';
@@ -78,6 +80,31 @@ export function AppRoutes() {
         element={
           <AuthenticatedShell>
             <PilotReadinessPage />
+          </AuthenticatedShell>
+        }
+      />
+
+      <Route
+        path="/pilot-control"
+        element={
+          <AuthenticatedShell>
+            <PilotControlCenterPage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/incidents"
+        element={
+          <AuthenticatedShell>
+            <IncidentTimelinePage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/incidents/:incidentId"
+        element={
+          <AuthenticatedShell>
+            <IncidentTimelinePage />
           </AuthenticatedShell>
         }
       />

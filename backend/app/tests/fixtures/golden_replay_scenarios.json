@@ -1,0 +1,24 @@
+[
+  {
+    "item_key": "golden-buy-black-l",
+    "message_text": "می‌خوام مشکی سایز L",
+    "expected_json": {
+      "intent": "buy_product"
+    }
+  },
+  {
+    "item_key": "golden-ask-price",
+    "message_text": "قیمت چنده؟",
+    "expected_json": {
+      "intent": "ask_price"
+    }
+  },
+  {
+    "item_key": "golden-handoff",
+    "message_text": "با مدیر صحبت کنم، عصبانیم",
+    "expected_json": {
+      "intent": "human_help",
+      "requires_handoff": true
+    }
+  }
+]

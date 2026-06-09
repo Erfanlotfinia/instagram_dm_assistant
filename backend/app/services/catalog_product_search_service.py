@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.domain.models import User
+from app.domain.models import MediaProductLink, User
 from app.integrations.openai_client import LiveOpenAIEmbeddingClient, OpenAIEmbeddingClient
 from app.integrations.qdrant_client import LiveQdrantClient, QdrantClient
 from app.repositories.catalog_repository import ProductAliasRepository, ProductNormalizedRepository

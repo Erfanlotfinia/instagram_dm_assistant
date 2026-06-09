@@ -95,23 +95,82 @@ class PilotService:
         self.db.refresh(settings)
         return settings
 
-    def set_emergency_stop(self, shop_id: UUID, enabled: bool, *, user_id: UUID | None = None) -> tuple[PilotSettings, PilotEvent]:
+    def set_emergency_stop(
+        self,
+        shop_id: UUID,
+        enabled: bool,
+        *,
+        user_id: UUID | None = None,
+        reason: str | None = None,
+        open_incident: bool = True,
+    ) -> tuple[PilotSettings, PilotEvent, dict]:
         settings = self.get_or_create_settings(shop_id)
+        scope_preview = self.build_emergency_stop_scope_preview(shop_id)
         settings.emergency_stop_enabled = enabled
         settings.updated_at = _now()
+        metadata = {
+            "reason": reason,
+            "scope_preview": scope_preview,
+        }
         event = self.log_event(
             shop_id,
             "emergency_stop" if enabled else "resume",
             PilotEventSeverity.CRITICAL if enabled else PilotEventSeverity.INFO,
             "Emergency stop activated" if enabled else "Pilot automation resumed",
-            description="Auto-send and auto-order progression are blocked immediately." if enabled else "Automation restored subject to pilot limits and approvals.",
+            description=reason or (
+                "Auto-send and auto-order progression are blocked immediately."
+                if enabled
+                else "Automation restored subject to pilot limits and approvals."
+            ),
+            metadata=metadata,
             user_id=user_id,
             commit=False,
         )
+        incident_id = None
+        if enabled and open_incident:
+            from app.services.incident_service import IncidentService
+
+            incident = IncidentService(self.db).open_from_emergency_stop(
+                shop_id,
+                user_id=user_id,
+                scope_preview=scope_preview,
+                reason=reason,
+            )
+            incident_id = incident.id
+            metadata["incident_id"] = str(incident_id)
         self.db.commit()
         self.db.refresh(settings)
         self.db.refresh(event)
-        return settings, event
+        scope_preview["incident_id"] = str(incident_id) if incident_id else None
+        return settings, event, scope_preview
+
+    def build_emergency_stop_scope_preview(self, shop_id: UUID) -> dict:
+        active_conversations = list(
+            self.db.scalars(
+                select(Conversation.id).where(
+                    Conversation.shop_id == shop_id,
+                    Conversation.is_simulation.is_(False),
+                    Conversation.state.in_([ConversationState.OPEN, ConversationState.PENDING_HANDOFF]),
+                )
+            ).all()
+        )
+        simulation_conversations = list(
+            self.db.scalars(
+                select(Conversation.id).where(
+                    Conversation.shop_id == shop_id,
+                    Conversation.is_simulation.is_(True),
+                )
+            ).all()
+        )
+        return {
+            "active_conversation_count": len(active_conversations),
+            "simulation_conversation_count": len(simulation_conversations),
+            "affected_conversation_ids": [str(conversation_id) for conversation_id in active_conversations[:50]],
+        }
+
+    def is_emergency_stop_active(self, shop_id: UUID) -> bool:
+        settings = self.get_or_create_settings(shop_id)
+        return bool(settings.emergency_stop_enabled)
 
     def log_event(
         self,
@@ -258,8 +317,10 @@ class PilotService:
         inventory_verified = self.db.scalar(select(InventoryMovement.id).join(ProductVariant).join(Product).where(Product.shop_id == shop_id, InventoryMovement.created_at >= _now() - timedelta(hours=24)).limit(1)) is not None
         payment_mode = bool(agent_settings and (agent_settings.risk_policy_json or agent_settings.discount_policy_json is not None))
         audit_logging = self.db.scalar(select(AdminAuditLog.id).where(AdminAuditLog.shop_id == shop_id).limit(1)) is not None
-        latest_ok = bool(latest and latest.status == "passed" and (latest.metrics_json or {}).get("thresholds_passed", {}))
-        thresholds_ok = latest_ok and all(bool(v) for v in (latest.metrics_json or {}).get("thresholds_passed", {}).values())
+        latest_metrics = (latest.metrics_json or {}) if latest else {}
+        thresholds_passed = latest_metrics.get("thresholds_passed") or {}
+        latest_ok = bool(latest and latest.status == "passed" and thresholds_passed)
+        thresholds_ok = latest_ok and all(bool(v) for v in thresholds_passed.values())
         return [
             PilotReadinessCriterion(key="latest_trl_validation", label="Latest TRL validation run passed thresholds", passed=thresholds_ok, detail=latest.status if latest else "No run"),
             PilotReadinessCriterion(key="no_critical_failed_jobs", label="No critical failed jobs", passed=failed_critical == 0, detail=f"{failed_critical} critical failed jobs"),

@@ -83,7 +83,9 @@ def build_readiness_payload() -> tuple[str, dict[str, CheckStatus], bool]:
         "qdrant": _check_qdrant(),
         "openai_config": _check_openai_config(),
     }
-    checks = {name: _normalize_check(result) for name, result in raw_checks.items()}
+    checks: dict[str, CheckStatus] = {
+        name: _normalize_check(result) for name, result in raw_checks.items()
+    }
     postgres_ok = checks["postgres"] == "ok"
     all_ok = all(value == "ok" for value in checks.values())
     if not postgres_ok:

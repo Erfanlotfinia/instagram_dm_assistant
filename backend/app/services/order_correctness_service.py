@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -18,7 +17,7 @@ from app.domain.enums import (
     OrderStatus,
     OrderTransitionTrigger,
 )
-from app.domain.models import InventoryReservation, Order, OrderItem, OrderItemDraft, OperatorReview, User
+from app.domain.models import Order, OrderItem, OrderItemDraft, OperatorReview, User
 from app.repositories.order_item_draft_repository import OrderItemDraftRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.order_state_transition_repository import OrderStateTransitionRepository
@@ -64,7 +63,7 @@ class OrderCorrectnessService:
         self.compensation = CompensationService(db, self.settings)
 
     def create_draft(self, payload: OrderDraftCreateRequest, user: User) -> OrderCorrectnessRead:
-        shop = self.shop_service.get_shop(payload.shop_id, user)
+        shop = self.shop_service.get_shop_entity(payload.shop_id, user)
         evaluation = self.policy.evaluate(None, shop, OrderCorrectnessAction.CREATE_DRAFT, record_attempt=False)
         if not evaluation.allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=evaluation.reasons)
@@ -131,7 +130,7 @@ class OrderCorrectnessService:
 
     def clarify(self, order_id: UUID, user: User, payload: OrderClarifyRequest) -> OrderCorrectnessRead:
         order = self._get_order_for_user(order_id, user)
-        shop = self.shop_service.get_shop(order.shop_id, user)
+        shop = self.shop_service.get_shop_entity(order.shop_id, user)
         evaluation = self.policy.evaluate(order, shop, OrderCorrectnessAction.CLARIFY)
         if not evaluation.allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=evaluation.reasons)
@@ -149,7 +148,7 @@ class OrderCorrectnessService:
 
     def confirm(self, order_id: UUID, user: User, payload: OrderConfirmRequest) -> OrderCorrectnessRead:
         order = self._get_order_for_user(order_id, user)
-        shop = self.shop_service.get_shop(order.shop_id, user)
+        shop = self.shop_service.get_shop_entity(order.shop_id, user)
         evaluation = self.policy.evaluate(order, shop, OrderCorrectnessAction.CONFIRM)
         if not evaluation.allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=evaluation.reasons)
@@ -201,7 +200,7 @@ class OrderCorrectnessService:
 
     def reserve(self, order_id: UUID, user: User, payload: OrderReserveRequest) -> OrderCorrectnessRead:
         order = self._get_order_for_user(order_id, user)
-        shop = self.shop_service.get_shop(order.shop_id, user)
+        shop = self.shop_service.get_shop_entity(order.shop_id, user)
         evaluation = self.policy.evaluate(order, shop, OrderCorrectnessAction.RESERVE)
         if not evaluation.allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=evaluation.reasons)
@@ -238,7 +237,7 @@ class OrderCorrectnessService:
 
     def payment_link(self, order_id: UUID, user: User) -> OrderCorrectnessRead:
         order = self._get_order_for_user(order_id, user)
-        shop = self.shop_service.get_shop(order.shop_id, user)
+        shop = self.shop_service.get_shop_entity(order.shop_id, user)
         evaluation = self.policy.evaluate(order, shop, OrderCorrectnessAction.PAYMENT_LINK)
         if not evaluation.allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=evaluation.reasons)
@@ -272,7 +271,7 @@ class OrderCorrectnessService:
 
     def complete(self, order_id: UUID, user: User) -> OrderCorrectnessRead:
         order = self._get_order_for_user(order_id, user)
-        shop = self.shop_service.get_shop(order.shop_id, user)
+        shop = self.shop_service.get_shop_entity(order.shop_id, user)
         evaluation = self.policy.evaluate(order, shop, OrderCorrectnessAction.COMPLETE)
         if not evaluation.allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=evaluation.reasons)
@@ -307,7 +306,7 @@ class OrderCorrectnessService:
 
     def cancel(self, order_id: UUID, user: User, payload: OrderCancelRequest) -> OrderCorrectnessRead:
         order = self._get_order_for_user(order_id, user)
-        shop = self.shop_service.get_shop(order.shop_id, user)
+        shop = self.shop_service.get_shop_entity(order.shop_id, user)
         evaluation = self.policy.evaluate(order, shop, OrderCorrectnessAction.CANCEL)
         if not evaluation.allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=evaluation.reasons)

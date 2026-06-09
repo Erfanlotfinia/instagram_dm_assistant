@@ -18,8 +18,12 @@ from app.api.v1.orders import router as orders_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.product_selection import router as product_selection_router
 from app.api.v1.pilot import router as pilot_router
+from app.api.v1.pilot_mode import router as pilot_mode_router
+from app.api.v1.policies import router as policies_router
 from app.api.v1.recovery import router as recovery_router
 from app.api.v1.resolve import router as resolve_router
+from app.api.v1.scenarios import router as scenarios_router
+from app.api.v1.traces import router as traces_router
 from app.api.v1.upsells import router as upsells_router
 from app.api.v1.products import router as products_router
 from app.api.v1.shops import router as shops_router
@@ -51,6 +55,10 @@ router.include_router(payments_router)
 router.include_router(webhooks_router)
 router.include_router(jobs_router)
 router.include_router(pilot_router)
+router.include_router(pilot_mode_router)
+router.include_router(policies_router)
+router.include_router(traces_router)
+router.include_router(scenarios_router)
 
 router.include_router(fashion_router)
 router.include_router(failed_jobs_platform_router)

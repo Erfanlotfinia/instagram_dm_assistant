@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     order_expiration_minutes: int = Field(default=30, ge=1)
     background_job_interval_seconds: int = Field(default=60, ge=10)
     embedding_refresh_batch_size: int = Field(default=50, ge=1)
+    default_model_version: str = "gpt-4o-mini"
+    default_prompt_version: str = "trust-layer-v1"
+    default_policy_version: str = "trust-layer-v1"
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ReplayPanel } from '../components/trust/ReplayPanel';
 import { ShopSelector } from '../components/ShopSelector';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
@@ -202,6 +203,7 @@ function SimulationResultPanel({ result }: { result: DMSimulatorResponse }) {
 export function DMSimulatorPage() {
   const { selectedShopId } = useShop();
   const { showToast } = useToast();
+  const [activeTab, setActiveTab] = useState<'live' | 'replay'>('live');
   const [instagramAccountId, setInstagramAccountId] = useState('');
   const [messageText, setMessageText] = useState<string>(EXAMPLE_MESSAGES[0].text);
   const [postUrl, setPostUrl] = useState('');
@@ -287,8 +289,32 @@ export function DMSimulatorPage() {
           this to test intents, product resolution, and reply drafting.
         </p>
         <ShopSelector />
+        <div className="filter-chips" role="tablist" aria-label="Simulator mode">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'live'}
+            className={`filter-chip${activeTab === 'live' ? ' filter-chip--active' : ''}`}
+            onClick={() => setActiveTab('live')}
+          >
+            Live simulate
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'replay'}
+            className={`filter-chip${activeTab === 'replay' ? ' filter-chip--active' : ''}`}
+            onClick={() => setActiveTab('replay')}
+          >
+            Deterministic replay
+          </button>
+        </div>
       </section>
 
+      {activeTab === 'replay' ? <ReplayPanel /> : null}
+
+      {activeTab === 'live' ? (
+      <>
       <section className="dashboard-card dashboard-card--wide dm-simulator-card">
         <div className="section-header section-header--stacked">
           <div>
@@ -487,6 +513,8 @@ export function DMSimulatorPage() {
         onCancel={() => setResetDialogOpen(false)}
         isLoading={resetMutation.isPending}
       />
+      </>
+      ) : null}
     </div>
   );
 }

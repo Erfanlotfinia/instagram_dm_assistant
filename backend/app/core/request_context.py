@@ -14,6 +14,7 @@ class RequestContext:
     tenant_id: str | None = None
     conversation_id: str | None = None
     order_id: str | None = None
+    trace_id: str | None = None
 
 
 _request_context: ContextVar[RequestContext | None] = ContextVar("request_context", default=None)
@@ -31,6 +32,7 @@ def set_request_context(
     tenant_id: str | None = None,
     conversation_id: str | None = None,
     order_id: str | None = None,
+    trace_id: str | None = None,
 ) -> RequestContext:
     ctx = RequestContext(
         request_id=request_id or new_request_id(),
@@ -39,9 +41,23 @@ def set_request_context(
         tenant_id=tenant_id,
         conversation_id=conversation_id,
         order_id=order_id,
+        trace_id=trace_id,
     )
     _request_context.set(ctx)
     return ctx
+
+
+def set_trace_context(trace_id: str | None = None) -> RequestContext:
+    current = get_request_context()
+    return set_request_context(
+        request_id=current.request_id if current else new_request_id(),
+        ip_address=current.ip_address if current else None,
+        user_agent=current.user_agent if current else None,
+        tenant_id=current.tenant_id if current else None,
+        conversation_id=current.conversation_id if current else None,
+        order_id=current.order_id if current else None,
+        trace_id=trace_id or new_request_id(),
+    )
 
 
 def set_order_context(tenant_id: str, order_id: str, conversation_id: str | None = None) -> RequestContext:
@@ -65,11 +81,18 @@ def get_request_id() -> str | None:
     return ctx.request_id if ctx else None
 
 
+def get_trace_id() -> str | None:
+    ctx = get_request_context()
+    return ctx.trace_id if ctx else None
+
+
 def context_log_extra() -> dict[str, Any]:
     ctx = get_request_context()
     if ctx is None:
         return {}
     extra: dict[str, Any] = {"request_id": ctx.request_id}
+    if ctx.trace_id:
+        extra["trace_id"] = ctx.trace_id
     if ctx.ip_address:
         extra["ip_address"] = ctx.ip_address
     if ctx.tenant_id:

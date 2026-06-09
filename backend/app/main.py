@@ -41,12 +41,9 @@ def create_app() -> FastAPI:
     add_exception_handlers(app)
     app.include_router(v1_router, prefix="/api/v1")
 
-    @app.get("/health", tags=["health"])
-    def root_health_check() -> dict[str, str]:
-        return {"status": "ok"}
+    from app.api.v1.health import health as root_health_check, ready as readiness_check
 
-    from app.api.v1.health import ready as readiness_check
-
+    app.add_api_route("/health", root_health_check, methods=["GET"], tags=["health"])
     app.add_api_route("/ready", readiness_check, methods=["GET"], tags=["health"])
 
     return app

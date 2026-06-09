@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from uuid import UUID
 
 from app.domain.enums import AgentIntent, AgentWorkflowState
 from app.domain.models import ConversationSlots, ProductVariant

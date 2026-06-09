@@ -17,6 +17,9 @@ class PilotSettingsBase(BaseModel):
     allowed_instagram_account_ids: list[UUID] = Field(default_factory=list)
     allowed_product_ids: list[UUID] | None = None
     emergency_stop_enabled: bool = False
+    operating_mode: str = "copilot"
+    category_overrides_json: dict = Field(default_factory=dict)
+    campaign_overrides_json: dict = Field(default_factory=dict)
 
 
 class PilotSettingsUpdate(BaseModel):
@@ -30,6 +33,9 @@ class PilotSettingsUpdate(BaseModel):
     allowed_instagram_account_ids: list[UUID] | None = None
     allowed_product_ids: list[UUID] | None = None
     emergency_stop_enabled: bool | None = None
+    operating_mode: str | None = None
+    category_overrides_json: dict | None = None
+    campaign_overrides_json: dict | None = None
 
 
 class PilotSettingsRead(PilotSettingsBase):
@@ -98,3 +104,34 @@ class PilotEventLogRead(BaseModel):
 class PilotActionResponse(BaseModel):
     pilot_settings: PilotSettingsRead
     event: PilotEventRead
+
+
+class EmergencyStopScopePreview(BaseModel):
+    active_conversation_count: int
+    simulation_conversation_count: int
+    affected_conversation_ids: list[UUID] = Field(default_factory=list)
+
+
+class EmergencyStopRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class EmergencyStopResponse(BaseModel):
+    pilot_settings: PilotSettingsRead
+    event: PilotEventRead
+    scope_preview: EmergencyStopScopePreview
+    incident_id: UUID | None = None
+
+
+class PilotModeUpdateRequest(BaseModel):
+    operating_mode: str
+    scope: str = "global"
+    scope_ref: str | None = None
+    reason: str | None = None
+    category_overrides_json: dict | None = None
+    campaign_overrides_json: dict | None = None
+
+
+class PilotModeUpdateResponse(BaseModel):
+    pilot_settings: PilotSettingsRead
+    history_id: UUID

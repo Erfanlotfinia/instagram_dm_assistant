@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 
 from app.domain.enums import AgentIntent, MessageChannel, MessageDirection, MessageType
 from app.domain.models import (
-    AgentAction,
     AgentDecisionTrace,
     AgentRun,
     Conversation,
@@ -26,7 +25,13 @@ from app.domain.models import (
     TRLValidationRun,
     TRLValidationScenarioResult,
 )
-from app.schemas.agent import AgentExtractionInput, AgentExtractionResult, ExtractedSlots, ExtractionConfidence
+from app.schemas.agent import (
+    AgentExtractionInput,
+    AgentExtractionResult,
+    ExtractedSlots,
+    ExtractionConfidence,
+    SemanticSearchHit,
+)
 from app.scripts.seed_trl_demo_data import seed_trl_demo_data
 from app.services.conversation_orchestrator import ConversationOrchestrator
 
@@ -83,11 +88,18 @@ class DeterministicSemanticSearch:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def search_internal(self, shop_id: UUID, query: str, limit: int = 1):
+    def search_internal(self, shop_id: UUID, query: str, limit: int = 1) -> list[SemanticSearchHit]:
         product = self.db.scalar(select(Product).where(Product.shop_id == shop_id).order_by(Product.created_at.asc()).limit(1))
         if product is None:
             return []
-        return [type("Hit", (), {"product_id": product.id})()]
+        return [
+            SemanticSearchHit(
+                product_id=product.id,
+                title=product.title,
+                score=1.0,
+                description=product.description,
+            )
+        ]
 
 
 class TRLValidationRunner:

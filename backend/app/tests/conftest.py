@@ -4,12 +4,13 @@ from collections.abc import Generator
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 import app.domain  # noqa: F401
-from app.db.base import Base
 from app.db.session import get_db_session
 from app.domain.enums import UserRole
 from app.domain.models import Shop, ShopMember
@@ -20,17 +21,30 @@ TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
     "postgresql+psycopg://postgres:postgres@localhost:5432/instagram_dm_assistant_test",
 )
+os.environ.setdefault("DATABASE_URL", TEST_DATABASE_URL)
+
+
+def _bootstrap_test_schema() -> None:
+    engine = create_engine(TEST_DATABASE_URL, pool_pre_ping=True)
+    with engine.begin() as connection:
+        connection.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+        connection.execute(text("CREATE SCHEMA public"))
+    engine.dispose()
+
+    alembic_cfg = Config("alembic.ini")
+    alembic_cfg.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
+    command.upgrade(alembic_cfg, "head")
 
 
 @pytest.fixture(scope="session")
 def engine():
+    _bootstrap_test_schema()
     test_engine = create_engine(TEST_DATABASE_URL, pool_pre_ping=True)
-    with test_engine.connect() as connection:
-        connection.execute(text("SELECT 1"))
-    Base.metadata.drop_all(bind=test_engine)
-    Base.metadata.create_all(bind=test_engine)
     yield test_engine
-    Base.metadata.drop_all(bind=test_engine)
+    with test_engine.begin() as connection:
+        connection.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+        connection.execute(text("CREATE SCHEMA public"))
+    test_engine.dispose()
 
 
 @pytest.fixture()

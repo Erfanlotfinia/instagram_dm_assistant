@@ -25,8 +25,8 @@ class JsonFormatter(logging.Formatter):
         for field in ("request_id", "ip_address", "shop_id", "user_id", "action"):
             if hasattr(record, field):
                 payload[field] = getattr(record, field)
-        if hasattr(record, "extra_data") and isinstance(record.extra_data, dict):
-            payload["data"] = mask_dict(record.extra_data)
+        if hasattr(record, "extra_data") and isinstance(getattr(record, "extra_data"), dict):
+            payload["data"] = mask_dict(getattr(record, "extra_data"))
         return json.dumps(payload, default=str)
 
 

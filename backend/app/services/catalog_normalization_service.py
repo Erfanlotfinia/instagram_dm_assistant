@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
-from uuid import UUID
 
 from sqlalchemy.orm import Session
 

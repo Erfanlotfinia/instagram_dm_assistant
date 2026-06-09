@@ -64,6 +64,15 @@ from app.domain.enums import (
     UserRole,
     VariantAliasType,
     PilotEventSeverity,
+    PilotModeScope,
+    PilotOperatingMode,
+    IncidentSeverity,
+    IncidentStatus,
+    IncidentTrigger,
+    ScenarioPackType,
+    SimulatorRunSourceType,
+    SimulatorRunStatus,
+    TraceEventType,
     WebhookDedupeOutcome,
     WebhookProcessingStatus,
     WebhookProvider,
@@ -144,6 +153,18 @@ class Shop(Base, TimestampMixin):
         back_populates="shop", cascade="all, delete-orphan", uselist=False
     )
     pilot_events: Mapped[list[PilotEvent]] = relationship(back_populates="shop", cascade="all, delete-orphan")
+    simulator_runs: Mapped[list["SimulatorRun"]] = relationship(
+        back_populates="shop", cascade="all, delete-orphan"
+    )
+    policy_versions: Mapped[list["PolicyVersion"]] = relationship(
+        back_populates="shop", cascade="all, delete-orphan"
+    )
+    scenario_packs: Mapped[list["ScenarioPack"]] = relationship(
+        back_populates="shop", cascade="all, delete-orphan"
+    )
+    incidents: Mapped[list["Incident"]] = relationship(
+        back_populates="shop", cascade="all, delete-orphan"
+    )
 
 
 class ShopMember(Base):
@@ -1328,6 +1349,13 @@ class PilotSettings(Base, TimestampMixin):
     allowed_instagram_account_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     allowed_product_ids: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     emergency_stop_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    operating_mode: Mapped[PilotOperatingMode] = mapped_column(
+        pg_enum(PilotOperatingMode, name="pilot_operating_mode"),
+        nullable=False,
+        default=PilotOperatingMode.COPILOT,
+    )
+    category_overrides_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    campaign_overrides_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
     shop: Mapped[Shop] = relationship(back_populates="pilot_settings")
 
@@ -1602,3 +1630,230 @@ class MediaProductLink(Base, TimestampMixin):
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     product: Mapped[Product] = relationship()
+
+
+class PolicyVersion(Base):
+    __tablename__ = "policy_versions"
+    __table_args__ = (UniqueConstraint("shop_id", "version", name="uq_policy_versions_shop_version"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    shop: Mapped[Shop] = relationship()
+    created_by_user: Mapped[User | None] = relationship()
+    simulator_runs: Mapped[list["SimulatorRun"]] = relationship(back_populates="policy_version")
+
+
+class SimulatorRun(Base):
+    __tablename__ = "simulator_runs"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_type: Mapped[SimulatorRunSourceType] = mapped_column(
+        pg_enum(SimulatorRunSourceType, name="simulator_run_source_type"),
+        nullable=False,
+        default=SimulatorRunSourceType.MANUAL,
+        index=True,
+    )
+    model_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    policy_version_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("policy_versions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    catalog_snapshot_hash: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    catalog_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    status: Mapped[SimulatorRunStatus] = mapped_column(
+        pg_enum(SimulatorRunStatus, name="simulator_run_status"),
+        nullable=False,
+        default=SimulatorRunStatus.RUNNING,
+        index=True,
+    )
+    total_items: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    passed_items: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_items: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    diff_summary_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    shop: Mapped[Shop] = relationship()
+    created_by_user: Mapped[User | None] = relationship()
+    policy_version: Mapped[PolicyVersion | None] = relationship(back_populates="simulator_runs")
+    items: Mapped[list["SimulatorRunItem"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+
+
+class SimulatorRunItem(Base):
+    __tablename__ = "simulator_run_items"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    run_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("simulator_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    item_key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    input_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    expected_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    actual_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    diff_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    passed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    trace_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True, index=True)
+    conversation_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    processing_time_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    run: Mapped[SimulatorRun] = relationship(back_populates="items")
+    conversation: Mapped[Conversation | None] = relationship()
+
+
+class TraceEvent(Base):
+    __tablename__ = "trace_events"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    trace_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, index=True)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    conversation_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    event_type: Mapped[TraceEventType] = mapped_column(
+        pg_enum(TraceEventType, name="trace_event_type"), nullable=False, index=True
+    )
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    shop: Mapped[Shop] = relationship()
+    conversation: Mapped[Conversation | None] = relationship()
+
+
+class ScenarioPack(Base, TimestampMixin):
+    __tablename__ = "scenario_packs"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    pack_type: Mapped[ScenarioPackType] = mapped_column(
+        pg_enum(ScenarioPackType, name="scenario_pack_type"), nullable=False, index=True
+    )
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scenarios_json: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    is_golden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    shop: Mapped[Shop] = relationship()
+    created_by_user: Mapped[User | None] = relationship()
+
+
+class PilotModeHistory(Base):
+    __tablename__ = "pilot_mode_history"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    previous_mode: Mapped[PilotOperatingMode | None] = mapped_column(
+        pg_enum(PilotOperatingMode, name="pilot_operating_mode"), nullable=True
+    )
+    new_mode: Mapped[PilotOperatingMode] = mapped_column(
+        pg_enum(PilotOperatingMode, name="pilot_operating_mode"), nullable=False
+    )
+    scope: Mapped[PilotModeScope] = mapped_column(
+        pg_enum(PilotModeScope, name="pilot_mode_scope"), nullable=False, default=PilotModeScope.GLOBAL
+    )
+    scope_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    changed_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    shop: Mapped[Shop] = relationship()
+    changed_by_user: Mapped[User | None] = relationship()
+
+
+class Incident(Base):
+    __tablename__ = "incidents"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    severity: Mapped[IncidentSeverity] = mapped_column(
+        pg_enum(IncidentSeverity, name="incident_severity"), nullable=False, index=True
+    )
+    status: Mapped[IncidentStatus] = mapped_column(
+        pg_enum(IncidentStatus, name="incident_status"), nullable=False, default=IncidentStatus.OPEN, index=True
+    )
+    trigger: Mapped[IncidentTrigger] = mapped_column(
+        pg_enum(IncidentTrigger, name="incident_trigger"), nullable=False, index=True
+    )
+    opened_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    opened_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    summary_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+    shop: Mapped[Shop] = relationship()
+    opened_by_user: Mapped[User | None] = relationship()
+    events: Mapped[list["IncidentEvent"]] = relationship(
+        back_populates="incident", cascade="all, delete-orphan"
+    )
+
+
+class IncidentEvent(Base):
+    __tablename__ = "incident_events"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    incident_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    actor_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    affected_conversation_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    incident: Mapped[Incident] = relationship(back_populates="events")
+    actor_user: Mapped[User | None] = relationship()

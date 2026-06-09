@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from app.domain.enums import (
     ConversationState,
@@ -25,7 +25,6 @@ from app.schemas.dashboard import (
     LowStockVariantSummary,
     TopSellingPostSummary,
 )
-from app.schemas.shop import ShopAgentSettings
 from app.services.shop_service import ShopService
 from app.services.upsell_service import UpsellService
 

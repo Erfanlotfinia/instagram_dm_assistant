@@ -51,7 +51,9 @@ const navGroups: NavGroup[] = [
     items: [
       { to: '/onboarding', label: 'Onboarding' },
       { to: '/simulator', label: 'DM Simulator' },
+      { to: '/pilot-control', label: 'Pilot Control' },
       { to: '/pilot-readiness', label: 'Pilot Readiness' },
+      { to: '/incidents', label: 'Incidents' },
       { to: '/trl-validation', label: 'TRL Validation' },
     ],
   },

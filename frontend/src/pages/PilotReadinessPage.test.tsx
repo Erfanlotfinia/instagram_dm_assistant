@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => {
   return {
     state,
     pilotSettings,
-    activatePilotEmergencyStop: vi.fn(),
+    activatePilotModeEmergencyStop: vi.fn(),
     resumePilot: vi.fn(),
   };
 });
@@ -82,9 +82,18 @@ vi.mock('../services/apiClient', () => ({
         },
       ],
     }),
-    activatePilotEmergencyStop: mocks.activatePilotEmergencyStop.mockImplementation(async () => {
+    activatePilotModeEmergencyStop: mocks.activatePilotModeEmergencyStop.mockImplementation(async () => {
       mocks.state.emergency_stop_enabled = true;
-      return { pilot_settings: mocks.pilotSettings(), event: {} };
+      return {
+        pilot_settings: mocks.pilotSettings(),
+        event: {},
+        scope_preview: {
+          active_conversation_count: 2,
+          simulation_conversation_count: 1,
+          affected_conversation_ids: ['c1', 'c2'],
+        },
+        incident_id: 'inc-1',
+      };
     }),
     resumePilot: mocks.resumePilot.mockImplementation(async () => {
       mocks.state.emergency_stop_enabled = false;
@@ -139,6 +148,6 @@ describe('PilotReadinessPage', () => {
     await waitFor(() => expect(stopButton).not.toBeDisabled());
     await user.click(stopButton);
     await user.click(await screen.findByRole('button', { name: /activate emergency stop/i }));
-    await waitFor(() => expect(mocks.activatePilotEmergencyStop).toHaveBeenCalledWith('s1'));
+    await waitFor(() => expect(mocks.activatePilotModeEmergencyStop).toHaveBeenCalledWith('s1', undefined));
   });
 });

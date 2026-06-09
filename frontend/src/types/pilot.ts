@@ -10,6 +10,9 @@ export interface PilotSettings {
   allowed_instagram_account_ids: string[];
   allowed_product_ids: string[] | null;
   emergency_stop_enabled: boolean;
+  operating_mode?: string;
+  category_overrides_json?: Record<string, string>;
+  campaign_overrides_json?: Record<string, string>;
   created_at: string;
   updated_at: string;
 }

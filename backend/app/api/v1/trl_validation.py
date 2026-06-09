@@ -27,7 +27,13 @@ def run_trl_validation(
     _membership: Annotated[ShopMember, Depends(get_shop_membership)],
     db: Annotated[Session, Depends(get_db_session)],
 ) -> TRLValidationRunRead:
-    return TRLValidationRunner(db).run(shop_id, created_by_user_id=current_user.id, reset_demo_data=payload.reset_demo_data, scenario_limit=payload.scenario_limit)
+    run = TRLValidationRunner(db).run(
+        shop_id,
+        created_by_user_id=current_user.id,
+        reset_demo_data=payload.reset_demo_data,
+        scenario_limit=payload.scenario_limit,
+    )
+    return TRLValidationRunRead.model_validate(run)
 
 
 @router.get("/runs", response_model=list[TRLValidationRunRead])
@@ -37,7 +43,7 @@ def list_trl_validation_runs(
     _membership: Annotated[ShopMember, Depends(get_shop_membership)],
     db: Annotated[Session, Depends(get_db_session)],
 ) -> list[TRLValidationRunRead]:
-    return TRLValidationRunner(db).list_runs(shop_id)
+    return [TRLValidationRunRead.model_validate(run) for run in TRLValidationRunner(db).list_runs(shop_id)]
 
 
 @router.get("/runs/{run_id}", response_model=TRLValidationRunRead)
@@ -51,7 +57,7 @@ def get_trl_validation_run(
     run = TRLValidationRunner(db).get_run(shop_id, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="TRL validation run not found")
-    return run
+    return TRLValidationRunRead.model_validate(run)
 
 
 @router.get("/runs/{run_id}/scenarios", response_model=list[TRLValidationScenarioResultRead])
@@ -63,7 +69,10 @@ def list_trl_validation_scenarios(
     db: Annotated[Session, Depends(get_db_session)],
     passed: bool | None = Query(default=None),
 ) -> list[TRLValidationScenarioResultRead]:
-    return TRLValidationRunner(db).list_results(shop_id, run_id, passed=passed)
+    return [
+        TRLValidationScenarioResultRead.model_validate(result)
+        for result in TRLValidationRunner(db).list_results(shop_id, run_id, passed=passed)
+    ]
 
 
 @router.get("/runs/{run_id}/risk-metrics", response_model=TRLRiskMetricsRead)
@@ -88,4 +97,4 @@ def reset_trl_validation(
     _membership: Annotated[ShopMember, Depends(get_shop_membership)],
     db: Annotated[Session, Depends(get_db_session)],
 ) -> TRLValidationResetResponse:
-    return TRLValidationRunner(db).reset(shop_id)
+    return TRLValidationResetResponse.model_validate(TRLValidationRunner(db).reset(shop_id))

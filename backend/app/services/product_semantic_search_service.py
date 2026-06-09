@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -16,6 +17,10 @@ from app.services.shop_service import ShopService
 logger = logging.getLogger(__name__)
 
 EMBEDDING_VECTOR_SIZE = 8
+
+
+class InternalSemanticSearch(Protocol):
+    def search_internal(self, shop_id: UUID, query: str, limit: int = 3) -> list[SemanticSearchHit]: ...
 
 
 class ProductSemanticSearchService:

@@ -16,6 +16,8 @@ from app.domain.enums import (
     AgentWorkflowState,
     ConversationEventType,
     ConversationState,
+    PilotOperatingMode,
+    TraceEventType,
 )
 from app.domain.models import AgentAction, AgentDecisionAudit, AgentDecisionTrace, AgentRun, Conversation, Message, Order, Product, ProductVariant, ShopAgentSettings
 from app.integrations.openai_client import LiveOpenAIChatClient, OpenAIChatClient
@@ -25,6 +27,7 @@ from app.repositories.agent_run_repository import AgentRunRepository
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.conversation_slots_repository import ConversationSlotsRepository
 from app.repositories.message_repository import MessageRepository
+from app.repositories.policy_version_repository import PolicyVersionRepository
 from app.repositories.product_repository import ProductRepository
 from app.repositories.variant_repository import VariantRepository
 from app.schemas.agent import AgentExtractionInput, AgentExtractionResult, ExtractionConfidence
@@ -35,15 +38,18 @@ from app.services.conversation_event_service import ConversationEventService
 from app.services.conversation_priority_service import ConversationPriorityService
 from app.services.customer_preferences_service import CustomerPreferencesService
 from app.services.auto_send_decision_service import AutoSendDecisionInput, AutoSendDecisionService
+from app.services.decision_trace_service import DecisionTraceService
 from app.services.handoff_service import evaluate_handoff
 from app.services.instagram_product_resolver import InstagramProductResolver
 from app.services.instagram_send_service import InstagramSendService
-from app.services.llm_extraction_service import LLMExtractionService, mask_sensitive_llm_output
+from app.services.llm_extraction_service import LLMExtractionProtocol, LLMExtractionService, mask_sensitive_llm_output
 from app.services.order_service import OrderService
 from app.services.agent_risk_scoring_service import AgentRiskScoringInput, AgentRiskScoringService
 from app.services.payment_service import PaymentService
+from app.services.pilot_mode_service import PilotModeService
 from app.services.pilot_service import PilotService
-from app.services.product_semantic_search_service import ProductSemanticSearchService
+from app.services.policy_engine import PolicyEngine, PolicyEvaluationContext, merge_policy_config
+from app.services.product_semantic_search_service import InternalSemanticSearch, ProductSemanticSearchService
 from app.services.response_generation_service import ReplyFacts, ResponseGenerationService
 from app.services.suggested_reply_service import SuggestedReplyService
 from app.services.upsell_service import UpsellService
@@ -63,8 +69,8 @@ class ConversationOrchestrator:
         self,
         db: Session,
         *,
-        llm_service: LLMExtractionService | None = None,
-        semantic_search: ProductSemanticSearchService | None = None,
+        llm_service: LLMExtractionProtocol | None = None,
+        semantic_search: InternalSemanticSearch | None = None,
         chat_client: OpenAIChatClient | None = None,
         qdrant_client: QdrantClient | None = None,
         settings: Settings | None = None,
@@ -86,6 +92,8 @@ class ConversationOrchestrator:
         self.order_service = OrderService(db, settings=self.settings)
         self.payment_service = PaymentService(db, settings=self.settings)
         self.risk_scoring = AgentRiskScoringService()
+        self.policy_engine = PolicyEngine()
+        self.trace_service = DecisionTraceService(db)
         self.allow_simulated_order_side_effects = allow_simulated_order_side_effects
 
         chat_client = chat_client or LiveOpenAIChatClient(self.settings)
@@ -113,6 +121,10 @@ class ConversationOrchestrator:
             logger.info("Agent run already exists for message %s; skipping duplicate processing", message_id)
             self.db.commit()
             return True
+
+        trace_id = self.trace_service.current_trace_id() or self.trace_service.bind_trace_context()
+        policy_eval = None
+        operating_mode: PilotOperatingMode | None = None
 
         ConversationEventService(self.db).record(
             conversation_id,
@@ -274,6 +286,17 @@ class ConversationOrchestrator:
 
         payment_url: str | None = None
         pilot_service = PilotService(self.db)
+        if pilot_service.is_emergency_stop_active(conversation.shop_id) and not conversation.is_simulation:
+            self._log_action(
+                conversation_id,
+                "order_side_effects_blocked",
+                {"intent": extraction.intent.value, "reason": "emergency_stop"},
+                {"reasons": ["pilot_emergency_stop_enabled"]},
+                confidence=extraction.confidence.intent,
+            )
+            conversation.preview_required = True
+            conversation.preview_reason = "pilot_emergency_stop_enabled"
+            conversation.suggested_outbound = None
         pilot_order_allowed, pilot_order_reasons = pilot_service.enforce_order_allowed(
             conversation.shop_id, product.id if product is not None else None
         )
@@ -282,12 +305,32 @@ class ConversationOrchestrator:
             and not risk_score.requires_preview
             and not risk_score.requires_handoff
             and (not conversation.is_simulation or self.allow_simulated_order_side_effects)
+            and not pilot_service.is_emergency_stop_active(conversation.shop_id)
         )
         draft_order_candidate = (
             product is not None
             and variant is not None
             and self.order_service.can_create_draft(slots, variant)
         )
+        write_trust = self._evaluate_trust_layer(
+            conversation=conversation,
+            pilot_service=pilot_service,
+            extraction=extraction,
+            handoff_required=conversation.handoff_required,
+            variant=variant,
+            inventory_available=inventory_available,
+            draft_order_candidate=draft_order_candidate,
+            would_auto_send=False,
+        )
+        policy_eval = write_trust["policy_eval"]
+        operating_mode = write_trust["operating_mode"]
+        trust_write_allowed = write_trust["trust_write_allowed"]
+        trust_reasons = list(write_trust["reasons"])
+        if trust_reasons:
+            combined_reasons.extend(trust_reasons)
+            preview_reason = ";".join(combined_reasons)
+            conversation.preview_required = True
+            conversation.preview_reason = preview_reason
         pilot_order_blocks_progression = (
             bool(pilot_order_reasons)
             and base_order_side_effects_allowed
@@ -299,7 +342,9 @@ class ConversationOrchestrator:
             preview_reason = ";".join(combined_reasons)
             conversation.preview_required = True
             conversation.preview_reason = preview_reason
-        order_side_effects_allowed = base_order_side_effects_allowed and pilot_order_allowed
+        order_side_effects_allowed = (
+            base_order_side_effects_allowed and pilot_order_allowed and trust_write_allowed
+        )
 
         if order_side_effects_allowed and extraction.intent == AgentIntent.CANCEL_ORDER:
             active_order = self.order_service.cancel_active_for_conversation(
@@ -327,7 +372,10 @@ class ConversationOrchestrator:
                     and high_value_threshold > 0
                     and float(active_order.total_amount) >= high_value_threshold
                 ):
-                    active_order.risk_flags = list({*(active_order.risk_flags or []), "high_value_order"})
+                    risk_flags = list(active_order.risk_flags or [])
+                    if "high_value_order" not in risk_flags:
+                        risk_flags.append("high_value_order")
+                    active_order.risk_flags = risk_flags
                     active_order.approval_source = "operator_required"
             if (
                 active_order is not None
@@ -481,7 +529,33 @@ class ConversationOrchestrator:
             conversation.preview_required = True
             conversation.preview_reason = preview_reason
             conversation.suggested_outbound = reply
-        if decision.auto_send_allowed and not force_preview and not risk_score.requires_handoff and pilot_send_allowed and not conversation.is_simulation:
+        send_trust = self._evaluate_trust_layer(
+            conversation=conversation,
+            pilot_service=pilot_service,
+            extraction=extraction,
+            handoff_required=conversation.handoff_required,
+            variant=variant,
+            inventory_available=inventory_available,
+            draft_order_candidate=False,
+            would_auto_send=decision.auto_send_allowed and not force_preview and not risk_score.requires_handoff,
+        )
+        trust_send_allowed = send_trust["trust_send_allowed"]
+        if send_trust["reasons"]:
+            combined_reasons.extend(send_trust["reasons"])
+            preview_reason = ";".join(combined_reasons)
+            force_preview = True
+            conversation.preview_required = True
+            conversation.preview_reason = preview_reason
+            conversation.suggested_outbound = reply
+        if (
+            decision.auto_send_allowed
+            and not force_preview
+            and not risk_score.requires_handoff
+            and pilot_send_allowed
+            and trust_send_allowed
+            and not conversation.is_simulation
+            and not pilot_service.is_emergency_stop_active(conversation.shop_id)
+        ):
             outbound = self.send_service.send_text_message(
                 conversation_id, reply, commit=False, is_simulation=False
             )
@@ -501,6 +575,7 @@ class ConversationOrchestrator:
             self._log_action(conversation_id, "preview_outbound", {"reply": reply}, {"preview_required": force_preview, "reason": preview_reason, "simulation": conversation.is_simulation}, confidence=extraction.confidence.intent)
 
         self._create_decision_trace(
+            trace_id=trace_id,
             conversation=conversation,
             message=message,
             agent_run=agent_run,
@@ -515,6 +590,18 @@ class ConversationOrchestrator:
             reply=reply,
             outbound_message_id=outbound.id if outbound is not None else None,
             handoff_reason=conversation.handoff_reason,
+            policy_eval=policy_eval,
+            operating_mode=operating_mode,
+        )
+        self._record_trust_trace_events(
+            trace_id=trace_id,
+            conversation=conversation,
+            extraction=extraction,
+            slots=slots,
+            product=product,
+            variant=variant,
+            policy_eval=policy_eval,
+            outbound_created=outbound is not None,
         )
 
         self._audit_decision(
@@ -552,20 +639,22 @@ class ConversationOrchestrator:
         media_id: str | None,
         message_text: str | None,
     ) -> tuple[Product | None, str]:
-        request = ResolveInstagramProductRequest(
-            instagram_post_url=shared_post_url or slots.instagram_post_url,
-            instagram_media_id=media_id,
-        )
-        resolved = self.product_resolver.resolve_internal(conversation.shop_id, request)
-        if resolved.requires_product_selection:
-            slots.product_candidates = [candidate.model_dump(mode="json") for candidate in resolved.candidates]
-            return None, "instagram_map_multi_product"
-        if resolved.product is not None:
-            product = self.products.get_for_shop(conversation.shop_id, resolved.product.id)
-            slots.product_candidates = [candidate.model_dump(mode="json") for candidate in resolved.candidates]
-            return product, "instagram_map"
+        post_url = shared_post_url or slots.instagram_post_url
+        if post_url or media_id:
+            request = ResolveInstagramProductRequest(
+                instagram_post_url=post_url,
+                instagram_media_id=media_id,
+            )
+            resolved = self.product_resolver.resolve_internal(conversation.shop_id, request)
+            if resolved.requires_product_selection:
+                slots.product_candidates = [candidate.model_dump(mode="json") for candidate in resolved.candidates]
+                return None, "instagram_map_multi_product"
+            if resolved.product is not None:
+                product = self.products.get_for_shop(conversation.shop_id, resolved.product.id)
+                slots.product_candidates = [candidate.model_dump(mode="json") for candidate in resolved.candidates]
+                return product, "instagram_map"
 
-        query = message_text or shared_post_url or ""
+        query = message_text or post_url or ""
         if query.strip():
             hits = self.semantic_search.search_internal(conversation.shop_id, query, limit=1)
             if hits:
@@ -680,9 +769,166 @@ class ConversationOrchestrator:
         lowered = (text or "").lower()
         return any(term in lowered for term in ("angry", "complaint", "furious", "شکایت", "ناراضی", "خراب"))
 
+    def _should_enforce_trust_gates(self, conversation: Conversation) -> bool:
+        return not (conversation.is_simulation and self.allow_simulated_order_side_effects)
+
+    @staticmethod
+    def _derive_policy_action_name(extraction: AgentExtractionResult, draft_order_candidate: bool) -> str | None:
+        if extraction.intent == AgentIntent.CONFIRM_ORDER:
+            return "confirm"
+        if draft_order_candidate:
+            return "create_draft"
+        if extraction.intent == AgentIntent.CANCEL_ORDER:
+            return "cancel"
+        return None
+
+    def _evaluate_trust_layer(
+        self,
+        *,
+        conversation: Conversation,
+        pilot_service: PilotService,
+        extraction: AgentExtractionResult,
+        handoff_required: bool,
+        variant: ProductVariant | None,
+        inventory_available: bool | None,
+        draft_order_candidate: bool,
+        would_auto_send: bool,
+    ) -> dict[str, Any]:
+        pilot_settings = pilot_service.get_or_create_settings(conversation.shop_id)
+        operating_mode = PilotModeService(self.db).resolve_operating_mode(pilot_settings)
+        policy_version = PolicyVersionRepository(self.db).get_active(conversation.shop_id)
+        policy_config = merge_policy_config(policy_version.config_json if policy_version else None)
+        emergency_stop = pilot_service.is_emergency_stop_active(conversation.shop_id)
+        stock_reserved = bool(variant and inventory_available is not False)
+        action_name = self._derive_policy_action_name(extraction, draft_order_candidate)
+        requires_write = bool(action_name or would_auto_send)
+
+        policy_eval = self.policy_engine.evaluate(
+            PolicyEvaluationContext(
+                shop_id=conversation.shop_id,
+                operating_mode=operating_mode,
+                intent_confidence=extraction.confidence.intent,
+                product_confidence=extraction.confidence.product,
+                variant_confidence=extraction.confidence.variant or extraction.confidence.slots,
+                customer_confirmed=extraction.intent == AgentIntent.CONFIRM_ORDER,
+                stock_reserved=stock_reserved,
+                within_messaging_window=True,
+                action_name=action_name,
+                requires_write=requires_write,
+                handoff_required=handoff_required,
+                emergency_stop=emergency_stop,
+            ),
+            policy_config,
+        )
+
+        trust_write_allowed = True
+        trust_send_allowed = True
+        reasons: list[str] = []
+        enforce = pilot_settings.pilot_enabled and self._should_enforce_trust_gates(conversation)
+
+        if enforce:
+            if operating_mode == PilotOperatingMode.SHADOW and requires_write:
+                trust_write_allowed = False
+                trust_send_allowed = False
+                reasons.append("shadow_mode_no_state_change")
+            elif operating_mode == PilotOperatingMode.COPILOT:
+                if action_name:
+                    trust_write_allowed = False
+                    reasons.append("copilot_requires_operator_approval")
+                if would_auto_send:
+                    trust_send_allowed = False
+                    reasons.append("copilot_requires_operator_approval")
+            elif operating_mode == PilotOperatingMode.AUTONOMOUS_LOW_RISK:
+                if action_name and not PolicyEngine.autonomous_allowed(policy_eval, operating_mode):
+                    trust_write_allowed = False
+                    reasons.extend(policy_eval.blocked_actions)
+                if would_auto_send and not policy_eval.allowed:
+                    trust_send_allowed = False
+                    reasons.extend(policy_eval.blocked_actions)
+
+        return {
+            "policy_eval": policy_eval,
+            "operating_mode": operating_mode,
+            "trust_write_allowed": trust_write_allowed,
+            "trust_send_allowed": trust_send_allowed,
+            "reasons": reasons,
+        }
+
+    def _record_trust_trace_events(
+        self,
+        *,
+        trace_id: UUID,
+        conversation: Conversation,
+        extraction: AgentExtractionResult,
+        slots,
+        product: Product | None,
+        variant: ProductVariant | None,
+        policy_eval,
+        outbound_created: bool,
+    ) -> None:
+        self.trace_service.record(
+            trace_id=trace_id,
+            shop_id=conversation.shop_id,
+            event_type=TraceEventType.RETRIEVAL_EVIDENCE,
+            payload={
+                "product_resolved": product is not None,
+                "variant_resolved": variant is not None,
+                "resolve_source": "orchestrator",
+            },
+            conversation_id=conversation.id,
+        )
+        self.trace_service.record(
+            trace_id=trace_id,
+            shop_id=conversation.shop_id,
+            event_type=TraceEventType.SLOTS_EXTRACTED,
+            payload={"slots": slots_to_dict(slots)},
+            conversation_id=conversation.id,
+        )
+        self.trace_service.record(
+            trace_id=trace_id,
+            shop_id=conversation.shop_id,
+            event_type=TraceEventType.CONFIDENCE_BAND,
+            payload={
+                "intent_band": self.policy_engine.confidence_band(extraction.confidence.intent),
+                "scores": {
+                    "intent": extraction.confidence.intent,
+                    "product": extraction.confidence.product,
+                    "variant": extraction.confidence.variant or extraction.confidence.slots,
+                },
+            },
+            conversation_id=conversation.id,
+        )
+        if policy_eval is not None:
+            self.trace_service.record_policy_checks(
+                trace_id=trace_id,
+                shop_id=conversation.shop_id,
+                checks=[check.__dict__ for check in policy_eval.checks],
+                conversation_id=conversation.id,
+            )
+            if policy_eval.allowed and outbound_created:
+                self.trace_service.record(
+                    trace_id=trace_id,
+                    shop_id=conversation.shop_id,
+                    event_type=TraceEventType.ACTION_ATTEMPTED,
+                    payload={"actions": ["auto_send", "process_inbound_message"]},
+                    conversation_id=conversation.id,
+                )
+            elif not policy_eval.allowed or not outbound_created:
+                blocked = list(policy_eval.blocked_actions)
+                if not outbound_created:
+                    blocked.append("auto_send_blocked")
+                self.trace_service.record(
+                    trace_id=trace_id,
+                    shop_id=conversation.shop_id,
+                    event_type=TraceEventType.ACTION_BLOCKED,
+                    payload={"blocked_actions": blocked},
+                    conversation_id=conversation.id,
+                )
+
     def _create_decision_trace(
         self,
         *,
+        trace_id: UUID,
         conversation: Conversation,
         message: Message,
         agent_run: AgentRun,
@@ -697,9 +943,25 @@ class ConversationOrchestrator:
         reply: str,
         outbound_message_id: UUID | None,
         handoff_reason: str | None,
+        policy_eval=None,
+        operating_mode: PilotOperatingMode | None = None,
     ) -> None:
         selected_variant_id = getattr(variant_result, "variant_id", None) if variant_result else None
+        enriched_risk = {
+            **risk_score,
+            "operating_mode": operating_mode.value if operating_mode else None,
+            "policy_evaluation": (
+                {
+                    "allowed": policy_eval.allowed,
+                    "checks": [check.__dict__ for check in policy_eval.checks],
+                    "blocked_actions": policy_eval.blocked_actions,
+                }
+                if policy_eval is not None
+                else None
+            ),
+        }
         self.db.add(AgentDecisionTrace(
+            id=trace_id,
             conversation_id=conversation.id,
             message_id=message.id,
             agent_run_id=agent_run.id,
@@ -710,7 +972,7 @@ class ConversationOrchestrator:
             selected_product_id=product.id if product is not None else None,
             variant_resolution=variant_result.model_dump(mode="json") if variant_result else {"variant_id": str(selected_variant_id) if selected_variant_id else None},
             inventory_result={"available": inventory_available},
-            risk_score=risk_score,
+            risk_score=enriched_risk,
             order_action={"order_id": str(order.id) if order else None, "status": order.status.value if order else None},
             next_state=conversation.workflow_state.value,
             outbound_message_id=outbound_message_id,

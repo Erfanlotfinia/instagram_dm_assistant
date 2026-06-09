@@ -60,6 +60,14 @@ jobs:
         with:
           name: resolver-benchmark-report
           path: backend/benchmark-report.json
+      - name: Run golden replay suite
+        working-directory: backend
+        run: python -m app.scripts.run_golden_replay_suite | tee golden-replay-report.json
+      - name: Upload golden replay report
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-replay-report
+          path: backend/golden-replay-report.json
 
   frontend:
     runs-on: ubuntu-latest

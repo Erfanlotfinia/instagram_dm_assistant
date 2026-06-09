@@ -204,7 +204,8 @@ class LiveQdrantClient:
         hybrid_hits: list[HybridSearchHit] = []
         id_field = "variant_id" if collection == "variants" else "product_id"
         for entity_id, fused_score in fused[: limit * 2]:
-            payload = dense_map.get(entity_id).payload if entity_id in dense_map else {id_field: str(entity_id)}
+            dense_hit = dense_map.get(entity_id)
+            payload = dense_hit.payload if dense_hit is not None else {id_field: str(entity_id)}
             if filters:
                 if shop_id and payload.get("shop_id") != str(shop_id):
                     continue
@@ -218,7 +219,7 @@ class LiveQdrantClient:
             hybrid_hits.append(
                 HybridSearchHit(
                     entity_id=entity_id,
-                    dense_score=dense_map.get(entity_id).score if entity_id in dense_map else 0.0,
+                    dense_score=dense_hit.score if dense_hit is not None else 0.0,
                     sparse_score=sparse_map.get(entity_id, 0.0),
                     fused_score=fused_score,
                     payload=payload,

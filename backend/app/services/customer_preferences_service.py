@@ -2,16 +2,14 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.config import Settings, get_settings
-from app.domain.enums import MessageDirection, OrderPaymentStatus, OrderRecoveryAttemptStatus, OrderRecoveryStatus, OrderStatus
-from app.domain.models import CustomerPreferences, Order, OrderItem
+from app.domain.enums import OrderPaymentStatus
+from app.domain.models import CustomerPreferences, Order
 from app.services.shop_service import ShopService
 
 logger = logging.getLogger(__name__)
@@ -33,7 +31,7 @@ class CustomerPreferencesService:
         from app.repositories.customer_repository import CustomerRepository
 
         self.shop_service.get_shop(shop_id, user)
-        customer = CustomerRepository(db).get_by_id(customer_id)
+        customer = CustomerRepository(self.db).get_by_id(customer_id)
         if customer is None or customer.shop_id != shop_id:
             return None
         return self.db.scalar(
@@ -69,7 +67,7 @@ class CustomerPreferencesService:
                     categories.add(product.category)
 
         if size_counts:
-            preferred_size = max(size_counts, key=size_counts.get)
+            preferred_size = max(size_counts, key=lambda k: size_counts[k])
             prefs.preferred_size = preferred_size
             prefs.last_successful_size = preferred_size
         if color_counts:

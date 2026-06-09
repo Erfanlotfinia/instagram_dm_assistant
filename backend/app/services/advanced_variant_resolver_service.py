@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.domain.models import Product, ProductAlias, User
+from app.domain.models import ProductAlias, User
 from app.integrations.openai_client import LiveOpenAIEmbeddingClient, OpenAIEmbeddingClient
 from app.integrations.qdrant_client import LiveQdrantClient, QdrantClient
 from app.repositories.product_repository import ProductRepository

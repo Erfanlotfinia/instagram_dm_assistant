@@ -52,12 +52,6 @@ async def receive_instagram_webhook(
             detail="Invalid JSON payload",
         ) from exc
 
-    if not isinstance(payload, dict):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Payload must be a JSON object",
-        )
-
     INBOUND_MESSAGES.inc()
     return WebhookIngestionService(db).handle_instagram_payload(payload, raw_body=body)
 

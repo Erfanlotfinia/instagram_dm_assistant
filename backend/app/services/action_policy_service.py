@@ -8,7 +8,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.domain.enums import OrderCorrectnessAction, ShopStatus
-from app.domain.models import Order, PilotSettings, Shop
+from app.domain.models import Order, Shop
 from app.repositories.pilot_mode_repository import PilotModeRepository
 from app.services.order_audit_service import OrderAuditService
 from app.services.pilot_service import PilotService

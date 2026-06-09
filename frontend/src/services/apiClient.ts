@@ -29,6 +29,16 @@ import type { CatalogImportJob, CatalogImportRequest, CatalogProductListResponse
 import type { ResolveProductResponse, ResolveVariantResponse, ResolverFeedback, ResolverFeedbackRequest, ResolverTrace } from '../types/resolve';
 import type { TRLRiskMetrics, TRLValidationRun, TRLValidationScenarioResult } from '../types/trlValidation';
 import type { PilotActionResponse, PilotEventLog, PilotMetrics, PilotReadinessResponse, PilotSettings } from '../types/pilot';
+import type {
+  AssembledDecisionTrace,
+  EmergencyStopResponse,
+  Incident,
+  PolicyEvaluationResponse,
+  ReplayRunRequest,
+  ScenarioPack,
+  SimulatorRunDetail,
+  SimulatorRunSummary as TrustSimulatorRunSummary,
+} from '../types/trust';
 import type { FailedJobListResponse, HealthResponse, ReadinessResponse } from '../types/health';
 import type { ColorAlias, SizeAlias, UnavailableDemandLog, VariantResolverResult } from '../types/fashion';
 import type { InstagramAccount, InstagramAccountCreate } from '../types/instagramAccount';
@@ -240,7 +250,50 @@ export const apiClient = {
       body: JSON.stringify(payload),
     }),
   listSimulatorRuns: (shopId: string) =>
-    request<SimulatorRunSummary[]>(`/api/v1/shops/${shopId}/simulator/runs`),
+    request<SimulatorRunSummary[]>(`/api/v1/shops/${shopId}/simulator/runs?legacy=true`),
+  listReplayRuns: (shopId: string) =>
+    request<TrustSimulatorRunSummary[]>(`/api/v1/shops/${shopId}/simulator/runs`),
+  getReplayRun: (shopId: string, runId: string) =>
+    request<SimulatorRunDetail>(`/api/v1/shops/${shopId}/simulator/runs/${runId}`),
+  runReplay: (shopId: string, payload: ReplayRunRequest) =>
+    request<{ run: SimulatorRunDetail }>(`/api/v1/shops/${shopId}/simulator/replay`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getTrustTrace: (shopId: string, traceId: string) =>
+    request<AssembledDecisionTrace>(`/api/v1/shops/${shopId}/traces/${traceId}`),
+  validatePolicies: (shopId: string, payload: Record<string, unknown>) =>
+    request<PolicyEvaluationResponse>(`/api/v1/shops/${shopId}/policies/validate`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  activatePilotModeEmergencyStop: (shopId: string, reason?: string) =>
+    request<EmergencyStopResponse>(`/api/v1/shops/${shopId}/pilot-mode/emergency-stop`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason ?? null }),
+    }),
+  updatePilotMode: (
+    shopId: string,
+    payload: {
+      operating_mode: string;
+      scope?: string;
+      scope_ref?: string | null;
+      reason?: string | null;
+    },
+  ) =>
+    request<{ pilot_settings: PilotSettings; history_id: string }>(`/api/v1/shops/${shopId}/pilot-mode`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  createScenarioPack: (shopId: string, payload: Record<string, unknown>) =>
+    request<ScenarioPack>(`/api/v1/shops/${shopId}/scenarios`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  listScenarioPacks: (shopId: string) => request<ScenarioPack[]>(`/api/v1/shops/${shopId}/scenarios`),
+  listIncidents: (shopId: string) => request<Incident[]>(`/api/v1/shops/${shopId}/incidents`),
+  getIncident: (shopId: string, incidentId: string) =>
+    request<Incident>(`/api/v1/shops/${shopId}/incidents/${incidentId}`),
   resetDMSimulator: (shopId: string) =>
     request<{ deleted_conversations: number }>(`/api/v1/shops/${shopId}/simulator/reset`, { method: 'DELETE' }),
   runTRLValidation: (shopId: string, payload: { reset_demo_data?: boolean; scenario_limit?: number | null } = {}) =>

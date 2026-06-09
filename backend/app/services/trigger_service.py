@@ -10,7 +10,14 @@ from sqlalchemy.orm import Session
 
 from app.domain.enums import ConversationState, MessageChannel, MessageDirection, MessageType, TriggerSourceType
 from app.domain.models import CommentToDmTrigger, Conversation, ConversationSlots, Customer, Message, TriggerEvent, User
-from app.schemas.triggers import TriggerMatchRequest, TriggerMatchResponse, TriggerPerformanceRead, TriggerRuleCreate, TriggerRuleUpdate
+from app.schemas.triggers import (
+    TriggerMatchRequest,
+    TriggerMatchResponse,
+    TriggerPerformanceRead,
+    TriggerRuleCreate,
+    TriggerRuleRead,
+    TriggerRuleUpdate,
+)
 from app.services.shop_service import ShopService
 
 
@@ -19,11 +26,16 @@ class TriggerService:
         self.db = db
         self.shop_service = ShopService(db)
 
-    def list_rules(self, shop_id: UUID, user: User) -> list[CommentToDmTrigger]:
+    def list_rules(self, shop_id: UUID, user: User) -> list[TriggerRuleRead]:
         self.shop_service.get_shop(shop_id, user)
-        return list(self.db.scalars(select(CommentToDmTrigger).where(CommentToDmTrigger.shop_id == shop_id).order_by(CommentToDmTrigger.created_at.desc())))
+        rules = self.db.scalars(
+            select(CommentToDmTrigger)
+            .where(CommentToDmTrigger.shop_id == shop_id)
+            .order_by(CommentToDmTrigger.created_at.desc())
+        ).all()
+        return [TriggerRuleRead.model_validate(rule) for rule in rules]
 
-    def create_rule(self, shop_id: UUID, payload: TriggerRuleCreate, user: User) -> CommentToDmTrigger:
+    def create_rule(self, shop_id: UUID, payload: TriggerRuleCreate, user: User) -> TriggerRuleRead:
         self.shop_service.get_shop(shop_id, user)
         if self._duplicate_exists(shop_id, payload.instagram_account_id, payload.instagram_media_id, payload.source_type, payload.keyword):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Duplicate trigger rule for this account/media/source/keyword")
@@ -35,9 +47,9 @@ class TriggerService:
             self.db.rollback()
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Duplicate trigger rule for this account/media/source/keyword") from exc
         self.db.refresh(rule)
-        return rule
+        return TriggerRuleRead.model_validate(rule)
 
-    def update_rule(self, shop_id: UUID, rule_id: UUID, payload: TriggerRuleUpdate, user: User) -> CommentToDmTrigger:
+    def update_rule(self, shop_id: UUID, rule_id: UUID, payload: TriggerRuleUpdate, user: User) -> TriggerRuleRead:
         rule = self._get_rule(shop_id, rule_id, user)
         updates = payload.model_dump(exclude_unset=True)
         candidate_account = rule.instagram_account_id
@@ -55,7 +67,7 @@ class TriggerService:
             self.db.rollback()
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Duplicate trigger rule for this account/media/source/keyword") from exc
         self.db.refresh(rule)
-        return rule
+        return TriggerRuleRead.model_validate(rule)
 
     def delete_rule(self, shop_id: UUID, rule_id: UUID, user: User) -> None:
         rule = self._get_rule(shop_id, rule_id, user)
