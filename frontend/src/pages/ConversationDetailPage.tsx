@@ -9,7 +9,9 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ConversationContextPanel } from '../components/conversations/ConversationContextPanel';
 import { MessageThread } from '../components/conversations/MessageThread';
 import { OperatorQuickActions } from '../components/conversations/OperatorQuickActions';
+import { DecisionTraceViewer } from '../components/conversations/DecisionTraceViewer';
 import { PriorityBadge } from '../components/conversations/PriorityBadge';
+import { RiskBadge } from '../components/conversations/RiskBadge';
 import { SuggestedReplyPanel } from '../components/conversations/SuggestedReplyPanel';
 import { useAuth } from '../contexts/AuthContext';
 import { useShop } from '../contexts/ShopContext';
@@ -82,6 +84,12 @@ export function ConversationDetailPage() {
   });
 
   const conversation = conversationQuery.data;
+  const tracesQuery = useQuery({
+    queryKey: ['decision-traces', shopId, conversationId],
+    queryFn: () => apiClient.listConversationDecisionTraces ? apiClient.listConversationDecisionTraces(shopId, conversationId!) : Promise.resolve([]),
+    enabled: Boolean(shopId && conversationId),
+  });
+  const latestRisk = tracesQuery.data?.[0]?.risk_score;
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
 
   const messageForm = useForm<MessageFormValues>({
@@ -308,6 +316,7 @@ export function ConversationDetailPage() {
                   score={conversation.priority_score}
                   reason={conversation.priority_reason}
                 />
+                <RiskBadge level={latestRisk?.risk_level} score={latestRisk?.score} />
                 {conversation.handoff_required ? (
                   <span className="status-pill status-pill--warning">Handoff required</span>
                 ) : null}
@@ -389,13 +398,16 @@ export function ConversationDetailPage() {
           </form>
         </section>
 
-        <ConversationContextPanel
-          conversation={conversation}
-          shopId={shopId}
-          confidence={confidence}
-          onSaveCustomer={(values) => updateCustomerMutation.mutate(values)}
-          isSavingCustomer={updateCustomerMutation.isPending}
-        />
+        <div className="page-stack">
+          <ConversationContextPanel
+            conversation={conversation}
+            shopId={shopId}
+            confidence={confidence}
+            onSaveCustomer={(values) => updateCustomerMutation.mutate(values)}
+            isSavingCustomer={updateCustomerMutation.isPending}
+          />
+          <DecisionTraceViewer shopId={shopId} conversationId={conversation.id} />
+        </div>
       </div>
 
       <ConfirmDialog

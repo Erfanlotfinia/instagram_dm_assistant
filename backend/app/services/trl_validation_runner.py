@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.domain.enums import AgentIntent, MessageChannel, MessageDirection, MessageType
 from app.domain.models import (
     AgentAction,
+    AgentDecisionTrace,
     AgentRun,
     Conversation,
     Customer,
@@ -102,14 +103,28 @@ class TRLValidationRunner:
         scenarios = self._load_scenarios()[:scenario_limit]
         run = TRLValidationRun(shop_id=shop_id, status="running", total_scenarios=len(scenarios), created_by_user_id=created_by_user_id, metrics_json={"thresholds": THRESHOLDS})
         self.db.add(run); self.db.commit(); self.db.refresh(run)
-        counters: dict[str, int] = {"intent_correct": 0, "slot_correct": 0, "product_correct": 0, "variant_correct": 0, "orders_expected": 0, "orders_created": 0, "false_orders": 0, "false_auto_send": 0, "handoff_expected": 0, "handoff_actual": 0, "handoff_tp": 0, "invalid_llm_json": 0, "failed": 0}
+        counters: dict[str, int] = {"intent_correct": 0, "slot_correct": 0, "product_correct": 0, "variant_correct": 0, "orders_expected": 0, "orders_created": 0, "false_orders": 0, "false_auto_send": 0, "handoff_expected": 0, "handoff_actual": 0, "handoff_tp": 0, "invalid_llm_json": 0, "safe_fallback": 0, "critical_risk": 0, "failed": 0}
+        latencies: list[int] = []
+        risk_values: list[float] = []
+        category_counts: dict[str, list[int]] = {}
         total_ms = 0
         try:
             for scenario in scenarios:
                 started = time.perf_counter()
                 result = self._run_one(shop_id, run.id, scenario, counters)
-                total_ms += result.processing_time_ms or int((time.perf_counter() - started) * 1000)
+                elapsed_ms = result.processing_time_ms or int((time.perf_counter() - started) * 1000)
+                total_ms += elapsed_ms
+                latencies.append(elapsed_ms)
+                category = result.input_json.get("category", "uncategorized")
+                bucket = category_counts.setdefault(category, [0, 0])
+                bucket[0] += int(result.passed); bucket[1] += 1
+                risk = result.actual_json.get("risk_score", {})
+                if isinstance(risk, dict):
+                    risk_values.append(float(risk.get("score", 0) or 0))
+                    counters["critical_risk"] += int(risk.get("risk_level") == "critical")
             total = len(scenarios) or 1
+            sorted_latencies = sorted(latencies)
+            p95_idx = min(len(sorted_latencies) - 1, int(len(sorted_latencies) * 0.95)) if sorted_latencies else 0
             metrics = {
                 "intent_accuracy": counters["intent_correct"] / total,
                 "slot_extraction_accuracy": counters["slot_correct"] / total,
@@ -121,7 +136,16 @@ class TRLValidationRunner:
                 "handoff_precision": counters["handoff_tp"] / max(counters["handoff_actual"], 1),
                 "handoff_recall": counters["handoff_tp"] / max(counters["handoff_expected"], 1),
                 "invalid_llm_json_count": counters["invalid_llm_json"],
+                "safe_fallback_count": counters["safe_fallback"],
+                "human_handoff_count": counters["handoff_actual"],
+                "false_positive_order_creation": counters["false_orders"],
+                "false_positive_auto_send": counters["false_auto_send"],
+                "average_risk_score": sum(risk_values) / max(len(risk_values), 1),
+                "critical_risk_count": counters["critical_risk"],
+                "scenario_pass_rate_by_category": {key: passed / max(total_count, 1) for key, (passed, total_count) in category_counts.items()},
                 "invalid_llm_json_handled_rate": 1.0,
+                "average_processing_latency": total_ms / total,
+                "p95_processing_latency": sorted_latencies[p95_idx] if sorted_latencies else 0,
                 "average_processing_time_ms": total_ms / total,
                 "failed_scenario_count": counters["failed"],
                 "false_payment_status_change_count": 0,
@@ -171,6 +195,8 @@ class TRLValidationRunner:
             "auto_sent": self.db.query(Message).filter_by(conversation_id=conv.id, direction=MessageDirection.OUTBOUND).count() > 0,
             "agent_run_status": latest_run.status.value if latest_run else None,
         }
+        trace = self.db.scalar(select(AgentDecisionTrace).where(AgentDecisionTrace.message_id == msg.id).order_by(AgentDecisionTrace.created_at.desc()).limit(1))
+        actual["risk_score"] = trace.risk_score if trace else {}
         expected = {k.removeprefix("expected_"): v for k, v in scenario.items() if k.startswith("expected_")}
         failures: list[str] = []
         def check(name, got, exp):
@@ -194,9 +220,11 @@ class TRLValidationRunner:
         counters["handoff_expected"] += int(scenario["expected_requires_handoff"])
         counters["handoff_actual"] += int(actual["requires_handoff"])
         counters["handoff_tp"] += int(scenario["expected_requires_handoff"] and actual["requires_handoff"])
+        counters["invalid_llm_json"] += int(actual["agent_run_status"] == "failed")
+        counters["safe_fallback"] += int(bool(latest_run and latest_run.output_json.get("safe_fallback")))
         passed = not failures
         counters["failed"] += int(not passed)
-        row = TRLValidationScenarioResult(run_id=run_id, scenario_id=scenario["scenario_id"], input_json={"message_text": scenario["message_text"], "shared_post_url": scenario.get("shared_post_url")}, expected_json=expected, actual_json=actual, passed=passed, failure_reasons=failures, processing_time_ms=elapsed, conversation_id=conv.id, order_id=order.id if order else None)
+        row = TRLValidationScenarioResult(run_id=run_id, scenario_id=scenario["scenario_id"], input_json={"message_text": scenario["message_text"], "shared_post_url": scenario.get("shared_post_url"), "category": scenario.get("category", "uncategorized")}, expected_json=expected, actual_json=actual, passed=passed, failure_reasons=failures, processing_time_ms=elapsed, conversation_id=conv.id, order_id=order.id if order else None)
         self.db.add(row); self.db.commit(); self.db.refresh(row)
         return row
 

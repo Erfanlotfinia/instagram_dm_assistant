@@ -23,6 +23,7 @@ import { ProductDetailPage } from '../pages/ProductDetailPage';
 import { ProductsPage } from '../pages/ProductsPage';
 import { PostRevenueAnalyticsPage } from '../pages/PostRevenueAnalyticsPage';
 import { RecoveryRulesPage } from '../pages/RecoveryRulesPage';
+import { RiskSettingsPage } from '../pages/RiskSettingsPage';
 import { SystemHealthPage } from '../pages/SystemHealthPage';
 import { UpsellRulesPage } from '../pages/UpsellRulesPage';
 import { SemanticSearchPage } from '../pages/SemanticSearchPage';
@@ -109,6 +110,14 @@ export function AppRoutes() {
         element={
           <AuthenticatedShell>
             <TriggerRulesPage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/risk-settings"
+        element={
+          <AuthenticatedShell>
+            <RiskSettingsPage />
           </AuthenticatedShell>
         }
       />
