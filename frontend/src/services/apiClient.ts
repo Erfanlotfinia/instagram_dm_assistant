@@ -27,6 +27,7 @@ import type { AgentPerformanceMetrics, AgentStudioSettings, DMSimulatorRequest, 
 import type { SemanticSearchResponse } from '../types/semanticSearch';
 import type { LoginRequest, TokenResponse, User } from '../types/auth';
 import type { TRLRiskMetrics, TRLValidationRun, TRLValidationScenarioResult } from '../types/trlValidation';
+import type { PilotActionResponse, PilotEventLog, PilotMetrics, PilotReadinessResponse, PilotSettings } from '../types/pilot';
 import type { FailedJobListResponse, HealthResponse, ReadinessResponse } from '../types/health';
 import type { ColorAlias, SizeAlias, UnavailableDemandLog, VariantResolverResult } from '../types/fashion';
 import type { InstagramAccount, InstagramAccountCreate } from '../types/instagramAccount';
@@ -147,6 +148,17 @@ export const apiClient = {
     request<DashboardMetrics>(`/api/v1/shops/${shopId}/dashboard/metrics`),
   getOnboardingStatus: (shopId: string) =>
     request<OnboardingStatus>(`/api/v1/shops/${shopId}/onboarding-status`),
+
+  getPilotSettings: (shopId: string) => request<PilotSettings>(`/api/v1/shops/${shopId}/pilot-settings`),
+  updatePilotSettings: (shopId: string, payload: Partial<PilotSettings>) =>
+    request<PilotSettings>(`/api/v1/shops/${shopId}/pilot-settings`, { method: 'PUT', body: JSON.stringify(payload) }),
+  getPilotReadiness: (shopId: string) => request<PilotReadinessResponse>(`/api/v1/shops/${shopId}/pilot-readiness`),
+  activatePilotEmergencyStop: (shopId: string) =>
+    request<PilotActionResponse>(`/api/v1/shops/${shopId}/pilot/emergency-stop`, { method: 'POST' }),
+  resumePilot: (shopId: string) =>
+    request<PilotActionResponse>(`/api/v1/shops/${shopId}/pilot/resume`, { method: 'POST' }),
+  getPilotMetrics: (shopId: string) => request<PilotMetrics>(`/api/v1/shops/${shopId}/pilot/metrics`),
+  getPilotEvents: (shopId: string) => request<PilotEventLog>(`/api/v1/shops/${shopId}/pilot/events`),
 
   listTriggerRules: (shopId: string) =>
     request<TriggerRule[]>(`/api/v1/shops/${shopId}/triggers`),
