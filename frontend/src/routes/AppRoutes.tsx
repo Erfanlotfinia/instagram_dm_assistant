@@ -22,6 +22,7 @@ import { OrdersPage } from '../pages/OrdersPage';
 import { ProductDetailPage } from '../pages/ProductDetailPage';
 import { ProductsPage } from '../pages/ProductsPage';
 import { PostRevenueAnalyticsPage } from '../pages/PostRevenueAnalyticsPage';
+import { PilotReadinessPage } from '../pages/PilotReadinessPage';
 import { RecoveryRulesPage } from '../pages/RecoveryRulesPage';
 import { RiskSettingsPage } from '../pages/RiskSettingsPage';
 import { SystemHealthPage } from '../pages/SystemHealthPage';
@@ -71,6 +72,15 @@ export function AppRoutes() {
           </AuthenticatedShell>
         }
       />
+      <Route
+        path="/pilot-readiness"
+        element={
+          <AuthenticatedShell>
+            <PilotReadinessPage />
+          </AuthenticatedShell>
+        }
+      />
+
       <Route
         path="/trl-validation"
         element={

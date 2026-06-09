@@ -53,6 +53,7 @@ from app.domain.enums import (
     SuggestedReplyStatus,
     TriggerSourceType,
     UserRole,
+    PilotEventSeverity,
     WebhookProcessingStatus,
     WebhookProvider,
 )
@@ -128,6 +129,10 @@ class Shop(Base, TimestampMixin):
     trl_validation_runs: Mapped[list[TRLValidationRun]] = relationship(
         back_populates="shop", cascade="all, delete-orphan"
     )
+    pilot_settings: Mapped[PilotSettings | None] = relationship(
+        back_populates="shop", cascade="all, delete-orphan", uselist=False
+    )
+    pilot_events: Mapped[list[PilotEvent]] = relationship(back_populates="shop", cascade="all, delete-orphan")
 
 
 class ShopMember(Base):
@@ -1101,6 +1106,45 @@ class UpsellSuggestion(Base, TimestampMixin):
         default=UpsellSuggestionStatus.SUGGESTED,
         index=True,
     )
+
+
+class PilotSettings(Base, TimestampMixin):
+    __tablename__ = "pilot_settings"
+
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), primary_key=True
+    )
+    pilot_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    pilot_name: Mapped[str] = mapped_column(String(255), nullable=False, default="Pilot")
+    pilot_start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pilot_end_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    max_auto_sent_messages_per_day: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    max_auto_created_orders_per_day: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
+    require_operator_approval_for_first_50_orders: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    allowed_instagram_account_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    allowed_product_ids: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    emergency_stop_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+
+    shop: Mapped[Shop] = relationship(back_populates="pilot_settings")
+
+
+class PilotEvent(Base):
+    __tablename__ = "pilot_events"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    severity: Mapped[PilotEventSeverity] = mapped_column(
+        pg_enum(PilotEventSeverity, name="pilot_event_severity"), nullable=False, default=PilotEventSeverity.INFO, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    event_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+    shop: Mapped[Shop] = relationship(back_populates="pilot_events")
 
 
 class TRLValidationRun(Base):

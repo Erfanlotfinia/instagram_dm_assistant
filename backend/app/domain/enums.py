@@ -271,3 +271,10 @@ class ConversationEventType(str, enum.Enum):
     ORDER_CANCELLED = "order_cancelled"
     CONVERSATION_ASSIGNED = "conversation_assigned"
     CUSTOMER_PROFILE_UPDATED = "customer_profile_updated"
+
+
+class PilotEventSeverity(str, enum.Enum):
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"

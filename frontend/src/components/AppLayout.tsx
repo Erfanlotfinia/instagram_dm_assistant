@@ -14,6 +14,7 @@ export function AppLayout({ children }: PropsWithChildren) {
     { to: '/onboarding', label: 'Onboarding' },
     { to: '/simulator', label: 'DM Simulator' },
     { to: '/trl-validation', label: 'TRL Validation' },
+    { to: '/pilot-readiness', label: 'Pilot Readiness' },
     { to: '/analytics', label: 'Analytics' },
     { to: '/fashion-dictionary', label: 'Fashion Dictionary' },
     { to: '/variant-resolver', label: 'Variant Resolver' },

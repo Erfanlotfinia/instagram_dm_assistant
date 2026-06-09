@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.domain.enums import FailedJobStatus, UserRole
+from app.domain.enums import FailedJobStatus, PilotEventSeverity, UserRole
 from app.domain.models import FailedJob, ShopMember, User
 from app.integrations.rabbitmq import RabbitMQPublisher
 from app.repositories.failed_job_repository import FailedJobRepository
@@ -17,6 +17,7 @@ from app.schemas.failed_job import FailedJobActionResponse, FailedJobListRespons
 from app.schemas.queue_events import MessageReceivedJob
 from app.services.audit_service import AuditService
 from app.services.shop_service import ShopService
+from app.services.pilot_service import PilotService
 
 
 class FailedJobService:
@@ -61,6 +62,15 @@ class FailedJobService:
         )
         repo = FailedJobRepository(db)
         created = repo.create(job)
+        if shop_id is not None:
+            PilotService(db).log_event(
+                shop_id,
+                "failed_job",
+                PilotEventSeverity.ERROR,
+                "Worker job failed",
+                description=error_message,
+                metadata={"queue_name": queue_name, "job_type": job_type, "retry_count": retry_count},
+            )
         repo.commit()
         return created
 

@@ -15,6 +15,7 @@ from app.api.v1.jobs import router as jobs_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.product_selection import router as product_selection_router
+from app.api.v1.pilot import router as pilot_router
 from app.api.v1.recovery import router as recovery_router
 from app.api.v1.upsells import router as upsells_router
 from app.api.v1.products import router as products_router
@@ -43,6 +44,7 @@ router.include_router(semantic_search_router)
 router.include_router(payments_router)
 router.include_router(webhooks_router)
 router.include_router(jobs_router)
+router.include_router(pilot_router)
 
 router.include_router(fashion_router)
 router.include_router(failed_jobs_platform_router)
