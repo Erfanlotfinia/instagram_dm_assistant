@@ -292,9 +292,11 @@ class ConversationOrchestrator:
             and variant is not None
             and self.order_service.can_create_draft(slots, variant)
         ):
+            existing_order = self.order_service.orders.get_active_for_conversation(conversation.id)
             active_order = self.order_service.upsert_draft_from_conversation(
                 conversation, slots, product, variant
             )
+            order_was_created = active_order is not None and existing_order is None
             if active_order is not None:
                 CREATED_ORDERS.inc()
                 AuditService(self.db).log(action="pilot_auto_order_created", entity_type="order", shop_id=conversation.shop_id, entity_id=str(active_order.id), metadata={"conversation_id": str(conversation.id)})
