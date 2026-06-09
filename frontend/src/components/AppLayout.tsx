@@ -20,6 +20,7 @@ export function AppLayout({ children }: PropsWithChildren) {
     { to: '/unavailable-demand', label: 'Unavailable Demand' },
     { to: '/triggers', label: 'Trigger Rules' },
     { to: '/agent-studio', label: 'Agent Studio' },
+    { to: '/risk-settings', label: 'Risk Settings' },
     { to: '/recovery-rules', label: 'Recovery Rules' },
     { to: '/upsell-rules', label: 'Upsell Rules' },
     { to: '/post-revenue', label: 'Post Revenue' },

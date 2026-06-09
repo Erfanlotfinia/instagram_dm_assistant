@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_shop_membership
 from app.db.session import get_db_session
 from app.domain.models import ShopMember, User
+from app.schemas.risk import TRLRiskMetricsRead
 from app.schemas.trl_validation import (
     TRLValidationResetResponse,
     TRLValidationRunRead,
@@ -63,6 +64,21 @@ def list_trl_validation_scenarios(
     passed: bool | None = Query(default=None),
 ) -> list[TRLValidationScenarioResultRead]:
     return TRLValidationRunner(db).list_results(shop_id, run_id, passed=passed)
+
+
+@router.get("/runs/{run_id}/risk-metrics", response_model=TRLRiskMetricsRead)
+def get_trl_validation_risk_metrics(
+    shop_id: UUID,
+    run_id: UUID,
+    _current_user: Annotated[User, Depends(get_current_user)],
+    _membership: Annotated[ShopMember, Depends(get_shop_membership)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> TRLRiskMetricsRead:
+    run = TRLValidationRunner(db).get_run(shop_id, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="TRL validation run not found")
+    metrics = run.metrics_json or {}
+    return TRLRiskMetricsRead(**{key: metrics.get(key, default) for key, default in TRLRiskMetricsRead().model_dump().items()})
 
 
 @router.delete("/reset", response_model=TRLValidationResetResponse)

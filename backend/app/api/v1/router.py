@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.agent_settings import router as agent_settings_router
+from app.api.v1.agent_risk import router as agent_risk_router
 from app.api.v1.analytics import router as analytics_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.conversations import router as conversations_router
@@ -50,5 +51,6 @@ router.include_router(simulator_router)
 router.include_router(triggers_router)
 router.include_router(analytics_router)
 router.include_router(agent_settings_router)
+router.include_router(agent_risk_router)
 router.include_router(trl_validation_router)
 router.include_router(suggested_replies_router)

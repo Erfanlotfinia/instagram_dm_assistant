@@ -25,3 +25,16 @@ export interface TRLValidationScenarioResult {
   order_id: string | null;
   created_at: string;
 }
+
+export interface TRLRiskMetrics {
+  invalid_llm_json_count: number;
+  safe_fallback_count: number;
+  human_handoff_count: number;
+  false_positive_order_creation: number;
+  false_positive_auto_send: number;
+  average_risk_score: number;
+  critical_risk_count: number;
+  scenario_pass_rate_by_category: Record<string, number>;
+  average_processing_latency: number;
+  p95_processing_latency: number;
+}
