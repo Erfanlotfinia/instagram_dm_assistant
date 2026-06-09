@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -61,6 +63,7 @@ class LLMExtractionService:
     ) -> None:
         self.settings = settings or get_settings()
         self.chat_client = chat_client or LiveOpenAIChatClient(self.settings)
+        self.last_invalid_output: str | None = None
 
     @property
     def model_name(self) -> str:
@@ -74,10 +77,12 @@ class LLMExtractionService:
         user_prompt = json.dumps(payload.model_dump(mode="json"), ensure_ascii=False)
         try:
             raw = self.chat_client.complete_json(SYSTEM_PROMPT, user_prompt)
+            self.last_invalid_output = None
             parsed = json.loads(raw)
             result = AgentExtractionResult.model_validate(parsed)
             return result, None
         except (json.JSONDecodeError, ValidationError, RuntimeError) as exc:
+            self.last_invalid_output = raw if "raw" in locals() else None
             logger.warning("LLM extraction failed; using safe fallback: %s", exc)
             return self._fallback_result(), str(exc)
 
@@ -87,7 +92,22 @@ class LLMExtractionService:
             intent=AgentIntent.UNCLEAR,
             missing_fields=[],
             confidence=ExtractionConfidence(intent=0.0, slots=0.0, product=0.0),
-            needs_human=False,
-            human_reason=None,
+            needs_human=True,
+            human_reason="Invalid or unsafe LLM extraction; operator review required",
             reply_style_hint="apologetic",
         )
+
+
+SENSITIVE_KEYS = {"phone", "address", "customer_name", "postal_code", "email", "payment", "card"}
+
+
+def mask_sensitive_llm_output(value: Any) -> Any:
+    if isinstance(value, str):
+        masked = re.sub(r"\+?\d[\d\s().-]{6,}\d", "[masked_phone]", value)
+        masked = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "[masked_email]", masked)
+        return masked[:4000]
+    if isinstance(value, dict):
+        return {key: ("[masked]" if key.lower() in SENSITIVE_KEYS else mask_sensitive_llm_output(item)) for key, item in value.items()}
+    if isinstance(value, list):
+        return [mask_sensitive_llm_output(item) for item in value[:50]]
+    return value

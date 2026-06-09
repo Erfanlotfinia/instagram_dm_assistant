@@ -8,34 +8,30 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_shop_membership
 from app.db.session import get_db_session
 from app.domain.models import AgentDecisionTrace, Conversation, ShopMember, User
+from app.schemas.risk import AgentDecisionTraceRead
 
-router = APIRouter(prefix="/shops/{shop_id}/conversations", tags=["decision-traces"])
+router = APIRouter(prefix="/shops/{shop_id}", tags=["decision-traces"])
 
 
-@router.get("/{conversation_id}/decision-traces")
-def list_decision_traces(shop_id: UUID, conversation_id: UUID, _user: Annotated[User, Depends(get_current_user)], _membership: Annotated[ShopMember, Depends(get_shop_membership)], db: Annotated[Session, Depends(get_db_session)]) -> list[dict]:
+@router.get("/decision-traces", response_model=list[AgentDecisionTraceRead])
+def list_shop_decision_traces(shop_id: UUID, _user: Annotated[User, Depends(get_current_user)], _membership: Annotated[ShopMember, Depends(get_shop_membership)], db: Annotated[Session, Depends(get_db_session)]) -> list[AgentDecisionTrace]:
+    return list(db.scalars(select(AgentDecisionTrace).join(Conversation).where(Conversation.shop_id == shop_id).order_by(AgentDecisionTrace.created_at.desc())).all())
+
+
+@router.get("/decision-traces/{trace_id}", response_model=AgentDecisionTraceRead)
+def get_shop_decision_trace(shop_id: UUID, trace_id: UUID, _user: Annotated[User, Depends(get_current_user)], _membership: Annotated[ShopMember, Depends(get_shop_membership)], db: Annotated[Session, Depends(get_db_session)]) -> AgentDecisionTrace:
+    trace = db.get(AgentDecisionTrace, trace_id)
+    if trace is None:
+        raise HTTPException(status_code=404, detail="Decision trace not found")
+    conversation = db.get(Conversation, trace.conversation_id)
+    if conversation is None or conversation.shop_id != shop_id:
+        raise HTTPException(status_code=404, detail="Decision trace not found")
+    return trace
+
+
+@router.get("/conversations/{conversation_id}/decision-traces", response_model=list[AgentDecisionTraceRead])
+def list_conversation_decision_traces(shop_id: UUID, conversation_id: UUID, _user: Annotated[User, Depends(get_current_user)], _membership: Annotated[ShopMember, Depends(get_shop_membership)], db: Annotated[Session, Depends(get_db_session)]) -> list[AgentDecisionTrace]:
     conversation = db.get(Conversation, conversation_id)
     if not conversation or conversation.shop_id != shop_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    traces = db.scalars(select(AgentDecisionTrace).where(AgentDecisionTrace.conversation_id == conversation_id).order_by(AgentDecisionTrace.created_at.desc())).all()
-    return [
-        {
-            "id": str(trace.id),
-            "message_id": str(trace.message_id) if trace.message_id else None,
-            "agent_run_id": str(trace.agent_run_id) if trace.agent_run_id else None,
-            "intent": trace.intent,
-            "extracted_slots": trace.extracted_slots,
-            "product_candidates": trace.product_candidates,
-            "selected_product_id": str(trace.selected_product_id) if trace.selected_product_id else None,
-            "variant_resolution": trace.variant_resolution,
-            "inventory_result": trace.inventory_result,
-            "order_action": trace.order_action,
-            "next_state": trace.next_state,
-            "outbound_message_id": str(trace.outbound_message_id) if trace.outbound_message_id else None,
-            "auto_send_allowed": trace.auto_send_allowed,
-            "human_handoff_required": trace.human_handoff_required,
-            "reasoning_summary": trace.reasoning_summary,
-            "created_at": trace.created_at.isoformat(),
-        }
-        for trace in traces
-    ]
+    return list(db.scalars(select(AgentDecisionTrace).where(AgentDecisionTrace.conversation_id == conversation_id).order_by(AgentDecisionTrace.created_at.desc())).all())

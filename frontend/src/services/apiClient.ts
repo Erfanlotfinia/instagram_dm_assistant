@@ -1,6 +1,8 @@
 import type {
   Conversation,
   ConversationDetail,
+  AgentDecisionTrace,
+  AgentRiskSettings,
   ConversationHandoffResponse,
   ConversationListFilters,
   ConversationResolveResponse,
@@ -24,7 +26,7 @@ import type { DashboardMetrics } from '../types/dashboard';
 import type { AgentPerformanceMetrics, AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PaginatedLostDemand, PaginatedOperatorPerformance, PostPerformanceRow, ResponseTimeAnalytics, SimulatorRunSummary, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
 import type { SemanticSearchResponse } from '../types/semanticSearch';
 import type { LoginRequest, TokenResponse, User } from '../types/auth';
-import type { TRLValidationRun, TRLValidationScenarioResult } from '../types/trlValidation';
+import type { TRLRiskMetrics, TRLValidationRun, TRLValidationScenarioResult } from '../types/trlValidation';
 import type { FailedJobListResponse, HealthResponse, ReadinessResponse } from '../types/health';
 import type { ColorAlias, SizeAlias, UnavailableDemandLog, VariantResolverResult } from '../types/fashion';
 import type { InstagramAccount, InstagramAccountCreate } from '../types/instagramAccount';
@@ -152,6 +154,16 @@ export const apiClient = {
     request<TriggerRule>(`/api/v1/shops/${shopId}/triggers`, { method: 'POST', body: JSON.stringify(payload) }),
   getTriggerPerformance: (shopId: string) =>
     request<TriggerPerformance[]>(`/api/v1/shops/${shopId}/triggers/performance`),
+  getAgentRiskSettings: (shopId: string) =>
+    request<AgentRiskSettings>(`/api/v1/shops/${shopId}/agent-risk-settings`),
+  updateAgentRiskSettings: (shopId: string, payload: Partial<AgentRiskSettings>) =>
+    request<AgentRiskSettings>(`/api/v1/shops/${shopId}/agent-risk-settings`, { method: 'PUT', body: JSON.stringify(payload) }),
+  listDecisionTraces: (shopId: string) =>
+    request<AgentDecisionTrace[]>(`/api/v1/shops/${shopId}/decision-traces`),
+  getDecisionTrace: (shopId: string, traceId: string) =>
+    request<AgentDecisionTrace>(`/api/v1/shops/${shopId}/decision-traces/${traceId}`),
+  listConversationDecisionTraces: (shopId: string, conversationId: string) =>
+    request<AgentDecisionTrace[]>(`/api/v1/shops/${shopId}/conversations/${conversationId}/decision-traces`),
   getAgentStudioSettings: (shopId: string) =>
     request<AgentStudioSettings>(`/api/v1/shops/${shopId}/agent-settings`),
   updateAgentStudioSettings: (shopId: string, payload: Partial<AgentStudioSettings>) =>
@@ -174,12 +186,14 @@ export const apiClient = {
     request<TRLValidationRun[]>(`/api/v1/shops/${shopId}/trl-validation/runs`),
   getTRLValidationRun: (shopId: string, runId: string) =>
     request<TRLValidationRun>(`/api/v1/shops/${shopId}/trl-validation/runs/${runId}`),
+  getTRLRiskMetrics: (shopId: string, runId: string) =>
+    request<TRLRiskMetrics>(`/api/v1/shops/${shopId}/trl-validation/runs/${runId}/risk-metrics`),
   listTRLValidationScenarios: (shopId: string, runId: string, passed?: boolean) =>
     request<TRLValidationScenarioResult[]>(
       `/api/v1/shops/${shopId}/trl-validation/runs/${runId}/scenarios${buildQuery({ passed: passed === undefined ? undefined : String(passed) })}`,
     ),
   resetTRLValidation: (shopId: string) =>
-    request<{ deleted_runs: number; deleted_conversations: number; deleted_orders: number }>(
+    request<{ deleted_runs: number; deleted_conversations: number; deleted_orders: number; deleted_customers?: number }>(
       `/api/v1/shops/${shopId}/trl-validation/reset`,
       { method: 'DELETE' },
     ),

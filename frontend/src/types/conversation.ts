@@ -287,3 +287,38 @@ export interface ConversationAssignResponse {
   assigned_operator_id: string;
   assigned_operator_name: string | null;
 }
+
+export interface AgentDecisionTrace {
+  id: string;
+  conversation_id: string;
+  message_id: string | null;
+  agent_run_id: string | null;
+  intent: string | null;
+  extracted_slots: Record<string, unknown>;
+  normalized_slots: Record<string, unknown>;
+  product_candidates: Array<Record<string, unknown>>;
+  selected_product_id: string | null;
+  variant_resolution: Record<string, unknown>;
+  inventory_result: Record<string, unknown>;
+  risk_score: { risk_level?: 'low' | 'medium' | 'high' | 'critical'; score?: number; risk_reasons?: string[]; requires_handoff?: boolean; requires_preview?: boolean } & Record<string, unknown>;
+  order_action: Record<string, unknown>;
+  next_state: string;
+  outbound_message_id: string | null;
+  auto_send_allowed: boolean;
+  human_handoff_required: boolean;
+  reasoning_summary: string | null;
+  created_at: string;
+}
+
+export interface AgentRiskSettings {
+  shop_id: string;
+  intent_confidence_threshold: number;
+  slot_confidence_threshold: number;
+  product_confidence_threshold: number;
+  variant_confidence_threshold: number;
+  address_confidence_threshold: number;
+  high_value_order_threshold: number;
+  handoff_for_high_risk: boolean;
+  handoff_for_low_variant_confidence: boolean;
+  preview_required_for_high_value_order: boolean;
+}

@@ -17,7 +17,7 @@ from app.domain.enums import (
     ConversationEventType,
     ConversationState,
 )
-from app.domain.models import AgentAction, AgentDecisionAudit, AgentRun, Conversation, Message, Order, Product, ProductVariant, ShopAgentSettings
+from app.domain.models import AgentAction, AgentDecisionAudit, AgentDecisionTrace, AgentRun, Conversation, Message, Order, Product, ProductVariant, ShopAgentSettings
 from app.integrations.openai_client import LiveOpenAIChatClient, OpenAIChatClient
 from app.integrations.qdrant_client import LiveQdrantClient, QdrantClient
 from app.repositories.agent_action_repository import AgentActionRepository
@@ -38,8 +38,9 @@ from app.services.auto_send_decision_service import AutoSendDecisionInput, AutoS
 from app.services.handoff_service import evaluate_handoff
 from app.services.instagram_product_resolver import InstagramProductResolver
 from app.services.instagram_send_service import InstagramSendService
-from app.services.llm_extraction_service import LLMExtractionService
+from app.services.llm_extraction_service import LLMExtractionService, mask_sensitive_llm_output
 from app.services.order_service import OrderService
+from app.services.agent_risk_scoring_service import AgentRiskScoringInput, AgentRiskScoringService
 from app.services.payment_service import PaymentService
 from app.services.product_semantic_search_service import ProductSemanticSearchService
 from app.services.response_generation_service import ReplyFacts, ResponseGenerationService
@@ -83,6 +84,7 @@ class ConversationOrchestrator:
         self.response_service = ResponseGenerationService()
         self.order_service = OrderService(db, settings=self.settings)
         self.payment_service = PaymentService(db, settings=self.settings)
+        self.risk_scoring = AgentRiskScoringService()
         self.allow_simulated_order_side_effects = allow_simulated_order_side_effects
 
         chat_client = chat_client or LiveOpenAIChatClient(self.settings)
@@ -224,6 +226,29 @@ class ConversationOrchestrator:
         active_order = self.order_service.orders.get_active_for_conversation(conversation_id)
         estimated_order_value = self._estimated_order_value(active_order, variant, slots)
         settings_row = self._get_or_create_agent_settings(conversation.shop_id)
+        risk_settings = self._risk_settings(settings_row)
+        risk_score = self.risk_scoring.score(
+            AgentRiskScoringInput(
+                intent_confidence=extraction.confidence.intent,
+                slot_confidence=extraction.confidence.slots,
+                product_confidence=extraction.confidence.product,
+                variant_confidence=extraction.confidence.variant or extraction.confidence.slots,
+                address_confidence=extraction.confidence.address,
+                order_value=estimated_order_value,
+                customer_history=self._customer_history(conversation),
+                message_text=message.text,
+                previous_failed_attempts=conversation.agent_failure_count,
+                unavailable_variant=bool(variant_match and (variant_match.invalid_color or variant_match.invalid_size)) or inventory_available is False,
+                payment_related_message=self._is_payment_related(message.text),
+                complaint_flag=self._is_complaint(message.text),
+                settings=risk_settings,
+            )
+        )
+        if risk_score.requires_handoff:
+            conversation.handoff_required = True
+            conversation.handoff_reason = ";".join(risk_score.risk_reasons) or "Risk policy requires handoff"
+            conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
+            conversation.state = ConversationState.PENDING_HANDOFF
         decision = AutoSendDecisionService().decide(
             AutoSendDecisionInput(
                 settings=settings_row,
@@ -237,16 +262,17 @@ class ConversationOrchestrator:
                 message_risk="simulation" if conversation.is_simulation and not self.allow_simulated_order_side_effects else None,
             )
         )
-        preview_reason = ";".join(decision.reasons) if decision.reasons else None
-        conversation.preview_required = decision.requires_preview
+        combined_reasons = [*decision.reasons, *risk_score.risk_reasons]
+        preview_reason = ";".join(combined_reasons) if combined_reasons else None
+        conversation.preview_required = decision.requires_preview or risk_score.requires_preview
         conversation.preview_reason = preview_reason
-        if decision.requires_handoff:
+        if decision.requires_handoff or risk_score.requires_handoff:
             conversation.handoff_required = True
             conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
             conversation.state = ConversationState.PENDING_HANDOFF
 
         payment_url: str | None = None
-        order_side_effects_allowed = decision.auto_send_allowed and (not conversation.is_simulation or self.allow_simulated_order_side_effects)
+        order_side_effects_allowed = decision.auto_send_allowed and not risk_score.requires_preview and not risk_score.requires_handoff and (not conversation.is_simulation or self.allow_simulated_order_side_effects)
 
         if order_side_effects_allowed and extraction.intent == AgentIntent.CANCEL_ORDER:
             active_order = self.order_service.cancel_active_for_conversation(
@@ -302,7 +328,7 @@ class ConversationOrchestrator:
                 conversation_id,
                 "order_side_effects_blocked",
                 {"intent": extraction.intent.value},
-                {"reasons": decision.reasons},
+                {"reasons": combined_reasons},
                 confidence=extraction.confidence.intent,
             )
 
@@ -390,11 +416,12 @@ class ConversationOrchestrator:
                 message_risk="simulation" if conversation.is_simulation and not self.allow_simulated_order_side_effects else None,
             )
         )
-        preview_reason = ";".join(decision.reasons) if decision.reasons else None
-        conversation.preview_required = decision.requires_preview
+        combined_reasons = [*decision.reasons, *risk_score.risk_reasons]
+        preview_reason = ";".join(combined_reasons) if combined_reasons else None
+        conversation.preview_required = decision.requires_preview or risk_score.requires_preview
         conversation.preview_reason = preview_reason
-        conversation.suggested_outbound = reply if decision.requires_preview else None
-        if decision.requires_handoff:
+        conversation.suggested_outbound = reply if (decision.requires_preview or risk_score.requires_preview) else None
+        if decision.requires_handoff or risk_score.requires_handoff:
             conversation.handoff_required = True
             conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
             conversation.state = ConversationState.PENDING_HANDOFF
@@ -407,11 +434,13 @@ class ConversationOrchestrator:
                 "auto_send_allowed": decision.auto_send_allowed,
                 "requires_preview": decision.requires_preview,
                 "requires_handoff": decision.requires_handoff,
-                "reasons": decision.reasons,
+                "reasons": combined_reasons,
+                "risk_score": risk_score.model_dump(),
             },
             confidence=extraction.confidence.intent,
         )
-        if decision.auto_send_allowed and not conversation.is_simulation:
+        outbound = None
+        if decision.auto_send_allowed and not risk_score.requires_preview and not risk_score.requires_handoff and not conversation.is_simulation:
             outbound = self.send_service.send_text_message(
                 conversation_id, reply, commit=False, is_simulation=False
             )
@@ -426,9 +455,26 @@ class ConversationOrchestrator:
                 reason=preview_reason,
                 is_simulation=conversation.is_simulation,
             )
-            action = "handoff_required" if decision.requires_handoff else "message_blocked_due_to_confidence" if decision.requires_preview else "suggested_reply_created"
-            AuditService(self.db).log(action=action, entity_type="conversation", shop_id=conversation.shop_id, entity_id=str(conversation.id), metadata={"reasons": decision.reasons})
-            self._log_action(conversation_id, "preview_outbound", {"reply": reply}, {"preview_required": decision.requires_preview, "reason": preview_reason, "simulation": conversation.is_simulation}, confidence=extraction.confidence.intent)
+            action = "handoff_required" if (decision.requires_handoff or risk_score.requires_handoff) else "message_blocked_due_to_confidence" if (decision.requires_preview or risk_score.requires_preview) else "suggested_reply_created"
+            AuditService(self.db).log(action=action, entity_type="conversation", shop_id=conversation.shop_id, entity_id=str(conversation.id), metadata={"reasons": combined_reasons})
+            self._log_action(conversation_id, "preview_outbound", {"reply": reply}, {"preview_required": decision.requires_preview or risk_score.requires_preview, "reason": preview_reason, "simulation": conversation.is_simulation}, confidence=extraction.confidence.intent)
+
+        self._create_decision_trace(
+            conversation=conversation,
+            message=message,
+            agent_run=agent_run,
+            extraction=extraction,
+            slots=slots,
+            product=product,
+            variant_result=variant_result,
+            inventory_available=inventory_available,
+            risk_score=risk_score.model_dump(),
+            decision=decision,
+            order=active_order,
+            reply=reply,
+            outbound_message_id=outbound.id if outbound is not None else None,
+            handoff_reason=conversation.handoff_reason,
+        )
 
         self._audit_decision(
             conversation=conversation,
@@ -548,7 +594,7 @@ class ConversationOrchestrator:
             model_name=self.llm_service.model_name,
             prompt_version=self.llm_service.prompt_version,
             input_json=extraction_input.model_dump(mode="json"),
-            output_json=extraction.model_dump(mode="json"),
+            output_json=self._agent_run_output_json(extraction, error_message),
             status=AgentRunStatus.FAILED if error_message else AgentRunStatus.SUCCESS,
             error_message=error_message,
             is_simulation=is_simulation,
@@ -556,6 +602,81 @@ class ConversationOrchestrator:
         if error_message:
             FAILED_AGENT_RUNS.inc()
         return self.agent_runs.create(run)
+
+
+    def _agent_run_output_json(self, extraction: AgentExtractionResult, error_message: str | None) -> dict[str, Any]:
+        payload = extraction.model_dump(mode="json")
+        if error_message:
+            invalid_output = getattr(self.llm_service, "last_invalid_output", None)
+            payload["safe_fallback"] = True
+            payload["invalid_llm_output"] = mask_sensitive_llm_output(invalid_output) if invalid_output else None
+        return payload
+
+    def _risk_settings(self, settings: ShopAgentSettings) -> dict[str, Any]:
+        return {
+            "intent_confidence_threshold": float(settings.confidence_threshold_intent),
+            "slot_confidence_threshold": float(settings.confidence_threshold_variant),
+            "product_confidence_threshold": float(settings.confidence_threshold_product),
+            "variant_confidence_threshold": float(settings.confidence_threshold_variant),
+            "address_confidence_threshold": float(settings.confidence_threshold_address),
+            "high_value_order_threshold": str(settings.high_value_order_threshold),
+            **(settings.risk_policy_json or {}),
+        }
+
+    def _customer_history(self, conversation: Conversation) -> dict[str, Any]:
+        if conversation.customer_id is None:
+            return {"first_order": True}
+        order_count = self.db.query(Order).filter(Order.customer_id == conversation.customer_id).count()
+        return {"order_count": order_count, "first_order": order_count == 0}
+
+    @staticmethod
+    def _is_payment_related(text: str | None) -> bool:
+        lowered = (text or "").lower()
+        return any(term in lowered for term in ("payment", "charged", "refund", "پرداخت", "پول"))
+
+    @staticmethod
+    def _is_complaint(text: str | None) -> bool:
+        lowered = (text or "").lower()
+        return any(term in lowered for term in ("angry", "complaint", "furious", "شکایت", "ناراضی", "خراب"))
+
+    def _create_decision_trace(
+        self,
+        *,
+        conversation: Conversation,
+        message: Message,
+        agent_run: AgentRun,
+        extraction: AgentExtractionResult,
+        slots,
+        product: Product | None,
+        variant_result,
+        inventory_available: bool | None,
+        risk_score: dict[str, Any],
+        decision,
+        order: Order | None,
+        reply: str,
+        outbound_message_id: UUID | None,
+        handoff_reason: str | None,
+    ) -> None:
+        selected_variant_id = getattr(variant_result, "variant_id", None) if variant_result else None
+        self.db.add(AgentDecisionTrace(
+            conversation_id=conversation.id,
+            message_id=message.id,
+            agent_run_id=agent_run.id,
+            intent=extraction.intent.value,
+            extracted_slots=extraction.slots.model_dump(mode="json"),
+            normalized_slots=slots_to_dict(slots),
+            product_candidates=getattr(slots, "product_candidates", []) or [],
+            selected_product_id=product.id if product is not None else None,
+            variant_resolution=variant_result.model_dump(mode="json") if variant_result else {"variant_id": str(selected_variant_id) if selected_variant_id else None},
+            inventory_result={"available": inventory_available},
+            risk_score=risk_score,
+            order_action={"order_id": str(order.id) if order else None, "status": order.status.value if order else None},
+            next_state=conversation.workflow_state.value,
+            outbound_message_id=outbound_message_id,
+            auto_send_allowed=bool(decision.auto_send_allowed and not risk_score.get("requires_preview") and not risk_score.get("requires_handoff")),
+            human_handoff_required=bool(conversation.handoff_required),
+            reasoning_summary=(handoff_reason or ";".join(risk_score.get("risk_reasons", [])) or "Deterministic state and safety gates evaluated"),
+        ))
 
 
     def _get_or_create_agent_settings(self, shop_id: UUID) -> ShopAgentSettings:

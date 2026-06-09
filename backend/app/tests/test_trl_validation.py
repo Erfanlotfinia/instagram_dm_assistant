@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.models import AgentAction, Message, Product, ProductVariant, TRLValidationScenarioResult
+from app.domain.models import AgentAction, Conversation, Customer, InstagramAccount, Message, Order, Product, ProductVariant, TRLValidationScenarioResult
 from app.scripts.seed_trl_demo_data import seed_trl_demo_data
 from app.services.trl_validation_runner import TRLValidationRunner, THRESHOLDS
 
@@ -46,3 +46,57 @@ def test_trl_shop_isolation(db_session: Session, demo_shop):
     run = runner.run(summary["shop_id"], scenario_limit=2)
     assert runner.get_run(demo_shop.id, run.id) is None
     assert runner.list_results(demo_shop.id, run.id) == []
+
+
+def test_trl_runner_can_run_twice_without_customer_unique_collision(db_session: Session):
+    summary = seed_trl_demo_data(reset=True, db=db_session)
+    runner = TRLValidationRunner(db_session)
+    first = runner.run(summary["shop_id"], scenario_limit=1)
+    second = runner.run(summary["shop_id"], scenario_limit=1)
+    assert first.status == "completed"
+    assert second.status == "completed"
+
+
+def test_trl_reset_only_deletes_trl_owned_simulation_records(db_session: Session):
+    summary = seed_trl_demo_data(reset=True, db=db_session)
+    shop_id = summary["shop_id"]
+    runner = TRLValidationRunner(db_session)
+    run = runner.run(shop_id, scenario_limit=1)
+
+    ig = db_session.scalar(select(InstagramAccount).where(InstagramAccount.shop_id == shop_id).limit(1))
+    customer = Customer(shop_id=shop_id, instagram_user_id="simulator_customer", full_name="Simulator Customer")
+    db_session.add(customer); db_session.flush()
+    simulator_conversation = Conversation(
+        shop_id=shop_id,
+        instagram_account_id=ig.id,
+        customer_id=customer.id,
+        channel_provider="instagram",
+        channel_conversation_id="simulator:unrelated",
+        channel_customer_id=customer.instagram_user_id,
+        is_simulation=True,
+    )
+    db_session.add(simulator_conversation); db_session.flush()
+    simulator_order = Order(
+        shop_id=shop_id,
+        customer_id=customer.id,
+        conversation_id=simulator_conversation.id,
+        customer_name="Simulator Customer",
+        phone="09120000000",
+        city="Tehran",
+        address="Simulator Street",
+        postal_code="12345",
+        is_simulation=True,
+    )
+    db_session.add(simulator_order); db_session.commit()
+
+    summary = runner.reset(shop_id)
+
+    assert summary["deleted_runs"] >= 1
+    assert db_session.get(Conversation, simulator_conversation.id) is not None
+    assert db_session.get(Order, simulator_order.id) is not None
+    assert (
+        db_session.query(Conversation)
+        .filter(Conversation.channel_conversation_id.like(f"trl:{run.id}:%"))
+        .count()
+        == 0
+    )

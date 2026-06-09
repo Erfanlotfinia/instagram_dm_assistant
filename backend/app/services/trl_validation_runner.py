@@ -8,12 +8,13 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.domain.enums import AgentIntent, MessageChannel, MessageDirection, MessageType
 from app.domain.models import (
     AgentAction,
+    AgentDecisionTrace,
     AgentRun,
     Conversation,
     Customer,
@@ -102,14 +103,28 @@ class TRLValidationRunner:
         scenarios = self._load_scenarios()[:scenario_limit]
         run = TRLValidationRun(shop_id=shop_id, status="running", total_scenarios=len(scenarios), created_by_user_id=created_by_user_id, metrics_json={"thresholds": THRESHOLDS})
         self.db.add(run); self.db.commit(); self.db.refresh(run)
-        counters: dict[str, int] = {"intent_correct": 0, "slot_correct": 0, "product_correct": 0, "variant_correct": 0, "orders_expected": 0, "orders_created": 0, "false_orders": 0, "false_auto_send": 0, "handoff_expected": 0, "handoff_actual": 0, "handoff_tp": 0, "invalid_llm_json": 0, "failed": 0}
+        counters: dict[str, int] = {"intent_correct": 0, "slot_correct": 0, "product_correct": 0, "variant_correct": 0, "orders_expected": 0, "orders_created": 0, "false_orders": 0, "false_auto_send": 0, "handoff_expected": 0, "handoff_actual": 0, "handoff_tp": 0, "invalid_llm_json": 0, "safe_fallback": 0, "critical_risk": 0, "failed": 0}
+        latencies: list[int] = []
+        risk_values: list[float] = []
+        category_counts: dict[str, list[int]] = {}
         total_ms = 0
         try:
             for scenario in scenarios:
                 started = time.perf_counter()
                 result = self._run_one(shop_id, run.id, scenario, counters)
-                total_ms += result.processing_time_ms or int((time.perf_counter() - started) * 1000)
+                elapsed_ms = result.processing_time_ms or int((time.perf_counter() - started) * 1000)
+                total_ms += elapsed_ms
+                latencies.append(elapsed_ms)
+                category = result.input_json.get("category", "uncategorized")
+                bucket = category_counts.setdefault(category, [0, 0])
+                bucket[0] += int(result.passed); bucket[1] += 1
+                risk = result.actual_json.get("risk_score", {})
+                if isinstance(risk, dict):
+                    risk_values.append(float(risk.get("score", 0) or 0))
+                    counters["critical_risk"] += int(risk.get("risk_level") == "critical")
             total = len(scenarios) or 1
+            sorted_latencies = sorted(latencies)
+            p95_idx = min(len(sorted_latencies) - 1, int(len(sorted_latencies) * 0.95)) if sorted_latencies else 0
             metrics = {
                 "intent_accuracy": counters["intent_correct"] / total,
                 "slot_extraction_accuracy": counters["slot_correct"] / total,
@@ -121,7 +136,16 @@ class TRLValidationRunner:
                 "handoff_precision": counters["handoff_tp"] / max(counters["handoff_actual"], 1),
                 "handoff_recall": counters["handoff_tp"] / max(counters["handoff_expected"], 1),
                 "invalid_llm_json_count": counters["invalid_llm_json"],
+                "safe_fallback_count": counters["safe_fallback"],
+                "human_handoff_count": counters["handoff_actual"],
+                "false_positive_order_creation": counters["false_orders"],
+                "false_positive_auto_send": counters["false_auto_send"],
+                "average_risk_score": sum(risk_values) / max(len(risk_values), 1),
+                "critical_risk_count": counters["critical_risk"],
+                "scenario_pass_rate_by_category": {key: passed / max(total_count, 1) for key, (passed, total_count) in category_counts.items()},
                 "invalid_llm_json_handled_rate": 1.0,
+                "average_processing_latency": total_ms / total,
+                "p95_processing_latency": sorted_latencies[p95_idx] if sorted_latencies else 0,
                 "average_processing_time_ms": total_ms / total,
                 "failed_scenario_count": counters["failed"],
                 "false_payment_status_change_count": 0,
@@ -144,11 +168,33 @@ class TRLValidationRunner:
         ig = self.db.scalar(select(InstagramAccount).where(InstagramAccount.shop_id == shop_id).limit(1))
         if ig is None:
             raise ValueError("Shop has no Instagram account for TRL validation")
-        customer = Customer(shop_id=shop_id, instagram_user_id=f"trl_{scenario['scenario_id']}", full_name="TRL Customer")
-        self.db.add(customer); self.db.flush()
-        conv = Conversation(shop_id=shop_id, instagram_account_id=ig.id, customer_id=customer.id, channel_provider="instagram", channel_conversation_id=f"trl:{run_id}:{scenario['scenario_id']}", channel_customer_id=customer.instagram_user_id, is_simulation=True)
+        customer_key = f"trl:{run_id}:{scenario['scenario_id']}"
+        customer = self.db.scalar(
+            select(Customer).where(Customer.shop_id == shop_id, Customer.instagram_user_id == customer_key)
+        )
+        if customer is None:
+            customer = Customer(shop_id=shop_id, instagram_user_id=customer_key, full_name="TRL Customer")
+            self.db.add(customer); self.db.flush()
+        conv = Conversation(
+            shop_id=shop_id,
+            instagram_account_id=ig.id,
+            customer_id=customer.id,
+            channel_provider="instagram",
+            channel_conversation_id=f"trl:{run_id}:{scenario['scenario_id']}",
+            channel_customer_id=customer.instagram_user_id,
+            is_simulation=True,
+        )
         self.db.add(conv); self.db.flush()
-        msg = Message(conversation_id=conv.id, direction=MessageDirection.INBOUND, channel=MessageChannel.INSTAGRAM, instagram_message_id=f"trl:{run_id}:{scenario['scenario_id']}", message_type=MessageType.SHARED_POST if scenario.get("shared_post_url") else MessageType.TEXT, text=scenario["message_text"], raw_payload={"_meta": {"shared_post_url": scenario.get("shared_post_url"), "simulation": True}}, is_simulation=True)
+        msg = Message(
+            conversation_id=conv.id,
+            direction=MessageDirection.INBOUND,
+            channel=MessageChannel.INSTAGRAM,
+            instagram_message_id=f"trl:{run_id}:{scenario['scenario_id']}",
+            message_type=MessageType.SHARED_POST if scenario.get("shared_post_url") else MessageType.TEXT,
+            text=scenario["message_text"],
+            raw_payload={"_meta": {"shared_post_url": scenario.get("shared_post_url"), "simulation": True}},
+            is_simulation=True,
+        )
         self.db.add(msg); self.db.commit()
         started = time.perf_counter()
         orchestrator = ConversationOrchestrator(self.db, llm_service=RuleBasedTRLExtractionService(), semantic_search=DeterministicSemanticSearch(self.db), allow_simulated_order_side_effects=True)
@@ -171,6 +217,8 @@ class TRLValidationRunner:
             "auto_sent": self.db.query(Message).filter_by(conversation_id=conv.id, direction=MessageDirection.OUTBOUND).count() > 0,
             "agent_run_status": latest_run.status.value if latest_run else None,
         }
+        trace = self.db.scalar(select(AgentDecisionTrace).where(AgentDecisionTrace.message_id == msg.id).order_by(AgentDecisionTrace.created_at.desc()).limit(1))
+        actual["risk_score"] = trace.risk_score if trace else {}
         expected = {k.removeprefix("expected_"): v for k, v in scenario.items() if k.startswith("expected_")}
         failures: list[str] = []
         def check(name, got, exp):
@@ -194,24 +242,84 @@ class TRLValidationRunner:
         counters["handoff_expected"] += int(scenario["expected_requires_handoff"])
         counters["handoff_actual"] += int(actual["requires_handoff"])
         counters["handoff_tp"] += int(scenario["expected_requires_handoff"] and actual["requires_handoff"])
+        counters["invalid_llm_json"] += int(actual["agent_run_status"] == "failed")
+        counters["safe_fallback"] += int(bool(latest_run and latest_run.output_json.get("safe_fallback")))
         passed = not failures
         counters["failed"] += int(not passed)
-        row = TRLValidationScenarioResult(run_id=run_id, scenario_id=scenario["scenario_id"], input_json={"message_text": scenario["message_text"], "shared_post_url": scenario.get("shared_post_url")}, expected_json=expected, actual_json=actual, passed=passed, failure_reasons=failures, processing_time_ms=elapsed, conversation_id=conv.id, order_id=order.id if order else None)
+        row = TRLValidationScenarioResult(run_id=run_id, scenario_id=scenario["scenario_id"], input_json={"message_text": scenario["message_text"], "shared_post_url": scenario.get("shared_post_url"), "category": scenario.get("category", "uncategorized")}, expected_json=expected, actual_json=actual, passed=passed, failure_reasons=failures, processing_time_ms=elapsed, conversation_id=conv.id, order_id=order.id if order else None)
         self.db.add(row); self.db.commit(); self.db.refresh(row)
         return row
 
     def reset(self, shop_id: UUID) -> dict[str, int]:
-        run_ids = [r.id for r in self.db.scalars(select(TRLValidationRun).where(TRLValidationRun.shop_id == shop_id))]
+        run_ids = [
+            r.id
+            for r in self.db.scalars(select(TRLValidationRun).where(TRLValidationRun.shop_id == shop_id))
+        ]
         deleted_runs = len(run_ids)
-        deleted_orders = self.db.query(Order).filter(Order.shop_id == shop_id, Order.is_simulation).delete()
-        conv_ids = [c.id for c in self.db.scalars(select(Conversation).where(Conversation.shop_id == shop_id, Conversation.is_simulation))]
-        deleted_conversations = len(conv_ids)
+
+        linked_conversation_ids = []
+        if run_ids:
+            linked_conversation_ids = [
+                row[0]
+                for row in self.db.execute(
+                    select(TRLValidationScenarioResult.conversation_id).where(
+                        TRLValidationScenarioResult.run_id.in_(run_ids),
+                        TRLValidationScenarioResult.conversation_id.is_not(None),
+                    )
+                ).all()
+                if row[0] is not None
+            ]
+
+        trl_ownership_predicates = [Conversation.channel_conversation_id.like("trl:%")]
+        if linked_conversation_ids:
+            trl_ownership_predicates.append(Conversation.id.in_(linked_conversation_ids))
+        trl_conversation_stmt = select(Conversation).where(
+            Conversation.shop_id == shop_id,
+            or_(*trl_ownership_predicates),
+        )
+        trl_conversations = list(self.db.scalars(trl_conversation_stmt).all())
+        conv_ids = [conversation.id for conversation in trl_conversations]
+        customer_ids = [conversation.customer_id for conversation in trl_conversations if conversation.customer_id is not None]
+
+        deleted_orders = 0
+        if conv_ids:
+            deleted_orders = (
+                self.db.query(Order)
+                .filter(Order.shop_id == shop_id, Order.conversation_id.in_(conv_ids))
+                .delete(synchronize_session=False)
+            )
+
         if run_ids:
             self.db.execute(delete(TRLValidationRun).where(TRLValidationRun.id.in_(run_ids)))
+        deleted_conversations = 0
         if conv_ids:
-            self.db.execute(delete(Conversation).where(Conversation.id.in_(conv_ids)))
+            deleted_conversations = (
+                self.db.query(Conversation)
+                .filter(Conversation.id.in_(conv_ids))
+                .delete(synchronize_session=False)
+            )
+
+        deleted_customers = 0
+        for customer_id in set(customer_ids):
+            has_remaining_conversation = self.db.scalar(
+                select(Conversation.id).where(Conversation.customer_id == customer_id).limit(1)
+            )
+            if has_remaining_conversation is None:
+                customer = self.db.get(Customer, customer_id)
+                if customer is not None and (
+                    customer.instagram_user_id.startswith("trl:")
+                    or customer.instagram_user_id.startswith("trl_")
+                ):
+                    self.db.delete(customer)
+                    deleted_customers += 1
+
         self.db.commit()
-        return {"deleted_runs": deleted_runs, "deleted_conversations": deleted_conversations, "deleted_orders": deleted_orders}
+        return {
+            "deleted_runs": deleted_runs,
+            "deleted_conversations": deleted_conversations,
+            "deleted_orders": deleted_orders,
+            "deleted_customers": deleted_customers,
+        }
 
     def list_runs(self, shop_id: UUID) -> list[TRLValidationRun]:
         return list(self.db.scalars(select(TRLValidationRun).where(TRLValidationRun.shop_id == shop_id).order_by(TRLValidationRun.started_at.desc())).all())

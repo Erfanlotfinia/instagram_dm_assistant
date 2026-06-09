@@ -7,15 +7,19 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.domain.enums import AgentIntent, AgentRunStatus, AgentWorkflowState
 
 
-class ProductReference(BaseModel):
+class StrictAgentModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ProductReference(StrictAgentModel):
     instagram_post_url: str | None = None
     instagram_media_id: str | None = None
 
 
-class ExtractedSlots(BaseModel):
+class ExtractedSlots(StrictAgentModel):
     color: str | None = None
     size: str | None = None
-    quantity: int | None = None
+    quantity: int | None = Field(default=None, ge=1, le=100)
     customer_name: str | None = None
     phone: str | None = None
     city: str | None = None
@@ -23,14 +27,15 @@ class ExtractedSlots(BaseModel):
     postal_code: str | None = None
 
 
-class ExtractionConfidence(BaseModel):
-    intent: float = 0.0
-    slots: float = 0.0
-    product: float = 0.0
-    address: float = 1.0
+class ExtractionConfidence(StrictAgentModel):
+    intent: float = Field(default=0.0, ge=0.0, le=1.0)
+    slots: float = Field(default=0.0, ge=0.0, le=1.0)
+    product: float = Field(default=0.0, ge=0.0, le=1.0)
+    variant: float = Field(default=0.0, ge=0.0, le=1.0)
+    address: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
-class AgentExtractionResult(BaseModel):
+class AgentExtractionResult(StrictAgentModel):
     intent: AgentIntent
     product_reference: ProductReference = Field(default_factory=ProductReference)
     slots: ExtractedSlots = Field(default_factory=ExtractedSlots)
