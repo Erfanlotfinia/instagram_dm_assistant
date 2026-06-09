@@ -18,9 +18,11 @@ def upgrade() -> None:
     op.add_column("shop_agent_settings", sa.Column("risk_policy_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'{}'::jsonb")))
     op.add_column("agent_decision_traces", sa.Column("normalized_slots", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'{}'::jsonb")))
     op.add_column("agent_decision_traces", sa.Column("risk_score", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'{}'::jsonb")))
+    op.add_column("agent_decision_audits", sa.Column("normalized_slots", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'{}'::jsonb")))
 
 
 def downgrade() -> None:
+    op.drop_column("agent_decision_audits", "normalized_slots")
     op.drop_column("agent_decision_traces", "risk_score")
     op.drop_column("agent_decision_traces", "normalized_slots")
     op.drop_column("shop_agent_settings", "risk_policy_json")
