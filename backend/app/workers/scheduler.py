@@ -27,6 +27,12 @@ class SchedulerWorker:
             if expired:
                 logger.info("Expired %s unpaid orders", expired)
 
+            from app.workers.order_workers import publish_expired_reservations
+
+            reservation_expired = publish_expired_reservations(db, self.settings)
+            if reservation_expired:
+                logger.info("Published %s reservation expiry jobs", reservation_expired)
+
             from app.services.order_recovery_service import OrderRecoveryService
 
             recovery_stats = OrderRecoveryService(db).process_recovery_cycle()

@@ -63,7 +63,7 @@ def test_upsert_draft_order(db_session, demo_shop) -> None:
         data["conversation"], slots, data["product"], data["variant"]
     )
     assert order is not None
-    assert order.status == OrderStatus.WAITING_FOR_CONFIRMATION
+    assert order.status == OrderStatus.READY_FOR_CONFIRMATION
     assert len(order.items) == 1
     assert order.items[0].product_title_snapshot == data["product"].title
     assert order.items[0].sku_snapshot == data["variant"].sku
@@ -82,7 +82,7 @@ def test_confirm_reserves_inventory(db_session, admin_user, demo_shop, order_pro
 
     service = OrderService(db_session)
     confirmed = service.confirm_order(demo_shop.id, order.id, admin_user)
-    assert confirmed.status == OrderStatus.WAITING_FOR_PAYMENT
+    assert confirmed.status == OrderStatus.PAYMENT_PENDING
     assert confirmed.payment_status == OrderPaymentStatus.PENDING
     assert confirmed.expires_at is not None
 

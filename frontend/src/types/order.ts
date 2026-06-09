@@ -98,3 +98,77 @@ export type OrderShipRequest = {
 export type OrderCancelRequest = {
   reason?: string;
 };
+
+export type ReservationSummary = {
+  id: string;
+  product_variant_id: string;
+  quantity: number;
+  status: 'active' | 'confirmed' | 'released' | 'expired';
+  expires_at: string;
+  confirmed_at?: string | null;
+  released_at?: string | null;
+};
+
+export type OrderItemDraft = {
+  id: string;
+  product_id: string | null;
+  product_variant_id: string | null;
+  quantity: number;
+  product_title_snapshot: string;
+  variant_label_snapshot: string;
+  unit_price: string;
+};
+
+export type PilotModeSnapshot = {
+  pilot_enabled?: boolean;
+  pilot_name?: string;
+  emergency_stop?: boolean;
+  require_operator_approval?: boolean;
+};
+
+export type OrderCorrectnessRead = {
+  id: string;
+  shop_id: string;
+  customer_id: string;
+  conversation_id: string;
+  status: OrderStatus;
+  subtotal_amount: string;
+  total_amount: string;
+  currency: string;
+  payment_status: string;
+  shipping_status: string;
+  customer_name: string;
+  phone: string;
+  city: string;
+  address: string;
+  postal_code: string;
+  expires_at: string | null;
+  customer_confirmed_at: string | null;
+  customer_confirmation_source: string | null;
+  confidence_score: string | null;
+  pilot_mode_snapshot: PilotModeSnapshot | null;
+  active_reservation_id: string | null;
+  draft_items: OrderItemDraft[];
+  reservations: ReservationSummary[];
+  is_simulation: boolean;
+};
+
+export type OrderTimelineEntry = {
+  entry_type: string;
+  occurred_at: string;
+  label: string;
+  status?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+export type OrderTimelineResponse = {
+  order_id: string;
+  entries: OrderTimelineEntry[];
+};
+
+export type OrderConfirmRequest = {
+  confirmation_source?: string;
+  operator_decision?: 'approved' | 'rejected';
+  reason?: string;
+  notes?: string;
+};

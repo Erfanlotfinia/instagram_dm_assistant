@@ -34,8 +34,11 @@ import type { InstagramAccount, InstagramAccountCreate } from '../types/instagra
 import type {
   Order,
   OrderCancelRequest,
+  OrderConfirmRequest,
+  OrderCorrectnessRead,
   OrderListFilters,
   OrderShipRequest,
+  OrderTimelineResponse,
 } from '../types/order';
 import type {
   InstagramProductMap,
@@ -511,5 +514,35 @@ export const apiClient = {
     request<Order>(`/api/v1/shops/${shopId}/orders/${orderId}/ship`, {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+  getOrderCorrectness: (orderId: string) =>
+    request<OrderCorrectnessRead>(`/api/v1/orders/${orderId}`),
+  getOrderTimeline: (orderId: string) =>
+    request<OrderTimelineResponse>(`/api/v1/orders/${orderId}/timeline`),
+  confirmOrderCorrectness: (orderId: string, payload: OrderConfirmRequest = {}) =>
+    request<OrderCorrectnessRead>(`/api/v1/orders/${orderId}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({ confirmation_source: 'operator', ...payload }),
+    }),
+  cancelOrderCorrectness: (orderId: string, payload: OrderCancelRequest = {}) =>
+    request<OrderCorrectnessRead>(`/api/v1/orders/${orderId}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  reserveOrder: (orderId: string, ttl_seconds = 1800) =>
+    request<OrderCorrectnessRead>(`/api/v1/orders/${orderId}/reserve`, {
+      method: 'POST',
+      body: JSON.stringify({ ttl_seconds }),
+    }),
+  paymentLinkOrder: (orderId: string) =>
+    request<OrderCorrectnessRead>(`/api/v1/orders/${orderId}/payment-link`, { method: 'POST' }),
+  rejectOrderCorrectness: (orderId: string, reason?: string) =>
+    request<OrderCorrectnessRead>(`/api/v1/orders/${orderId}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({
+        confirmation_source: 'operator',
+        operator_decision: 'rejected',
+        reason,
+      }),
     }),
 };

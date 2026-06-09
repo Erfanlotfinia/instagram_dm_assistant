@@ -52,7 +52,7 @@ def test_agent_flow_creates_draft_and_payment_link(db_session, demo_shop) -> Non
     )
 
     assert data["conversation"].workflow_state == AgentWorkflowState.WAITING_FOR_PAYMENT
-    assert order.status == OrderStatus.WAITING_FOR_PAYMENT
+    assert order.status == OrderStatus.PAYMENT_PENDING
     assert outbound is not None
     assert "لینک پرداخت" in outbound.text
     assert "/api/v1/payments/mock/pay/" in outbound.text
@@ -97,7 +97,7 @@ def test_agent_creates_draft_on_complete_slots(db_session, demo_shop) -> None:
     db_session.refresh(data["conversation"])
     order = db_session.query(Order).filter(Order.conversation_id == data["conversation"].id).one_or_none()
     assert order is not None
-    assert order.status == OrderStatus.WAITING_FOR_CONFIRMATION
+    assert order.status == OrderStatus.READY_FOR_CONFIRMATION
     assert data["conversation"].workflow_state == AgentWorkflowState.WAITING_FOR_CONFIRMATION
 
 

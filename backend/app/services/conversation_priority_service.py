@@ -92,7 +92,11 @@ class ConversationPriorityService:
             if active_order.total_amount >= HIGH_VALUE_THRESHOLD:
                 score += PRIORITY_WEIGHTS["high_value_order"]
                 reasons.append("High-value order")
-            if active_order.status in {OrderStatus.DRAFT, OrderStatus.WAITING_FOR_CONFIRMATION}:
+            if active_order.status in {
+                OrderStatus.DRAFT,
+                OrderStatus.WAITING_FOR_CLARIFICATION,
+                OrderStatus.READY_FOR_CONFIRMATION,
+            }:
                 score += PRIORITY_WEIGHTS["order_operator_action"]
                 reasons.append("Order waiting for operator action")
 

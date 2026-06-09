@@ -12,6 +12,7 @@ from app.api.v1.failed_jobs_platform import router as failed_jobs_platform_route
 from app.api.v1.fashion import router as fashion_router
 from app.api.v1.health import router as health_router
 from app.api.v1.jobs import router as jobs_router
+from app.api.v1.order_correctness import router as order_correctness_router
 from app.api.v1.orders import router as orders_router
 from app.api.v1.payments import router as payments_router
 from app.api.v1.product_selection import router as product_selection_router
@@ -36,6 +37,7 @@ router.include_router(products_router)
 router.include_router(recovery_router)
 router.include_router(upsells_router)
 router.include_router(product_selection_router)
+router.include_router(order_correctness_router)
 router.include_router(orders_router)
 router.include_router(conversations_router)
 router.include_router(customers_router)

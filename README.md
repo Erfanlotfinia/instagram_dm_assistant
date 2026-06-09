@@ -189,6 +189,21 @@ npm run build
 - The LLM only extracts structured intent/slots; services validate products, variants, prices, inventory, payments, and state transitions.
 - Orders require explicit customer confirmation before payment and cannot be marked paid by the LLM.
 
+## Order correctness foundation
+
+Deterministic order lifecycle with durable reservations, action-policy gating, webhook idempotency, and full audit trails.
+
+Key API routes:
+
+- `POST /api/v1/orders/draft` — create draft + `order_items_draft`
+- `POST /api/v1/orders/{id}/clarify|confirm|reserve|payment-link|complete|cancel`
+- `GET /api/v1/orders/{id}` and `GET /api/v1/orders/{id}/timeline`
+- `POST /api/v1/webhooks/meta` — Meta webhook alias with Redis + DB idempotency
+
+Shop-scoped routes under `/api/v1/shops/{shop_id}/orders/*` remain as aliases.
+
+See [docs/order-correctness-architecture.md](docs/order-correctness-architecture.md).
+
 ## Meta Instagram webhook setup
 
 Configure these backend environment variables:
@@ -201,6 +216,7 @@ Webhook endpoints exposed by the API:
 
 - `GET /api/v1/webhooks/instagram` — Meta challenge verification
 - `POST /api/v1/webhooks/instagram` — inbound Instagram messaging events
+- `POST /api/v1/webhooks/meta` — alias with idempotent ingestion
 
 ### Local development with ngrok
 

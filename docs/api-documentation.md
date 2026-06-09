@@ -37,8 +37,10 @@ All shop-scoped routes require membership in the shop.
 | `/api/v1/shops` | Shops, settings, dashboard, Instagram accounts |
 | `/api/v1/shops/{id}/products` | Product catalog |
 | `/api/v1/shops/{id}/conversations` | Conversations, handoff, manual messages |
-| `/api/v1/shops/{id}/orders` | Orders lifecycle |
+| `/api/v1/shops/{id}/orders` | Orders lifecycle (shop-scoped aliases) |
+| `/api/v1/orders/*` | Order correctness canonical routes (draft, clarify, confirm, reserve, payment-link, complete, cancel, timeline) |
 | `/api/v1/webhooks/instagram` | Meta inbound webhook |
+| `/api/v1/webhooks/meta` | Meta webhook alias with idempotent ingestion |
 | `/api/v1/payments/mock/*` | Dev payment simulation |
 
 ## Rate limits (when enabled)

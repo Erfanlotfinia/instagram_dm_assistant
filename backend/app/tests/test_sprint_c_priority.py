@@ -33,7 +33,7 @@ def test_priority_increases_after_order_waiting_payment(db_session, demo_shop) -
         shop_id=demo_shop.id,
         customer_id=data["customer"].id,
         conversation_id=conversation.id,
-        status=OrderStatus.WAITING_FOR_PAYMENT,
+        status=OrderStatus.PAYMENT_PENDING,
         payment_status=OrderPaymentStatus.PENDING,
         total_amount=Decimal("150.00"),
         currency="USD",

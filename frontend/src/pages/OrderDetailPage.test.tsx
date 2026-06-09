@@ -24,7 +24,7 @@ vi.mock('../services/apiClient', () => ({
     getOrder: vi.fn().mockResolvedValue({
       id: 'o1',
       shop_id: 's1',
-      status: 'waiting_for_payment',
+      status: 'payment_pending',
       payment_status: 'pending',
       shipping_status: 'not_started',
       total_amount: '49.99',
@@ -36,6 +36,19 @@ vi.mock('../services/apiClient', () => ({
       shipments: [],
     }),
     markOrderPaid: mocks.markPaid,
+    getOrderCorrectness: vi.fn().mockResolvedValue({
+      id: 'o1',
+      shop_id: 's1',
+      status: 'payment_pending',
+      total_amount: '49.99',
+      currency: 'USD',
+      payment_status: 'pending',
+      shipping_status: 'not_started',
+      reservations: [],
+      draft_items: [],
+      pilot_mode_snapshot: { pilot_enabled: true, pilot_name: 'Pilot' },
+    }),
+    getOrderTimeline: vi.fn().mockResolvedValue({ order_id: 'o1', entries: [] }),
   },
 }));
 

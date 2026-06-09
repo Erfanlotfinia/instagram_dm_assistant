@@ -30,9 +30,10 @@ class OrderRepository:
     def get_active_for_conversation(self, conversation_id: UUID) -> Order | None:
         active_statuses = {
             OrderStatus.DRAFT,
-            OrderStatus.WAITING_FOR_CONFIRMATION,
-            OrderStatus.CONFIRMED,
-            OrderStatus.WAITING_FOR_PAYMENT,
+            OrderStatus.WAITING_FOR_CLARIFICATION,
+            OrderStatus.READY_FOR_CONFIRMATION,
+            OrderStatus.RESERVED,
+            OrderStatus.PAYMENT_PENDING,
         }
         stmt = (
             select(Order)
@@ -78,7 +79,7 @@ class OrderRepository:
 
     def list_expired_candidates(self, now: datetime) -> list[Order]:
         stmt = select(Order).where(
-            Order.status == OrderStatus.WAITING_FOR_PAYMENT,
+            Order.status == OrderStatus.PAYMENT_PENDING,
             Order.expires_at.is_not(None),
             Order.expires_at < now,
         )

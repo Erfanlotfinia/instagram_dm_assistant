@@ -50,7 +50,7 @@ class ShippingService:
         if order is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
 
-        if order.status not in {OrderStatus.PAID, OrderStatus.PREPARING}:
+        if order.status not in {OrderStatus.PAID, OrderStatus.ORDER_CREATED}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot ship order in status {order.status.value}",
@@ -67,7 +67,8 @@ class ShippingService:
         )
         self.shipments.create(shipment)
 
-        order.status = OrderStatus.SHIPPED
+        if order.status == OrderStatus.PAID:
+            order.status = OrderStatus.ORDER_CREATED
         order.shipping_status = OrderShippingStatus.SHIPPED
 
         self.order_service.audit(

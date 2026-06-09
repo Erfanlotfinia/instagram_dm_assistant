@@ -75,7 +75,7 @@ def test_e2e_inbound_to_paid_order(db_session, demo_shop) -> None:
     assert orchestrator.process_inbound_message(data["conversation"].id, confirm_message.id) is True
 
     order = db_session.query(Order).filter(Order.conversation_id == data["conversation"].id).one()
-    assert order.status == OrderStatus.WAITING_FOR_PAYMENT
+    assert order.status == OrderStatus.PAYMENT_PENDING
 
     from app.services.payment_service import PaymentService
 
@@ -158,7 +158,7 @@ def test_failure_stock_unavailable(db_session, demo_shop) -> None:
     orchestrator = build_orchestrator(db_session, llm_response=llm_response)
     assert orchestrator.process_inbound_message(data["conversation"].id, message.id) is True
     order = db_session.query(Order).filter(Order.conversation_id == data["conversation"].id).first()
-    assert order is None or order.status != OrderStatus.WAITING_FOR_PAYMENT
+    assert order is None or order.status != OrderStatus.PAYMENT_PENDING
 
 
 def test_duplicate_webhook_message_id(db_session, demo_shop) -> None:

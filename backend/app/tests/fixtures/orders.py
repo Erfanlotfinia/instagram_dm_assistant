@@ -41,7 +41,7 @@ def seed_draft_order(
         shop_id=shop_id,
         customer_id=customer_id,
         conversation_id=conversation_id,
-        status=OrderStatus.WAITING_FOR_CONFIRMATION,
+        status=OrderStatus.READY_FOR_CONFIRMATION,
         subtotal_amount=Decimal("49.99"),
         total_amount=Decimal("49.99"),
         currency="USD",

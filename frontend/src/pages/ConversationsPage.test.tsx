@@ -26,7 +26,7 @@ vi.mock('../services/apiClient', () => ({
         needs_attention: true,
         customer: { id: 'cust-1', instagram_user_id: 'ig-1', full_name: 'Ali' },
         linked_product: { id: 'p1', title: 'Hoodie' },
-        linked_order: { id: 'o1', status: 'waiting_for_payment', payment_status: 'pending', total_amount: '49.99' },
+        linked_order: { id: 'o1', status: 'payment_pending', payment_status: 'pending', total_amount: '49.99' },
         assigned_operator: { id: 'u1', full_name: 'Admin' },
         last_message_text: 'Hello',
         confidence_score: 0.85,
@@ -57,7 +57,7 @@ describe('ConversationsPage', () => {
       expect(screen.getByRole('link', { name: 'Ali' })).toBeInTheDocument();
       expect(screen.getByText('urgent (85)')).toBeInTheDocument();
       expect(screen.getByText('Hoodie')).toBeInTheDocument();
-      expect(screen.getByText('waiting_for_payment')).toBeInTheDocument();
+      expect(screen.getByText('payment_pending')).toBeInTheDocument();
       expect(screen.getByText('Admin')).toBeInTheDocument();
     });
   });

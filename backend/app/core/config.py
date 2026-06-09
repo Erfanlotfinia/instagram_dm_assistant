@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     rabbitmq_queue_message_received: str = "instagram.message.received"
     rabbitmq_queue_retry: str = "instagram.message.received.retry"
     rabbitmq_queue_dlq: str = "instagram.message.received.dlq"
+    rabbitmq_queue_payment_callbacks: str = "payment_callbacks"
+    rabbitmq_queue_reservation_expiry: str = "reservation_expiry"
+    rabbitmq_queue_order_compensation: str = "order_compensation"
+    rabbitmq_queue_operator_alerts: str = "operator_alerts"
+    rabbitmq_queue_dead_letter: str = "dead_letter"
+    reservation_default_ttl_seconds: int = Field(default=1800, ge=60)
     rabbitmq_max_retries: int = Field(default=3, ge=0)
     rabbitmq_retry_delay_ms: int = Field(default=30_000, ge=1000)
     api_public_base_url: str = "http://localhost:8000"

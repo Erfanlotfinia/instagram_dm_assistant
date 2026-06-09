@@ -602,7 +602,7 @@ def _ensure_order_fulfillment_records(
             record_status = PaymentRecordStatus.CANCELLED
         elif (
             payment_status == OrderPaymentStatus.UNPAID
-            and resolved_status == OrderStatus.WAITING_FOR_CONFIRMATION
+            and resolved_status == OrderStatus.READY_FOR_CONFIRMATION
         ):
             record_status = PaymentRecordStatus.CREATED
 
@@ -746,7 +746,7 @@ def _backfill_demo_order_fulfillment(db: Session, shop_id: UUID) -> None:
 
         # Showcase a fully shipped order in the demo UI.
         if reference_key == "demo-order-paid-hoodie":
-            order.status = OrderStatus.SHIPPED
+            order.status = OrderStatus.ORDER_CREATED
             order.shipping_status = OrderShippingStatus.SHIPPED
             shipment = db.scalar(select(Shipment).where(Shipment.order_id == order.id).limit(1))
             if shipment is None:
@@ -1145,7 +1145,7 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
             conversation_id=conv_handoff.id,
             product=hoodie,
             variant=hoodie_variant,
-            status=OrderStatus.WAITING_FOR_PAYMENT,
+            status=OrderStatus.PAYMENT_PENDING,
             payment_status=OrderPaymentStatus.PENDING,
             shipping_status=OrderShippingStatus.NOT_STARTED,
             customer_name="Sara Karimi",
@@ -1159,7 +1159,7 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
                 conversation_id=conv_sim.id,
                 product=black_shirt,
                 variant=shirt_variant,
-                status=OrderStatus.WAITING_FOR_CONFIRMATION,
+                status=OrderStatus.READY_FOR_CONFIRMATION,
                 payment_status=OrderPaymentStatus.UNPAID,
                 shipping_status=OrderShippingStatus.NOT_STARTED,
                 customer_name="Reza Ahmadi",

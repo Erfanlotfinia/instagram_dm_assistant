@@ -33,10 +33,14 @@ from app.domain.enums import (
     FailedJobStatus,
     InstagramAccountStatus,
     InventoryMovementType,
+    InventoryReservationStatus,
     MessageChannel,
     MessageDirection,
     MessageType,
+    OperatorReviewDecision,
+    OrderCorrectnessAction,
     OrderPaymentStatus,
+    OrderTransitionTrigger,
     OrderRecoveryAttemptStatus,
     OrderRecoveryStatus,
     OrderShippingStatus,
@@ -54,6 +58,7 @@ from app.domain.enums import (
     TriggerSourceType,
     UserRole,
     PilotEventSeverity,
+    WebhookDedupeOutcome,
     WebhookProcessingStatus,
     WebhookProvider,
 )
@@ -333,6 +338,11 @@ class WebhookEvent(Base, TimestampMixin):
         default=WebhookProcessingStatus.RECEIVED,
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    dedupe_outcome: Mapped[WebhookDedupeOutcome | None] = mapped_column(
+        pg_enum(WebhookDedupeOutcome, name="webhook_dedupe_outcome"), nullable=True
+    )
 
 
 class Message(Base):
@@ -752,6 +762,19 @@ class Order(Base, TimestampMixin):
     recovery_attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_recovery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_simulation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    customer_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    customer_confirmation_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    confidence_score: Mapped[Any | None] = mapped_column(Numeric(5, 4), nullable=True)
+    confidence_source: Mapped[ConfidenceSource | None] = mapped_column(
+        pg_enum(ConfidenceSource, name="confidence_source"), nullable=True
+    )
+    active_reservation_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("inventory_reservations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    pilot_mode_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
     shop: Mapped[Shop] = relationship(back_populates="orders")
     customer: Mapped[Customer] = relationship(back_populates="orders")
@@ -767,6 +790,181 @@ class Order(Base, TimestampMixin):
     )
     recovery_attempts: Mapped[list[OrderRecoveryAttempt]] = relationship(
         back_populates="order", cascade="all, delete-orphan"
+    )
+    draft_items: Mapped[list[OrderItemDraft]] = relationship(
+        back_populates="order", cascade="all, delete-orphan"
+    )
+    active_reservation: Mapped[InventoryReservation | None] = relationship(
+        foreign_keys=[active_reservation_id],
+    )
+    inventory_reservations: Mapped[list[InventoryReservation]] = relationship(
+        back_populates="order",
+        cascade="all, delete-orphan",
+        foreign_keys="InventoryReservation.order_id",
+    )
+
+
+class InventoryReservation(Base):
+    __tablename__ = "inventory_reservations"
+    __table_args__ = (
+        UniqueConstraint(
+            "order_id",
+            "product_variant_id",
+            name="uq_inventory_reservations_active_order_variant",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    order_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    product_variant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("product_variants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[InventoryReservationStatus] = mapped_column(
+        pg_enum(InventoryReservationStatus, name="inventory_reservation_status"),
+        nullable=False,
+        default=InventoryReservationStatus.ACTIVE,
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ttl_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    order: Mapped[Order] = relationship(
+        back_populates="inventory_reservations",
+        foreign_keys=[order_id],
+    )
+
+
+class OrderItemDraft(Base):
+    __tablename__ = "order_items_draft"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    order_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    product_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True
+    )
+    product_variant_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("product_variants.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    product_title_snapshot: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    variant_label_snapshot: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    unit_price: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    order: Mapped[Order] = relationship(back_populates="draft_items")
+
+
+class OrderStateTransition(Base):
+    __tablename__ = "order_state_transitions"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    order_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    from_status: Mapped[str] = mapped_column(String(64), nullable=False)
+    to_status: Mapped[str] = mapped_column(String(64), nullable=False)
+    trigger: Mapped[OrderTransitionTrigger] = mapped_column(
+        pg_enum(OrderTransitionTrigger, name="order_transition_trigger"), nullable=False
+    )
+    actor_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    trace_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    conversation_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True
+    )
+    transition_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+
+class ActionAttempt(Base):
+    __tablename__ = "action_attempts"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    order_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action: Mapped[OrderCorrectnessAction] = mapped_column(
+        pg_enum(OrderCorrectnessAction, name="order_correctness_action"), nullable=False
+    )
+    allowed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    denial_reasons: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    policy_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class PilotMode(Base):
+    __tablename__ = "pilot_modes"
+    __table_args__ = (UniqueConstraint("shop_id", "action", name="uq_pilot_modes_shop_action"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action: Mapped[OrderCorrectnessAction] = mapped_column(
+        pg_enum(OrderCorrectnessAction, name="order_correctness_action"), nullable=False
+    )
+    permitted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    confidence_threshold: Mapped[Any] = mapped_column(Numeric(5, 4), nullable=False, default=0.6)
+    require_customer_confirmation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class OperatorReview(Base):
+    __tablename__ = "operator_reviews"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    order_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    reviewer_user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    decision: Mapped[OperatorReviewDecision] = mapped_column(
+        pg_enum(OperatorReviewDecision, name="operator_review_decision"), nullable=False
+    )
+    reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
 

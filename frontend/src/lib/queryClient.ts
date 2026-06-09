@@ -26,6 +26,8 @@ export const queryKeys = {
   orders: (shopId: string, filters?: Record<string, unknown>) =>
     ['shops', shopId, 'orders', filters ?? {}] as const,
   order: (shopId: string, orderId: string) => ['shops', shopId, 'orders', orderId] as const,
+  orderCorrectness: (orderId: string) => ['orders', orderId, 'correctness'] as const,
+  orderTimeline: (orderId: string) => ['orders', orderId, 'timeline'] as const,
   instagramMaps: (shopId: string) => ['shops', shopId, 'instagram-maps'] as const,
   shopMembers: (shopId: string) => ['shops', shopId, 'members'] as const,
 };

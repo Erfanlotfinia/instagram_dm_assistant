@@ -96,8 +96,19 @@ class PaymentService:
             payment.callback_processed_at = datetime.now(UTC)
             order = self.order_service.get_order_internal(payment.order_id)
             if order:
-                order.payment_status = OrderPaymentStatus.FAILED
-                PilotService(self.db).log_event(order.shop_id, "payment_callback_error", PilotEventSeverity.ERROR, "Payment callback failed", description=f"Payment callback status {callback_status.value}", metadata={"payment_id": str(payment.id), "order_id": str(order.id)})
+                from app.services.compensation_service import CompensationService
+
+                CompensationService(self.db, self.settings).handle_payment_failed(
+                    order, reason=f"payment_{callback_status.value}"
+                )
+                PilotService(self.db).log_event(
+                    order.shop_id,
+                    "payment_callback_error",
+                    PilotEventSeverity.ERROR,
+                    "Payment callback failed",
+                    description=f"Payment callback status {callback_status.value}",
+                    metadata={"payment_id": str(payment.id), "order_id": str(order.id)},
+                )
             self.payments.commit()
             logger.info(
                 "Mock payment callback failed order=%s payment=%s status=%s",
@@ -111,9 +122,13 @@ class PaymentService:
 
     def send_payment_link(self, shop_id: UUID, order_id: UUID, user: User) -> Order:
         order = self.order_service.get_order_for_shop(shop_id, order_id, user)
-        if order.status in {OrderStatus.DRAFT, OrderStatus.WAITING_FOR_CONFIRMATION}:
+        if order.status in {
+            OrderStatus.DRAFT,
+            OrderStatus.READY_FOR_CONFIRMATION,
+            OrderStatus.RESERVED,
+        }:
             self.order_service._confirm_for_payment(order)
-        if order.status != OrderStatus.WAITING_FOR_PAYMENT:
+        if order.status != OrderStatus.PAYMENT_PENDING:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot send payment link for order in status {order.status.value}",
@@ -152,7 +167,7 @@ class PaymentService:
 
     def mark_paid_manually(self, shop_id: UUID, order_id: UUID, user: User) -> Order:
         order = self.order_service.get_order_for_shop(shop_id, order_id, user)
-        if order.status not in {OrderStatus.WAITING_FOR_PAYMENT, OrderStatus.CONFIRMED}:
+        if order.status not in {OrderStatus.PAYMENT_PENDING, OrderStatus.READY_FOR_CONFIRMATION}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot mark paid from status {order.status.value}",

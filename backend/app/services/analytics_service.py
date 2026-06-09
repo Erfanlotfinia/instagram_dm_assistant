@@ -37,7 +37,21 @@ class AnalyticsService:
         inbound = self._count_inbound(shop_id, start, end)
         resolved_products = self._count_slots(shop_id, ConversationSlots.product_id.is_not(None), start, end)
         resolved_variants = self._count_slots(shop_id, ConversationSlots.product_variant_id.is_not(None), start, end)
-        drafts = self._count_orders(shop_id, Order.status.in_([OrderStatus.DRAFT, OrderStatus.WAITING_FOR_CONFIRMATION, OrderStatus.WAITING_FOR_PAYMENT, OrderStatus.PAID]), start, end)
+        drafts = self._count_orders(
+            shop_id,
+            Order.status.in_(
+                [
+                    OrderStatus.DRAFT,
+                    OrderStatus.WAITING_FOR_CLARIFICATION,
+                    OrderStatus.READY_FOR_CONFIRMATION,
+                    OrderStatus.RESERVED,
+                    OrderStatus.PAYMENT_PENDING,
+                    OrderStatus.PAID,
+                ]
+            ),
+            start,
+            end,
+        )
         paid = self._count_orders(shop_id, Order.payment_status == OrderPaymentStatus.PAID, start, end)
         revenue = self.db.scalar(self._range(select(func.coalesce(func.sum(Order.total_amount), 0)).where(Order.shop_id == shop_id, Order.payment_status == OrderPaymentStatus.PAID), Order.created_at, start, end)) or Decimal("0")
         total_conversations = self._count_conversations(shop_id, start, end)
@@ -48,8 +62,8 @@ class AnalyticsService:
             product_resolved_count=resolved_products,
             variant_resolved_count=resolved_variants,
             draft_orders=drafts,
-            confirmed_orders=self._count_orders(shop_id, Order.status == OrderStatus.CONFIRMED, start, end),
-            waiting_for_payment=self._count_orders(shop_id, Order.status == OrderStatus.WAITING_FOR_PAYMENT, start, end),
+            confirmed_orders=self._count_orders(shop_id, Order.status == OrderStatus.READY_FOR_CONFIRMATION, start, end),
+            waiting_for_payment=self._count_orders(shop_id, Order.status == OrderStatus.PAYMENT_PENDING, start, end),
             resolved_product_rate=self._rate(resolved_products, inbound),
             variant_resolved_rate=self._rate(resolved_variants, inbound),
             draft_order_rate=self._rate(drafts, inbound),
@@ -118,8 +132,8 @@ class AnalyticsService:
             row = rows.setdefault(url, PostRevenueRow(instagram_post_url=url))
             if order.status in {
                 OrderStatus.DRAFT,
-                OrderStatus.WAITING_FOR_CONFIRMATION,
-                OrderStatus.WAITING_FOR_PAYMENT,
+                OrderStatus.READY_FOR_CONFIRMATION,
+                OrderStatus.PAYMENT_PENDING,
                 OrderStatus.PAID,
             }:
                 row.draft_orders += 1

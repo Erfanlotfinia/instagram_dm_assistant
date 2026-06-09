@@ -48,7 +48,7 @@ class DashboardService:
 
         today_orders = self._count_orders_since(shop_id, today_start)
         paid_orders = self._count_orders_by_payment(shop_id, OrderPaymentStatus.PAID)
-        waiting_for_payment = self._count_orders_by_status(shop_id, OrderStatus.WAITING_FOR_PAYMENT)
+        waiting_for_payment = self._count_orders_by_status(shop_id, OrderStatus.PAYMENT_PENDING)
         handoff_conversations = self._count_handoff_conversations(shop_id)
         low_stock = self._list_low_stock_variants(shop_id, threshold)
         funnel = self._build_conversion_funnel(shop_id)
@@ -166,7 +166,7 @@ class DashboardService:
                     Order.status.in_(
                         [
                             OrderStatus.DRAFT,
-                            OrderStatus.WAITING_FOR_CONFIRMATION,
+                            OrderStatus.READY_FOR_CONFIRMATION,
                         ]
                     ),
                 )
@@ -197,7 +197,7 @@ class DashboardService:
         )
         waiting = select(func.count()).select_from(Order).where(
             Order.shop_id == shop_id,
-            Order.status == OrderStatus.WAITING_FOR_PAYMENT,
+            Order.status == OrderStatus.PAYMENT_PENDING,
             Order.payment_status != OrderPaymentStatus.PAID,
         )
         return int(self.db.scalar(stmt) or 0) + int(self.db.scalar(waiting) or 0)

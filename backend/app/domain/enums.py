@@ -121,15 +121,52 @@ class ConfidenceSource(str, enum.Enum):
 
 class OrderStatus(str, enum.Enum):
     DRAFT = "draft"
-    WAITING_FOR_CONFIRMATION = "waiting_for_confirmation"
-    CONFIRMED = "confirmed"
-    WAITING_FOR_PAYMENT = "waiting_for_payment"
+    WAITING_FOR_CLARIFICATION = "waiting_for_clarification"
+    READY_FOR_CONFIRMATION = "ready_for_confirmation"
+    RESERVED = "reserved"
+    PAYMENT_PENDING = "payment_pending"
     PAID = "paid"
-    PREPARING = "preparing"
-    SHIPPED = "shipped"
-    COMPLETED = "completed"
+    ORDER_CREATED = "order_created"
+    FAILED = "failed"
     CANCELLED = "cancelled"
     EXPIRED = "expired"
+
+
+class InventoryReservationStatus(str, enum.Enum):
+    ACTIVE = "active"
+    CONFIRMED = "confirmed"
+    RELEASED = "released"
+    EXPIRED = "expired"
+
+
+class OrderTransitionTrigger(str, enum.Enum):
+    API = "api"
+    WEBHOOK = "webhook"
+    WORKER = "worker"
+    SYSTEM = "system"
+
+
+class OrderCorrectnessAction(str, enum.Enum):
+    CREATE_DRAFT = "create_draft"
+    CLARIFY = "clarify"
+    CONFIRM = "confirm"
+    RESERVE = "reserve"
+    PAYMENT_LINK = "payment_link"
+    COMPLETE = "complete"
+    CANCEL = "cancel"
+    MARK_PAID = "mark_paid"
+    EXPIRE = "expire"
+
+
+class WebhookDedupeOutcome(str, enum.Enum):
+    PROCESSED = "processed"
+    DUPLICATE = "duplicate"
+    IGNORED = "ignored"
+
+
+class OperatorReviewDecision(str, enum.Enum):
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
 
 class OrderPaymentStatus(str, enum.Enum):

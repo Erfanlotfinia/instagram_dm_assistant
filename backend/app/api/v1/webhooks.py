@@ -59,4 +59,41 @@ async def receive_instagram_webhook(
         )
 
     INBOUND_MESSAGES.inc()
-    return WebhookIngestionService(db).handle_instagram_payload(payload)
+    return WebhookIngestionService(db).handle_instagram_payload(payload, raw_body=body)
+
+
+@router.post("/meta", response_model=WebhookAckResponse | WebhookIgnoredResponse)
+async def receive_meta_webhook(
+    request: Request,
+    db: Annotated[Session, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    _: Annotated[None, Depends(rate_limit_webhook)],
+) -> WebhookAckResponse | WebhookIgnoredResponse:
+    """Alias for Instagram/Meta webhook ingestion with idempotency."""
+    body = await request.body()
+    if settings.instagram_app_secret:
+        signature = request.headers.get("X-Hub-Signature-256")
+        if not verify_meta_signature(body, signature, settings.instagram_app_secret):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid webhook signature",
+            )
+
+    try:
+        import json
+
+        payload: dict[str, Any] = json.loads(body.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid JSON payload",
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Payload must be a JSON object",
+        )
+
+    INBOUND_MESSAGES.inc()
+    return WebhookIngestionService(db).handle_instagram_payload(payload, raw_body=body)

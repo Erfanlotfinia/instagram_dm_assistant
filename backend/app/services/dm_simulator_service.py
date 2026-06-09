@@ -92,7 +92,9 @@ class DMSimulatorService:
             .where(
                 Order.conversation_id == conversation.id,
                 Order.is_simulation.is_(True),
-                Order.status.in_([OrderStatus.DRAFT, OrderStatus.WAITING_FOR_CONFIRMATION]),
+                Order.status.in_(
+                    [OrderStatus.DRAFT, OrderStatus.WAITING_FOR_CLARIFICATION, OrderStatus.READY_FOR_CONFIRMATION]
+                ),
             )
             .order_by(Order.created_at.desc())
         )

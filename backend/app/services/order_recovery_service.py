@@ -98,7 +98,7 @@ class OrderRecoveryService:
 
         orders = self.db.scalars(
             select(Order).where(
-                Order.status == OrderStatus.WAITING_FOR_PAYMENT,
+                Order.status == OrderStatus.PAYMENT_PENDING,
                 Order.payment_status != OrderPaymentStatus.PAID,
                 Order.recovery_status.not_in(TERMINAL_RECOVERY_STATUSES),
             )
@@ -267,7 +267,7 @@ class OrderRecoveryService:
             logger.warning("Recovery send failed order=%s: %s", order.id, exc)
 
         if order.recovery_attempt_count >= rule.max_attempts and order.payment_status != OrderPaymentStatus.PAID:
-            if order.status == OrderStatus.WAITING_FOR_PAYMENT:
+            if order.status == OrderStatus.PAYMENT_PENDING:
                 order.recovery_status = OrderRecoveryStatus.FAILED
 
         return attempt

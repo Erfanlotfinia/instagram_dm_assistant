@@ -44,12 +44,35 @@ def setup_message_queues(channel: BlockingChannel, settings: Settings | None = N
             "x-dead-letter-routing-key": retry_queue,
         },
     )
+    setup_order_correctness_queues(channel, settings)
     logger.info(
         "RabbitMQ queues declared main=%s retry=%s dlq=%s",
         main_queue,
         retry_queue,
         dlq_queue,
     )
+
+
+def setup_order_correctness_queues(
+    channel: BlockingChannel, settings: Settings | None = None
+) -> None:
+    settings = settings or get_settings()
+    dead_letter = settings.rabbitmq_queue_dead_letter
+    channel.queue_declare(queue=dead_letter, durable=True)
+    for queue_name in (
+        settings.rabbitmq_queue_payment_callbacks,
+        settings.rabbitmq_queue_reservation_expiry,
+        settings.rabbitmq_queue_order_compensation,
+        settings.rabbitmq_queue_operator_alerts,
+    ):
+        channel.queue_declare(
+            queue=queue_name,
+            durable=True,
+            arguments={
+                "x-dead-letter-exchange": "",
+                "x-dead-letter-routing-key": dead_letter,
+            },
+        )
 
 
 def get_queue_depth(channel: BlockingChannel, queue_name: str) -> int:

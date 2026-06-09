@@ -51,9 +51,10 @@ logger = logging.getLogger(__name__)
 
 ACTIVE_ORDER_STATUSES = {
     OrderStatus.DRAFT,
-    OrderStatus.WAITING_FOR_CONFIRMATION,
-    OrderStatus.CONFIRMED,
-    OrderStatus.WAITING_FOR_PAYMENT,
+    OrderStatus.WAITING_FOR_CLARIFICATION,
+    OrderStatus.READY_FOR_CONFIRMATION,
+    OrderStatus.RESERVED,
+    OrderStatus.PAYMENT_PENDING,
 }
 
 
@@ -125,7 +126,8 @@ class OrderService:
         existing = self.orders.get_active_for_conversation(conversation.id)
         if existing is not None and existing.status not in {
             OrderStatus.DRAFT,
-            OrderStatus.WAITING_FOR_CONFIRMATION,
+            OrderStatus.WAITING_FOR_CLARIFICATION,
+            OrderStatus.READY_FOR_CONFIRMATION,
         }:
             return existing
 
@@ -134,7 +136,7 @@ class OrderService:
                 shop_id=conversation.shop_id,
                 customer_id=conversation.customer_id,
                 conversation_id=conversation.id,
-                status=OrderStatus.WAITING_FOR_CONFIRMATION,
+                status=OrderStatus.READY_FOR_CONFIRMATION,
                 subtotal_amount=subtotal,
                 total_amount=subtotal,
                 currency=product.currency,
@@ -148,7 +150,7 @@ class OrderService:
             self.orders.create(order)
         else:
             order = existing
-            order.status = OrderStatus.WAITING_FOR_CONFIRMATION
+            order.status = OrderStatus.READY_FOR_CONFIRMATION
             order.subtotal_amount = subtotal
             order.total_amount = subtotal
             order.currency = product.currency
@@ -182,51 +184,81 @@ class OrderService:
         order_id: UUID,
         user: User,
     ) -> OrderRead:
+        from app.schemas.order_correctness import OrderConfirmRequest
+        from app.services.order_correctness_service import OrderCorrectnessService
+
+        OrderCorrectnessService(self.db, self.settings).confirm(
+            order_id,
+            user,
+            OrderConfirmRequest(confirmation_source="operator", operator_decision=None),
+        )
         order = self.get_order_for_shop(shop_id, order_id, user)
-        confirmed = self._confirm_for_payment(order)
+        from app.schemas.order_correctness import OrderReserveRequest
+
+        correctness = OrderCorrectnessService(self.db, self.settings)
+        try:
+            correctness.reserve(order_id, user, OrderReserveRequest())
+        except HTTPException:
+            pass
         self.audit(
             shop_id=shop_id,
             user_id=user.id,
             action="confirm_order",
             entity_type="order",
             entity_id=str(order.id),
-            details={"status": confirmed.status.value},
+            details={"status": order.status.value},
         )
         self.orders.commit()
-        return self._to_read(confirmed)
+        return self._to_read(self.get_order_for_shop(shop_id, order_id, user))
 
     def confirm_after_customer(self, order: Order) -> Order:
-        if order.status != OrderStatus.WAITING_FOR_CONFIRMATION:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot confirm order in status {order.status.value}",
-            )
-        return self._confirm_for_payment(order)
-
-    def _confirm_for_payment(self, order: Order) -> Order:
-        if order.status == OrderStatus.WAITING_FOR_PAYMENT:
-            logger.info("Order already confirmed for payment order=%s (idempotent)", order.id)
-            return order
         if order.status not in {
-            OrderStatus.WAITING_FOR_CONFIRMATION,
+            OrderStatus.READY_FOR_CONFIRMATION,
             OrderStatus.DRAFT,
-            OrderStatus.CONFIRMED,
+            OrderStatus.WAITING_FOR_CLARIFICATION,
         }:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot confirm order in status {order.status.value}",
             )
+        order.customer_confirmed_at = datetime.now(UTC)
+        order.customer_confirmation_source = "customer"
+        return self._confirm_for_payment(order)
 
-        for item in order.items:
-            if item.product_variant_id is None:
-                continue
-            self._reserve_inventory(
-                variant_id=item.product_variant_id,
-                quantity=item.quantity,
-                order_id=order.id,
+    def _confirm_for_payment(self, order: Order) -> Order:
+        if order.status == OrderStatus.PAYMENT_PENDING:
+            logger.info("Order already confirmed for payment order=%s (idempotent)", order.id)
+            return order
+        from app.services.inventory_reservation_service import InventoryReservationService
+        from app.services.order_state_machine_service import OrderStateMachineService, TransitionContext
+        from app.domain.enums import OrderCorrectnessAction, OrderTransitionTrigger
+
+        reservation_service = InventoryReservationService(self.db)
+        state_machine = OrderStateMachineService(self.db)
+
+        if order.status == OrderStatus.READY_FOR_CONFIRMATION:
+            for item in order.items:
+                if item.product_variant_id is None:
+                    continue
+                reservation = reservation_service.reserve(
+                    shop_id=order.shop_id,
+                    order_id=order.id,
+                    product_variant_id=item.product_variant_id,
+                    quantity=item.quantity,
+                    ttl_seconds=self.settings.reservation_default_ttl_seconds,
+                )
+                order.active_reservation_id = reservation.id
+            state_machine.transition(
+                order,
+                OrderCorrectnessAction.RESERVE,
+                TransitionContext(trigger=OrderTransitionTrigger.SYSTEM),
             )
 
-        order.status = OrderStatus.WAITING_FOR_PAYMENT
+        state_machine.transition(
+            order,
+            OrderCorrectnessAction.PAYMENT_LINK,
+            TransitionContext(trigger=OrderTransitionTrigger.SYSTEM),
+        )
         order.payment_status = OrderPaymentStatus.PENDING
         order.expires_at = datetime.now(UTC) + timedelta(minutes=self.settings.order_expiration_minutes)
         order.recovery_status = OrderRecoveryStatus.NONE
@@ -276,10 +308,15 @@ class OrderService:
         return self._cancel_order_internal(order, reason=reason)
 
     def _cancel_order_internal(self, order: Order, reason: str | None = None) -> Order:
-        if order.status in {OrderStatus.CANCELLED, OrderStatus.EXPIRED, OrderStatus.COMPLETED}:
+        if order.status in {OrderStatus.CANCELLED, OrderStatus.EXPIRED, OrderStatus.ORDER_CREATED}:
             return order
 
-        if order.status == OrderStatus.WAITING_FOR_PAYMENT:
+        from app.services.inventory_reservation_service import InventoryReservationService
+
+        InventoryReservationService(self.db).release_all_for_order(
+            order.id, reason=reason or "Order cancelled"
+        )
+        if order.status in {OrderStatus.PAYMENT_PENDING, OrderStatus.RESERVED}:
             self._release_order_inventory(order, reason=reason or "Order cancelled")
 
         order.status = OrderStatus.CANCELLED
@@ -299,8 +336,11 @@ class OrderService:
         return order
 
     def expire_order(self, order: Order) -> Order:
-        if order.status != OrderStatus.WAITING_FOR_PAYMENT:
+        if order.status != OrderStatus.PAYMENT_PENDING:
             return order
+        from app.services.inventory_reservation_service import InventoryReservationService
+
+        InventoryReservationService(self.db).release_all_for_order(order.id, reason="Order expired")
         self._release_order_inventory(order, reason="Order expired")
         order.status = OrderStatus.EXPIRED
         order.payment_status = OrderPaymentStatus.UNPAID
@@ -325,13 +365,23 @@ class OrderService:
         if order.status == OrderStatus.PAID and order.payment_status == OrderPaymentStatus.PAID:
             logger.info("Duplicate mark paid ignored order=%s", order.id)
             return order
-        if order.status not in {OrderStatus.WAITING_FOR_PAYMENT, OrderStatus.CONFIRMED}:
+        if order.status not in {OrderStatus.PAYMENT_PENDING, OrderStatus.READY_FOR_CONFIRMATION}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot mark paid from status {order.status.value}",
             )
 
-        order.status = OrderStatus.PAID
+        from app.domain.enums import OrderCorrectnessAction, OrderTransitionTrigger
+        from app.services.order_state_machine_service import OrderStateMachineService, TransitionContext
+
+        if order.status == OrderStatus.PAYMENT_PENDING:
+            OrderStateMachineService(self.db).transition(
+                order,
+                OrderCorrectnessAction.MARK_PAID,
+                TransitionContext(trigger=OrderTransitionTrigger.WEBHOOK),
+            )
+        else:
+            order.status = OrderStatus.PAID
         order.payment_status = OrderPaymentStatus.PAID
         order.expires_at = None
         order.shipping_status = OrderShippingStatus.PREPARING

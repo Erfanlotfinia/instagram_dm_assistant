@@ -208,7 +208,8 @@ class PilotService:
             previewed_messages=previewed,
             human_handoff_count=handoff,
             draft_orders=self._count_orders(shop_id, OrderStatus.DRAFT),
-            confirmed_orders=self._count_orders(shop_id, OrderStatus.CONFIRMED) + self._count_orders(shop_id, OrderStatus.WAITING_FOR_PAYMENT),
+            confirmed_orders=self._count_orders(shop_id, OrderStatus.READY_FOR_CONFIRMATION)
+            + self._count_orders(shop_id, OrderStatus.PAYMENT_PENDING),
             paid_orders=int(self.db.scalar(select(func.count(Order.id)).where(Order.shop_id == shop_id, Order.payment_status == OrderPaymentStatus.PAID)) or 0),
             cancelled_orders=self._count_orders(shop_id, OrderStatus.CANCELLED),
             failed_jobs=failed_jobs,

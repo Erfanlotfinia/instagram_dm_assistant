@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.enums import WebhookProcessingStatus
+from app.domain.enums import WebhookProcessingStatus, WebhookProvider
 from app.domain.models import WebhookEvent
 
 
@@ -18,6 +18,15 @@ class WebhookEventRepository:
 
     def get_by_id(self, event_id: UUID) -> WebhookEvent | None:
         return self.db.get(WebhookEvent, event_id)
+
+    def get_by_idempotency_key(
+        self, provider: WebhookProvider, idempotency_key: str
+    ) -> WebhookEvent | None:
+        stmt = select(WebhookEvent).where(
+            WebhookEvent.provider == provider,
+            WebhookEvent.idempotency_key == idempotency_key,
+        )
+        return self.db.scalar(stmt)
 
     def update_status(
         self,

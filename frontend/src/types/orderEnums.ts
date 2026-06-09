@@ -1,12 +1,12 @@
 export type OrderStatus =
   | 'draft'
-  | 'waiting_for_confirmation'
-  | 'confirmed'
-  | 'waiting_for_payment'
+  | 'waiting_for_clarification'
+  | 'ready_for_confirmation'
+  | 'reserved'
+  | 'payment_pending'
   | 'paid'
-  | 'preparing'
-  | 'shipped'
-  | 'completed'
+  | 'order_created'
+  | 'failed'
   | 'cancelled'
   | 'expired';
 
@@ -24,13 +24,13 @@ export type ShipmentStatus = 'pending' | 'preparing' | 'shipped' | 'delivered' |
 
 export const ORDER_STATUS_OPTIONS: OrderStatus[] = [
   'draft',
-  'waiting_for_confirmation',
-  'confirmed',
-  'waiting_for_payment',
+  'waiting_for_clarification',
+  'ready_for_confirmation',
+  'reserved',
+  'payment_pending',
   'paid',
-  'preparing',
-  'shipped',
-  'completed',
+  'order_created',
+  'failed',
   'cancelled',
   'expired',
 ];

@@ -1,6 +1,10 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
+import { OrderDraftPanel } from '../orders/OrderDraftPanel';
+import { queryKeys } from '../../lib/queryClient';
+import { apiClient } from '../../services/apiClient';
 import type { ConversationDetail, ConversationEvent, CustomerUpdate } from '../../types/conversation';
 import { ConversationEventsTimeline } from './ConversationEventsTimeline';
 import { CustomerProfilePanel } from './CustomerProfilePanel';
@@ -34,6 +38,12 @@ export function ConversationContextPanel({
   isSavingCustomer,
 }: ConversationContextPanelProps) {
   const [activeTab, setActiveTab] = useState<ContextTab>('customer');
+  const linkedOrderId = conversation.linked_order?.id;
+  const correctnessQuery = useQuery({
+    queryKey: queryKeys.orderCorrectness(linkedOrderId ?? ''),
+    queryFn: () => apiClient.getOrderCorrectness(linkedOrderId!),
+    enabled: Boolean(linkedOrderId),
+  });
 
   return (
     <aside className="conversation-context" aria-label="Conversation context">
@@ -75,6 +85,9 @@ export function ConversationContextPanel({
         hidden={activeTab !== 'order'}
         className="conversation-context__panel"
       >
+        {correctnessQuery.data ? (
+          <OrderDraftPanel order={correctnessQuery.data} />
+        ) : null}
         {conversation.linked_order ? (
           <dl className="context-facts">
             <div className="context-facts__item">

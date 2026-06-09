@@ -3,6 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { OrderTimelineTab } from '../components/orders/OrderTimelineTab';
+import { PilotModeBadge } from '../components/orders/PilotModeBadge';
+import { ReservationStatusChip } from '../components/orders/ReservationStatusChip';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { queryKeys } from '../lib/queryClient';
@@ -240,8 +243,9 @@ function OperatorActionsPanel({
 }) {
   const canConfirm =
     order.status === 'draft' ||
-    order.status === 'waiting_for_confirmation' ||
-    order.status === 'confirmed';
+    order.status === 'waiting_for_clarification' ||
+    order.status === 'ready_for_confirmation' ||
+    order.status === 'reserved';
   const canMarkPaid = order.payment_status !== 'paid';
   const confirmComplete =
     !canConfirm &&
@@ -249,8 +253,11 @@ function OperatorActionsPanel({
     order.status !== 'expired' &&
     order.status !== 'draft';
   const markPaidComplete = order.payment_status === 'paid';
-  const canShip = order.status === 'paid' || order.status === 'preparing';
-  const canCancel = order.status !== 'cancelled' && order.status !== 'completed';
+  const canShip = order.status === 'paid' || order.status === 'order_created';
+  const canCancel =
+    order.status !== 'cancelled' &&
+    order.status !== 'expired' &&
+    order.status !== 'order_created';
 
   return (
     <div className="order-operator-actions">
@@ -441,7 +448,14 @@ export function OrderDetailPage() {
     enabled: Boolean(shopId && orderId),
   });
 
+  const correctnessQuery = useQuery({
+    queryKey: queryKeys.orderCorrectness(orderId ?? ''),
+    queryFn: () => apiClient.getOrderCorrectness(orderId!),
+    enabled: Boolean(orderId),
+  });
+
   const order = orderQuery.data;
+  const correctness = correctnessQuery.data;
   const latestShipment = order?.shipments?.[0];
 
   useEffect(() => {
@@ -456,6 +470,8 @@ export function OrderDetailPage() {
   function invalidateOrder() {
     queryClient.invalidateQueries({ queryKey: queryKeys.order(shopId, orderId!) });
     queryClient.invalidateQueries({ queryKey: queryKeys.orders(shopId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.orderCorrectness(orderId!) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.orderTimeline(orderId!) });
   }
 
   const actionMutation = useMutation({
@@ -524,7 +540,13 @@ export function OrderDetailPage() {
     <div className="page-stack page-stack--wide">
       <section className="dashboard-card dashboard-card--wide">
         <p className="dashboard-card__eyebrow">Order detail</p>
-        <h1>Order {order.id.slice(0, 8)}</h1>
+        <div className="section-header section-header--stacked">
+          <h1>Order {order.id.slice(0, 8)}</h1>
+          <div className="order-draft-panel__meta">
+            <PilotModeBadge snapshot={correctness?.pilot_mode_snapshot} />
+            {correctness && <ReservationStatusChip reservations={correctness.reservations} />}
+          </div>
+        </div>
         <p>
           <Link className="table-link" to="/orders">
             Back to orders
@@ -659,7 +681,9 @@ export function OrderDetailPage() {
       </section>
 
       <section className="dashboard-card dashboard-card--wide">
-        <h2>Status timeline</h2>
+        <h2>Audit timeline</h2>
+        {orderId ? <OrderTimelineTab orderId={orderId} /> : null}
+        <h3 className="context-section__title">Legacy timeline</h3>
         <ol className="timeline-list">
           {order.timeline.map((event) => (
             <li key={`${event.status}-${event.occurred_at}`}>

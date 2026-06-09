@@ -259,7 +259,7 @@ def test_duplicate_payment_callback_idempotent(db_session, demo_shop) -> None:
         shop_id=demo_shop.id,
         conversation_id=data["conversation"].id,
         customer_id=data["customer"].id,
-        status=OrderStatus.WAITING_FOR_PAYMENT,
+        status=OrderStatus.PAYMENT_PENDING,
         payment_status=OrderPaymentStatus.PENDING,
         total_amount=Decimal("99.99"),
         currency="USD",
