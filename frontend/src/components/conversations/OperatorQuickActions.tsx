@@ -31,7 +31,8 @@ export function OperatorQuickActions({
     hasOrder &&
     (orderStatus === 'ready_for_confirmation' ||
       orderStatus === 'reserved' ||
-      orderStatus === 'payment_pending');
+      orderStatus === 'payment_pending' ||
+      orderStatus === 'waiting_for_payment');
   const canMarkPaid = hasOrder && paymentStatus !== 'paid';
   const canShip = hasOrder && orderStatus === 'paid';
   const canCancel = hasOrder && orderStatus !== 'cancelled' && orderStatus !== 'completed';

@@ -45,7 +45,7 @@ describe('OrdersPage', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Ali Rezaei|waiting_for_payment|49.99/i)).toBeInTheDocument();
+      expect(screen.getByText('Ali Rezaei')).toBeInTheDocument();
     });
   });
 });

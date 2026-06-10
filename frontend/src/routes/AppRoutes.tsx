@@ -11,6 +11,7 @@ import { AnalyticsPage } from '../pages/AnalyticsPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { DMSimulatorPage } from '../pages/DMSimulatorPage';
 import { FashionDictionaryPage } from '../pages/FashionDictionaryPage';
+import { FailedJobsPage } from '../pages/FailedJobsPage';
 import { InstagramAccountsPage } from '../pages/InstagramAccountsPage';
 import {
   InstagramProductMappingPage,
@@ -300,6 +301,15 @@ export function AppRoutes() {
         element={
           <AuthenticatedShell>
             <SystemHealthPage />
+          </AuthenticatedShell>
+        }
+      />
+
+      <Route
+        path="/failed-jobs"
+        element={
+          <AuthenticatedShell>
+            <FailedJobsPage />
           </AuthenticatedShell>
         }
       />

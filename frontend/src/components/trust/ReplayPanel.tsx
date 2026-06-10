@@ -59,7 +59,7 @@ function ReplayItemRow({
 }
 
 export function ReplayPanel() {
-  const { selectedShopId } = useShop();
+  const { selectedShopId, shops } = useShop();
   const { showToast } = useToast();
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [traceId, setTraceId] = useState<string | null>(null);
@@ -71,13 +71,13 @@ export function ReplayPanel() {
 
   const scenarioPacksQuery = useQuery({
     queryKey: ['scenario-packs', selectedShopId],
-    queryFn: () => apiClient.listScenarioPacks(selectedShopId!),
+    queryFn: () => apiClient.listScenarioPacks(selectedShopId || shops[0]?.id || ''),
     enabled: Boolean(selectedShopId),
   });
 
   const replayRunsQuery = useQuery({
     queryKey: ['replay-runs', selectedShopId],
-    queryFn: () => apiClient.listReplayRuns(selectedShopId!),
+    queryFn: () => apiClient.listReplayRuns(selectedShopId || shops[0]?.id || ''),
     enabled: Boolean(selectedShopId),
   });
 
@@ -89,13 +89,13 @@ export function ReplayPanel() {
 
   const traceQuery = useQuery({
     queryKey: ['trust-trace', selectedShopId, traceId],
-    queryFn: () => apiClient.getTrustTrace(selectedShopId!, traceId!),
+    queryFn: () => apiClient.getTrustTrace(selectedShopId || shops[0]?.id || '', traceId!),
     enabled: Boolean(selectedShopId && traceId),
   });
 
   const replayMutation = useMutation({
     mutationFn: (scenarios: ReplayScenarioInput[]) =>
-      apiClient.runReplay(selectedShopId!, {
+      apiClient.runReplay(selectedShopId || shops[0]?.id || '', {
         label: 'Manual replay run',
         model_version: modelVersion || null,
         prompt_version: promptVersion || null,
@@ -112,7 +112,7 @@ export function ReplayPanel() {
 
   const createPackMutation = useMutation({
     mutationFn: () =>
-      apiClient.createScenarioPack(selectedShopId!, {
+      apiClient.createScenarioPack(selectedShopId || shops[0]?.id || '', {
         name: packName,
         pack_type: 'handcrafted',
         scenarios_json: GOLDEN_SCENARIOS,

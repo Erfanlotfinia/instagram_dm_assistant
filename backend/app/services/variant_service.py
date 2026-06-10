@@ -98,6 +98,18 @@ class VariantService:
             ) from exc
         return VariantRead.from_variant(variant)
 
+
+    def delete_variant(self, shop_id: UUID, variant_id: UUID, user: User) -> None:
+        self.shop_service.get_shop(shop_id, user)
+        variant = self._get_variant_for_shop_or_404(shop_id, variant_id)
+        if variant.reserved_quantity > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete variant with reserved inventory",
+            )
+        self.variants.delete(variant)
+        self.variants.commit()
+
     def _require_product(self, shop_id: UUID, product_id: UUID, user: User):
         self.shop_service.get_shop(shop_id, user)
         product = self.products.get_for_shop(shop_id, product_id)

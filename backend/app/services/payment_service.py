@@ -122,8 +122,12 @@ class PaymentService:
 
     def send_payment_link(self, shop_id: UUID, order_id: UUID, user: User) -> Order:
         order = self.order_service.get_order_for_shop(shop_id, order_id, user)
+        if order.status == OrderStatus.DRAFT:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Order must be confirmed before sending payment link",
+            )
         if order.status in {
-            OrderStatus.DRAFT,
             OrderStatus.READY_FOR_CONFIRMATION,
             OrderStatus.RESERVED,
         }:
