@@ -141,3 +141,19 @@ def create_shared_post_message(db_session, conversation_id: UUID, post_url: str,
     db_session.commit()
     db_session.refresh(message)
     return message
+
+
+def create_text_message(db_session, conversation_id: UUID, text: str, *, instagram_message_id: str | None = None) -> Message:
+    message = Message(
+        conversation_id=conversation_id,
+        direction=MessageDirection.INBOUND,
+        channel=MessageChannel.INSTAGRAM,
+        instagram_message_id=instagram_message_id,
+        message_type=MessageType.TEXT,
+        text=text,
+        raw_payload={},
+    )
+    db_session.add(message)
+    db_session.commit()
+    db_session.refresh(message)
+    return message

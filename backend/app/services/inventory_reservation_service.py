@@ -179,8 +179,12 @@ class InventoryReservationService:
         return reservation
 
     def release_all_for_order(self, order_id: UUID, reason: str = "Order released") -> None:
-        for reservation in self.reservations.get_active_for_order(order_id):
-            self.release_reservation(reservation.id, reason=reason)
+        for reservation in self.reservations.list_for_order(order_id):
+            if reservation.status in {
+                InventoryReservationStatus.ACTIVE,
+                InventoryReservationStatus.CONFIRMED,
+            }:
+                self.release_reservation(reservation.id, reason=reason)
 
     def _cache_reservation(self, reservation: InventoryReservation) -> None:
         ttl = max(1, int((reservation.expires_at - datetime.now(UTC)).total_seconds()))

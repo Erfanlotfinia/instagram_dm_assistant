@@ -111,6 +111,17 @@ def update_variant(
     return VariantService(db).update_variant(shop_id, variant_id, payload, current_user)
 
 
+
+
+@router.delete("/{shop_id}/variants/{variant_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_variant(
+    shop_id: UUID,
+    variant_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> None:
+    VariantService(db).delete_variant(shop_id, variant_id, current_user)
+
 @router.get("/{shop_id}/instagram-product-maps", response_model=list[InstagramProductMapRead])
 def list_instagram_product_maps(
     shop_id: UUID,

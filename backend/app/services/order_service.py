@@ -254,6 +254,10 @@ class OrderService:
                 TransitionContext(trigger=OrderTransitionTrigger.SYSTEM),
             )
 
+        for reservation in reservation_service.reservations.list_for_order(order.id):
+            if reservation.status.value == "active":
+                reservation_service.confirm_reservation(reservation.id)
+
         state_machine.transition(
             order,
             OrderCorrectnessAction.PAYMENT_LINK,
@@ -370,6 +374,11 @@ class OrderService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot mark paid from status {order.status.value}",
             )
+        if order.status == OrderStatus.READY_FOR_CONFIRMATION and order.customer_confirmed_at is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Customer confirmation or payment-pending reservation is required before marking paid",
+            )
 
         from app.domain.enums import OrderCorrectnessAction, OrderTransitionTrigger
         from app.services.order_state_machine_service import OrderStateMachineService, TransitionContext
@@ -385,6 +394,7 @@ class OrderService:
         order.payment_status = OrderPaymentStatus.PAID
         order.expires_at = None
         order.shipping_status = OrderShippingStatus.PREPARING
+        self._finalize_paid_inventory(order)
         from app.services.customer_preferences_service import CustomerPreferencesService
         from app.services.order_recovery_service import OrderRecoveryService
 
@@ -394,6 +404,62 @@ class OrderService:
         order.payment_callback_status = payment.status.value if payment else "manual_paid"
         logger.info("Order marked paid order=%s payment=%s", order.id, payment.id if payment else None)
         return order
+
+    def _finalize_paid_inventory(self, order: Order) -> None:
+        """Convert a confirmed reservation into sold inventory exactly once.
+
+        Reservations increase ``reserved_quantity`` while an order is waiting for
+        payment. Marking an order paid must atomically consume that reservation by
+        decrementing both reserved and on-hand stock. The SALE movement makes the
+        operation idempotent for duplicate callbacks/manual retries.
+        """
+
+        for item in order.items:
+            if item.product_variant_id is None:
+                continue
+
+            existing_sale = self.db.scalar(
+                select(InventoryMovement).where(
+                    InventoryMovement.product_variant_id == item.product_variant_id,
+                    InventoryMovement.movement_type == InventoryMovementType.SALE,
+                    InventoryMovement.reference_type == "order",
+                    InventoryMovement.reference_id == str(order.id),
+                )
+            )
+            if existing_sale is not None:
+                logger.info(
+                    "Duplicate inventory sale ignored order=%s variant=%s",
+                    order.id,
+                    item.product_variant_id,
+                )
+                continue
+
+            locked = self.variants.get_for_update(item.product_variant_id)
+            if locked is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
+            if locked.reserved_quantity < item.quantity:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Reserved inventory is required before marking paid",
+                )
+            if locked.stock_quantity < item.quantity:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Insufficient stock for paid order",
+                )
+
+            locked.reserved_quantity -= item.quantity
+            locked.stock_quantity -= item.quantity
+            self.inventory.create(
+                InventoryMovement(
+                    product_variant_id=locked.id,
+                    movement_type=InventoryMovementType.SALE,
+                    quantity=item.quantity,
+                    reason="Order paid",
+                    reference_type="order",
+                    reference_id=str(order.id),
+                )
+            )
 
     def audit(
         self,

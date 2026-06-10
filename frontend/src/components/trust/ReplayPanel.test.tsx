@@ -59,7 +59,9 @@ describe('ReplayPanel', () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await user.click(await screen.findByRole('button', { name: /run golden replay pack/i }));
+    const runButton = await screen.findByRole('button', { name: /run golden replay pack/i });
+    await waitFor(() => expect(runButton).toBeEnabled());
+    await user.click(runButton);
 
     await waitFor(() => {
       expect(mocks.runReplay).toHaveBeenCalledWith(
@@ -81,7 +83,9 @@ describe('ReplayPanel', () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await user.click(await screen.findByRole('button', { name: /save golden pack/i }));
+    const saveButton = await screen.findByRole('button', { name: /save golden pack/i });
+    await waitFor(() => expect(saveButton).toBeEnabled());
+    await user.click(saveButton);
 
     await waitFor(() => {
       expect(mocks.createScenarioPack).toHaveBeenCalledWith(

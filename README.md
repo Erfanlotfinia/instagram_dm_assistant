@@ -11,12 +11,12 @@ This repository is an advanced MVP for an Instagram DM ordering agent. It includ
 │   │   ├── api/v1/          # Versioned API routers only
 │   │   ├── core/            # Settings, logging, errors, security, pagination
 │   │   ├── db/              # SQLAlchemy session, base metadata, Alembic migrations
-│   │   ├── domain/          # Future domain models and domain logic
-│   │   ├── services/        # Future application services
-│   │   ├── integrations/    # Future external service adapters
-│   │   ├── workers/         # Future background consumers/producers
-│   │   ├── schemas/         # Future Pydantic request/response schemas
-│   │   ├── repositories/    # Future persistence adapters
+│   │   ├── domain/          # SQLAlchemy models and domain enums
+│   │   ├── services/        # Application services and orchestration logic
+│   │   ├── integrations/    # External service adapters
+│   │   ├── workers/         # Background consumers/producers
+│   │   ├── schemas/         # Pydantic request/response schemas
+│   │   ├── repositories/    # Persistence adapters
 │   │   └── tests/           # Pytest suite
 │   ├── alembic.ini
 │   └── pyproject.toml
@@ -519,3 +519,14 @@ Run backend TRL tests:
 ```bash
 cd backend && pytest app/tests/test_trl_validation.py app/tests/test_pilot_readiness.py -v
 ```
+
+## Additional guides
+
+- [Migration guide](docs/migration-guide.md)
+- [Failed jobs runbook](docs/failed-jobs-runbook.md)
+- [DM simulator guide](docs/simulator-guide.md)
+- [Analytics guide](docs/analytics-guide.md)
+- [Retention and deletion notes](docs/retention-deletion.md)
+- [Meta webhook setup](docs/meta-webhook-setup.md)
+- [Operator guide](docs/operator-guide.md)
+- [Troubleshooting](docs/troubleshooting.md)

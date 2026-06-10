@@ -64,6 +64,7 @@ const navGroups: NavGroup[] = [
       { to: '/instagram-accounts', label: 'Instagram Accounts' },
       { to: '/settings', label: 'Settings' },
       { to: '/system-health', label: 'System Health' },
+      { to: '/failed-jobs', label: 'Failed Jobs' },
     ],
   },
 ];

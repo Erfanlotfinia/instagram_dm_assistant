@@ -114,18 +114,19 @@ class WebhookIngestionService:
             logger.info("Duplicate webhook (integrity) key=%s", idempotency_key)
             return WebhookAckResponse(dedupe_outcome=WebhookDedupeOutcome.DUPLICATE.value)
 
-        queued_count = 0
+        jobs: list[MessageReceivedJob] = []
         errors: list[str] = []
 
         for parsed in parsed_messages:
             try:
-                queued = self._process_message(webhook_event.id, parsed)
-                if queued:
-                    queued_count += 1
+                job = self._process_message(webhook_event.id, parsed)
+                if job is not None:
+                    jobs.append(job)
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Failed to process Instagram message %s", parsed.message_id)
                 errors.append(str(exc))
 
+        queued_count = len(jobs)
         if queued_count > 0:
             self.webhook_events.update_status(webhook_event, WebhookProcessingStatus.QUEUED)
         elif errors:
@@ -137,18 +138,24 @@ class WebhookIngestionService:
             webhook_event.dedupe_outcome = WebhookDedupeOutcome.IGNORED
 
         self.db.commit()
+
+        for job in jobs:
+            self.publisher.publish(
+                self.settings.rabbitmq_queue_message_received,
+                job.model_dump(mode="json"),
+            )
         return WebhookAckResponse(dedupe_outcome=webhook_event.dedupe_outcome.value)
 
-    def _process_message(self, webhook_event_id: UUID, parsed: ParsedInstagramMessage) -> bool:
+    def _process_message(self, webhook_event_id: UUID, parsed: ParsedInstagramMessage) -> MessageReceivedJob | None:
         existing = self.messages.get_by_instagram_message_id(parsed.message_id)
         if existing is not None:
             logger.info("Duplicate Instagram message id %s ignored", parsed.message_id)
-            return False
+            return None
 
         account = self.accounts.get_by_ig_user_id(parsed.recipient_id)
         if account is None:
             logger.warning("No Instagram account for recipient %s", parsed.recipient_id)
-            return False
+            return None
 
         customer = self.customers.get_by_instagram_user_id(account.shop_id, parsed.sender_id)
         if customer is None:
@@ -205,7 +212,7 @@ class WebhookIngestionService:
                 self.messages.create(message)
         except IntegrityError:
             logger.info("Race duplicate for Instagram message id %s", parsed.message_id)
-            return False
+            return None
 
         message_time = parsed.timestamp or datetime.now(UTC)
         conversation.last_message_at = message_time
@@ -225,8 +232,4 @@ class WebhookIngestionService:
             customer_id=customer.id,
             webhook_event_id=webhook_event_id,
         )
-        self.publisher.publish(
-            self.settings.rabbitmq_queue_message_received,
-            job.model_dump(mode="json"),
-        )
-        return True
+        return job

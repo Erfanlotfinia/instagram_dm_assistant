@@ -64,6 +64,10 @@ class VariantRepository:
         self.db.flush()
         return variant
 
+    def delete(self, variant: ProductVariant) -> None:
+        self.db.delete(variant)
+        self.db.flush()
+
     def commit(self) -> None:
         self.db.commit()
 

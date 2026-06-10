@@ -58,3 +58,14 @@ Postgres / Redis / RabbitMQ / Qdrant (private network)
 - [ ] Prometheus scraping `/api/v1/metrics`
 - [ ] Backups for Postgres
 - [ ] DLQ monitored for poison messages
+
+## Production safety validation
+
+The API validates production settings at startup. When `APP_ENV=production`, deployment must provide:
+
+- a non-default `JWT_SECRET_KEY` with at least 32 characters;
+- a non-default `TOKEN_ENCRYPTION_KEY` with at least 32 characters;
+- `INSTAGRAM_APP_SECRET` so Meta webhook signatures are verified;
+- explicit HTTPS `CORS_ORIGINS` with no wildcard.
+
+Deployments that do not meet these requirements fail fast instead of accepting unsafe traffic.

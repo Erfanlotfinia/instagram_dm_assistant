@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -81,6 +81,24 @@ class Settings(BaseSettings):
         extra="ignore",
         case_sensitive=False,
     )
+
+
+    @model_validator(mode="after")
+    def validate_production_safety(self) -> "Settings":
+        if self.app_env == "production":
+            default_jwt_values = {"change-me-in-production", "change-me-in-local-development"}
+            default_token_values = {"local-dev-token-encryption-key-32b!"}
+            if self.jwt_secret_key in default_jwt_values or len(self.jwt_secret_key) < 32:
+                raise ValueError("JWT_SECRET_KEY must be a strong non-default secret in production")
+            if self.token_encryption_key in default_token_values or len(self.token_encryption_key) < 32:
+                raise ValueError("TOKEN_ENCRYPTION_KEY must be a strong non-default secret in production")
+            if not self.instagram_app_secret:
+                raise ValueError("INSTAGRAM_APP_SECRET is required in production for webhook signature verification")
+            if not self.cors_origins or "*" in self.cors_origins:
+                raise ValueError("CORS_ORIGINS must be explicit in production")
+            if any(origin.startswith("http://") for origin in self.cors_origins):
+                raise ValueError("CORS_ORIGINS must use HTTPS in production")
+        return self
 
     @computed_field  # type: ignore[misc]
     @property

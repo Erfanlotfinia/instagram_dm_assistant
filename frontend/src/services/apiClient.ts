@@ -40,6 +40,7 @@ import type {
   SimulatorRunSummary as TrustSimulatorRunSummary,
 } from '../types/trust';
 import type { FailedJobListResponse, HealthResponse, ReadinessResponse } from '../types/health';
+import type { LoginRequest, TokenResponse, User } from '../types/auth';
 import type { ColorAlias, SizeAlias, UnavailableDemandLog, VariantResolverResult } from '../types/fashion';
 import type { InstagramAccount, InstagramAccountCreate } from '../types/instagramAccount';
 import type {
