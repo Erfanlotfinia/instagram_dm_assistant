@@ -116,3 +116,7 @@ class OrderShipRequest(BaseModel):
 
 class OrderCancelRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=512)
+
+
+class PaymentLinkRequest(BaseModel):
+    admin_override_reason: str | None = Field(default=None, max_length=512)

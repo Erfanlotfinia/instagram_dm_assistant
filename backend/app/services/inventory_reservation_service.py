@@ -94,6 +94,7 @@ class InventoryReservationService:
             product_variant_id,
             quantity,
         )
+        self.reservations.commit()
         return reservation
 
     def refresh_reservation(self, reservation_id: UUID, ttl_seconds: int) -> InventoryReservation:
@@ -108,6 +109,7 @@ class InventoryReservationService:
         reservation.expires_at = datetime.now(UTC) + timedelta(seconds=ttl_seconds)
         reservation.ttl_seconds = ttl_seconds
         self._cache_reservation(reservation)
+        self.reservations.commit()
         return reservation
 
     def release_reservation(self, reservation_id: UUID, reason: str = "Released") -> InventoryReservation:
@@ -149,6 +151,7 @@ class InventoryReservationService:
         reservation.released_at = datetime.now(UTC)
         self.cache.delete_reservation_cache(str(reservation.id))
         logger.info("reservation_released reservation_id=%s reason=%s", reservation_id, reason)
+        self.reservations.commit()
         return reservation
 
     def confirm_reservation(self, reservation_id: UUID) -> InventoryReservation:
@@ -166,6 +169,7 @@ class InventoryReservationService:
         reservation.confirmed_at = datetime.now(UTC)
         self.cache.delete_reservation_cache(str(reservation.id))
         logger.info("reservation_confirmed reservation_id=%s", reservation_id)
+        self.reservations.commit()
         return reservation
 
     def expire_reservation(self, reservation_id: UUID) -> InventoryReservation:

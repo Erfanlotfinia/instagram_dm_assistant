@@ -17,11 +17,13 @@ from app.domain.enums import (
     MessageChannel,
     MessageDirection,
     MessageType,
+    OutboxEventStatus,
     WebhookDedupeOutcome,
     WebhookProcessingStatus,
     WebhookProvider,
 )
-from app.domain.models import Conversation, Customer, Message, WebhookEvent
+from app.domain.models import Conversation, Customer, Message, OutboxEvent, WebhookEvent
+from app.repositories.outbox_event_repository import OutboxEventRepository
 from app.integrations.instagram_webhook import ParsedInstagramMessage, parse_instagram_webhook_payload
 from app.integrations.rabbitmq import MessagePublisher, RabbitMQPublisher
 from app.integrations.redis_cache import RedisCacheService
@@ -75,6 +77,7 @@ class WebhookIngestionService:
         self.customers = CustomerRepository(db)
         self.conversations = ConversationRepository(db)
         self.messages = MessageRepository(db)
+        self.outbox = OutboxEventRepository(db)
 
     def handle_instagram_payload(
         self, payload: dict[str, Any], raw_body: bytes | None = None
@@ -129,6 +132,21 @@ class WebhookIngestionService:
         queued_count = len(jobs)
         if queued_count > 0:
             self.webhook_events.update_status(webhook_event, WebhookProcessingStatus.QUEUED)
+            for job in jobs:
+                self.outbox.create(
+                    OutboxEvent(
+                        event_type="message.received",
+                        aggregate_type="message",
+                        aggregate_id=str(job.message_id),
+                        shop_id=job.shop_id,
+                        payload={
+                            "_queue_name": self.settings.rabbitmq_queue_message_received,
+                            "_body": job.model_dump(mode="json"),
+                            "idempotency_key": f"message-received:{job.message_id}",
+                        },
+                        status=OutboxEventStatus.PENDING,
+                    )
+                )
         elif errors:
             self.webhook_events.update_status(
                 webhook_event,
@@ -138,12 +156,6 @@ class WebhookIngestionService:
             webhook_event.dedupe_outcome = WebhookDedupeOutcome.IGNORED
 
         self.db.commit()
-
-        for job in jobs:
-            self.publisher.publish(
-                self.settings.rabbitmq_queue_message_received,
-                job.model_dump(mode="json"),
-            )
         return WebhookAckResponse(dedupe_outcome=webhook_event.dedupe_outcome.value)
 
     def _process_message(self, webhook_event_id: UUID, parsed: ParsedInstagramMessage) -> MessageReceivedJob | None:

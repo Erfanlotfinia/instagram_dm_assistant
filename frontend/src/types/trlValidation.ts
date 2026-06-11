@@ -1,6 +1,7 @@
 export interface TRLValidationRun {
   id: string;
   shop_id: string;
+  validation_mode?: string;
   status: 'running' | 'completed' | 'failed' | string;
   total_scenarios: number;
   passed_scenarios: number;

@@ -32,7 +32,7 @@ from app.schemas.agent import (
     ExtractionConfidence,
     SemanticSearchHit,
 )
-from app.scripts.seed_trl_demo_data import seed_trl_demo_data
+from app.core.config import get_settings
 from app.services.conversation_orchestrator import ConversationOrchestrator
 
 THRESHOLDS = {
@@ -45,9 +45,10 @@ THRESHOLDS = {
     "average_processing_time_ms": 2000,
     "false_payment_status_change_count": 0,
     "inventory_double_reservation_count": 0,
-    "invalid_llm_json_handled_rate": 1.0,
+    "invalid_llm_json_handled_safely_rate": 1.0,
     "duplicate_webhook_idempotency_rate": 1.0,
     "critical_security_tests_pass_rate": 1.0,
+    "p95_processing_time_ms": 5000,
 }
 
 
@@ -108,14 +109,46 @@ class TRLValidationRunner:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def run(self, shop_id: UUID, *, created_by_user_id: UUID | None = None, reset_demo_data: bool = False, scenario_limit: int | None = None) -> TRLValidationRun:
+    def run(
+        self,
+        shop_id: UUID,
+        *,
+        created_by_user_id: UUID | None = None,
+        reset_demo_data: bool = False,
+        scenario_limit: int | None = None,
+        validation_mode: str = "deterministic_regression",
+    ) -> TRLValidationRun:
+        settings = get_settings()
+        if validation_mode == "live_llm_staging":
+            if not settings.trl_live_llm_enabled:
+                raise ValueError("TRL live LLM staging requires TRL_LIVE_LLM_ENABLED=true")
+            if not settings.openai_api_key:
+                raise ValueError("TRL live LLM staging requires OPENAI_API_KEY")
         if reset_demo_data:
             self.reset(shop_id)
             shop = self.db.get(Shop, shop_id)
             if shop and shop.slug == "trl-fashion-demo":
+                from app.scripts.seed_trl_demo_data import seed_trl_demo_data
+
                 seed_trl_demo_data(reset=False, db=self.db)
         scenarios = self._load_scenarios()[:scenario_limit]
-        run = TRLValidationRun(shop_id=shop_id, status="running", total_scenarios=len(scenarios), created_by_user_id=created_by_user_id, metrics_json={"thresholds": THRESHOLDS})
+        thresholds = {
+            **THRESHOLDS,
+            "average_processing_time_ms": settings.trl_average_processing_time_ms_threshold,
+            "p95_processing_time_ms": settings.trl_p95_processing_time_ms_threshold,
+        }
+        run = TRLValidationRun(
+            shop_id=shop_id,
+            validation_mode=validation_mode,
+            status="running",
+            total_scenarios=len(scenarios),
+            created_by_user_id=created_by_user_id,
+            metrics_json={
+                "thresholds": thresholds,
+                "validation_mode": validation_mode,
+                "proves_live_llm": validation_mode == "live_llm_staging",
+            },
+        )
         self.db.add(run); self.db.commit(); self.db.refresh(run)
         counters: dict[str, int] = {"intent_correct": 0, "slot_correct": 0, "product_correct": 0, "variant_correct": 0, "orders_expected": 0, "orders_created": 0, "false_orders": 0, "false_auto_send": 0, "handoff_expected": 0, "handoff_actual": 0, "handoff_tp": 0, "invalid_llm_json": 0, "safe_fallback": 0, "critical_risk": 0, "failed": 0}
         latencies: list[int] = []
@@ -125,7 +158,7 @@ class TRLValidationRunner:
         try:
             for scenario in scenarios:
                 started = time.perf_counter()
-                result = self._run_one(shop_id, run.id, scenario, counters)
+                result = self._run_one(shop_id, run.id, scenario, counters, validation_mode=validation_mode)
                 elapsed_ms = result.processing_time_ms or int((time.perf_counter() - started) * 1000)
                 total_ms += elapsed_ms
                 latencies.append(elapsed_ms)
@@ -157,18 +190,23 @@ class TRLValidationRunner:
                 "average_risk_score": sum(risk_values) / max(len(risk_values), 1),
                 "critical_risk_count": counters["critical_risk"],
                 "scenario_pass_rate_by_category": {key: passed / max(total_count, 1) for key, (passed, total_count) in category_counts.items()},
-                "invalid_llm_json_handled_rate": 1.0,
+                "invalid_llm_json_handled_safely_rate": 1.0 if counters["invalid_llm_json"] == 0 else counters["safe_fallback"] / max(counters["invalid_llm_json"], 1),
                 "average_processing_latency": total_ms / total,
                 "p95_processing_latency": sorted_latencies[p95_idx] if sorted_latencies else 0,
                 "average_processing_time_ms": total_ms / total,
+                "p95_processing_time_ms": sorted_latencies[p95_idx] if sorted_latencies else 0,
                 "failed_scenario_count": counters["failed"],
                 "false_payment_status_change_count": 0,
                 "inventory_double_reservation_count": 0,
                 "duplicate_webhook_idempotency_rate": 1.0,
                 "critical_security_tests_pass_rate": 1.0,
-                "thresholds": THRESHOLDS,
+                "validation_mode": validation_mode,
+                "proves_live_llm": validation_mode == "live_llm_staging",
+                "model_version": settings.openai_model if validation_mode == "live_llm_staging" else RuleBasedTRLExtractionService.model_name,
+                "prompt_version": settings.default_prompt_version if validation_mode == "live_llm_staging" else RuleBasedTRLExtractionService.prompt_version,
+                "thresholds": thresholds,
             }
-            metrics["thresholds_passed"] = self.evaluate_thresholds(metrics)
+            metrics["thresholds_passed"] = self.evaluate_thresholds(metrics, thresholds)
             run.status = "completed"; run.completed_at = datetime.now(UTC); run.metrics_json = metrics
             run.passed_scenarios = self.db.query(TRLValidationScenarioResult).filter_by(run_id=run.id, passed=True).count()
             run.failed_scenarios = run.total_scenarios - run.passed_scenarios
@@ -178,7 +216,15 @@ class TRLValidationRunner:
             run.status = "failed"; run.completed_at = datetime.now(UTC); run.metrics_json = {"error": str(exc), "thresholds": THRESHOLDS}
             self.db.commit(); raise
 
-    def _run_one(self, shop_id: UUID, run_id: UUID, scenario: dict[str, Any], counters: dict[str, int]) -> TRLValidationScenarioResult:
+    def _run_one(
+        self,
+        shop_id: UUID,
+        run_id: UUID,
+        scenario: dict[str, Any],
+        counters: dict[str, int],
+        *,
+        validation_mode: str = "deterministic_regression",
+    ) -> TRLValidationScenarioResult:
         ig = self.db.scalar(select(InstagramAccount).where(InstagramAccount.shop_id == shop_id).limit(1))
         if ig is None:
             raise ValueError("Shop has no Instagram account for TRL validation")
@@ -211,7 +257,18 @@ class TRLValidationRunner:
         )
         self.db.add(msg); self.db.commit()
         started = time.perf_counter()
-        orchestrator = ConversationOrchestrator(self.db, llm_service=RuleBasedTRLExtractionService(), semantic_search=DeterministicSemanticSearch(self.db), allow_simulated_order_side_effects=True)
+        if validation_mode == "live_llm_staging":
+            from app.services.llm_extraction_service import LLMExtractionService
+
+            llm_service = LLMExtractionService(self.db)
+        else:
+            llm_service = RuleBasedTRLExtractionService()
+        orchestrator = ConversationOrchestrator(
+            self.db,
+            llm_service=llm_service,
+            semantic_search=DeterministicSemanticSearch(self.db),
+            allow_simulated_order_side_effects=True,
+        )
         orchestrator.process_inbound_message(conv.id, msg.id)
         elapsed = int((time.perf_counter() - started) * 1000)
         self.db.refresh(conv)
@@ -350,8 +407,16 @@ class TRLValidationRunner:
         return list(self.db.scalars(stmt).all())
 
     @staticmethod
-    def evaluate_thresholds(metrics: dict[str, Any]) -> dict[str, bool]:
-        return {k: (metrics.get(k, 0) >= v if isinstance(v, float) else metrics.get(k, 999999) <= v) for k, v in THRESHOLDS.items()}
+    def evaluate_thresholds(metrics: dict[str, Any], thresholds: dict[str, Any] | None = None) -> dict[str, bool]:
+        thresholds = thresholds or THRESHOLDS
+        results: dict[str, bool] = {}
+        for key, expected in thresholds.items():
+            value = metrics.get(key)
+            if isinstance(expected, float) and not isinstance(expected, bool):
+                results[key] = (value or 0) >= expected
+            else:
+                results[key] = (value if value is not None else 999999) <= expected
+        return results
 
     @staticmethod
     def _load_scenarios() -> list[dict[str, Any]]:

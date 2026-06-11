@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ShopSelector } from '../components/ShopSelector';
+import { useAuth } from '../contexts/AuthContext';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { apiClient } from '../services/apiClient';
@@ -12,14 +14,35 @@ function formatPayload(payload: Record<string, unknown>): string {
 
 export function FailedJobsPage() {
   const { selectedShopId } = useShop();
+  const { user } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState('failed');
+  const [queueFilter, setQueueFilter] = useState('');
+  const [jobTypeFilter, setJobTypeFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [pendingAction, setPendingAction] = useState<{ type: 'retry' | 'ignore'; jobId: string } | null>(null);
+
+  const canManage = user?.role === 'owner' || user?.role === 'admin';
+
+  const filters = useMemo(
+    () => ({
+      page,
+      status: statusFilter || undefined,
+      queue_name: queueFilter || undefined,
+      job_type: jobTypeFilter || undefined,
+      date_from: dateFrom ? new Date(dateFrom).toISOString() : undefined,
+      date_to: dateTo ? new Date(dateTo).toISOString() : undefined,
+    }),
+    [page, statusFilter, queueFilter, jobTypeFilter, dateFrom, dateTo],
+  );
 
   const jobs = useQuery({
-    queryKey: ['failed-jobs', selectedShopId, page],
-    queryFn: () => apiClient.listFailedJobs(selectedShopId, page),
-    enabled: Boolean(selectedShopId),
+    queryKey: ['failed-jobs', selectedShopId, filters],
+    queryFn: () => apiClient.listFailedJobs(selectedShopId, filters),
+    enabled: Boolean(selectedShopId) && canManage,
   });
 
   const retry = useMutation({
@@ -27,6 +50,7 @@ export function FailedJobsPage() {
     onSuccess: () => {
       showToast('Failed job requeued.', 'success');
       queryClient.invalidateQueries({ queryKey: ['failed-jobs', selectedShopId] });
+      setPendingAction(null);
     },
     onError: (error) => showToast(error instanceof Error ? error.message : 'Retry failed', 'error'),
   });
@@ -36,6 +60,7 @@ export function FailedJobsPage() {
     onSuccess: () => {
       showToast('Failed job ignored.', 'success');
       queryClient.invalidateQueries({ queryKey: ['failed-jobs', selectedShopId] });
+      setPendingAction(null);
     },
     onError: (error) => showToast(error instanceof Error ? error.message : 'Ignore failed', 'error'),
   });
@@ -49,7 +74,7 @@ export function FailedJobsPage() {
           <p className="dashboard-card__eyebrow">Reliability</p>
           <h1>Failed jobs</h1>
           <p className="dashboard-card__subtitle">
-            Review dead-lettered worker jobs and safely retry or ignore them. Payloads are masked by the API.
+            Review dead-lettered worker jobs and safely retry or ignore them. Payloads are redacted by the API.
           </p>
         </div>
         <ShopSelector />
@@ -57,11 +82,42 @@ export function FailedJobsPage() {
 
       <section className="dashboard-card dashboard-card--wide">
         {!selectedShopId ? <p className="empty-state">Select a shop to view failed jobs.</p> : null}
+        {!canManage && selectedShopId ? (
+          <p className="empty-state">Admin access is required to view failed jobs.</p>
+        ) : null}
+        {canManage ? (
+          <div className="analytics-toolbar failed-jobs-toolbar">
+            <label className="form-field">
+              Status
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <option value="failed">Failed</option>
+                <option value="retried">Retried</option>
+                <option value="ignored">Ignored</option>
+              </select>
+            </label>
+            <label className="form-field">
+              Queue
+              <input value={queueFilter} onChange={(e) => setQueueFilter(e.target.value)} placeholder="queue name" />
+            </label>
+            <label className="form-field">
+              Job type
+              <input value={jobTypeFilter} onChange={(e) => setJobTypeFilter(e.target.value)} placeholder="job type" />
+            </label>
+            <label className="form-field">
+              From
+              <input type="datetime-local" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            </label>
+            <label className="form-field">
+              To
+              <input type="datetime-local" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            </label>
+          </div>
+        ) : null}
         {jobs.isLoading ? <p className="empty-state">Loading failed jobs…</p> : null}
         {jobs.error ? (
           <p className="form-error">{jobs.error instanceof Error ? jobs.error.message : 'Failed to load jobs'}</p>
         ) : null}
-        {!jobs.isLoading && !jobs.error && (jobs.data?.items.length ?? 0) === 0 ? (
+        {!jobs.isLoading && !jobs.error && canManage && (jobs.data?.items.length ?? 0) === 0 ? (
           <p className="empty-state">No unresolved failed jobs.</p>
         ) : null}
 
@@ -75,8 +131,8 @@ export function FailedJobsPage() {
                   <th>Status</th>
                   <th>Retries</th>
                   <th>Error</th>
-                  <th>Payload</th>
-                  <th>Actions</th>
+                  <th>Redacted payload</th>
+                  {canManage ? <th>Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -91,30 +147,32 @@ export function FailedJobsPage() {
                     <td>{job.error_message || '—'}</td>
                     <td>
                       <details>
-                        <summary>View masked payload</summary>
-                        <pre className="code-block">{formatPayload(job.payload)}</pre>
+                        <summary>View redacted payload</summary>
+                        <pre className="code-block">{formatPayload(job.redacted_payload)}</pre>
                       </details>
                     </td>
-                    <td>
-                      <div className="button-row">
-                        <button
-                          className="button button--primary"
-                          type="button"
-                          disabled={retry.isPending || job.status !== 'failed'}
-                          onClick={() => retry.mutate(job.id)}
-                        >
-                          Retry
-                        </button>
-                        <button
-                          className="button button--ghost-dark"
-                          type="button"
-                          disabled={ignore.isPending || job.status !== 'failed'}
-                          onClick={() => ignore.mutate(job.id)}
-                        >
-                          Ignore
-                        </button>
-                      </div>
-                    </td>
+                    {canManage ? (
+                      <td>
+                        <div className="button-row">
+                          <button
+                            className="button button--primary"
+                            type="button"
+                            disabled={retry.isPending || job.status !== 'failed'}
+                            onClick={() => setPendingAction({ type: 'retry', jobId: job.id })}
+                          >
+                            Retry
+                          </button>
+                          <button
+                            className="button button--ghost-dark"
+                            type="button"
+                            disabled={ignore.isPending || job.status !== 'failed'}
+                            onClick={() => setPendingAction({ type: 'ignore', jobId: job.id })}
+                          >
+                            Ignore
+                          </button>
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -136,6 +194,23 @@ export function FailedJobsPage() {
           </div>
         ) : null}
       </section>
+
+      <ConfirmDialog
+        open={pendingAction?.type === 'retry'}
+        title="Retry failed job?"
+        message="This will requeue the job for processing."
+        confirmLabel="Retry"
+        onConfirm={() => pendingAction && retry.mutate(pendingAction.jobId)}
+        onCancel={() => setPendingAction(null)}
+      />
+      <ConfirmDialog
+        open={pendingAction?.type === 'ignore'}
+        title="Ignore failed job?"
+        message="Ignored jobs will not be retried automatically."
+        confirmLabel="Ignore"
+        onConfirm={() => pendingAction && ignore.mutate(pendingAction.jobId)}
+        onCancel={() => setPendingAction(null)}
+      />
     </div>
   );
 }

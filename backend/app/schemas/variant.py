@@ -27,6 +27,11 @@ class VariantUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class VariantArchiveRequest(BaseModel):
+    force: bool = False
+    reason: str | None = Field(default=None, max_length=512)
+
+
 class VariantRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

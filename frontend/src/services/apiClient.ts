@@ -360,8 +360,20 @@ export const apiClient = {
     request<PostRevenueRow[]>(
       `/api/v1/shops/${shopId}/analytics/post-revenue${buildQuery({ date_from: dateFrom, date_to: dateTo })}`,
     ),
-  listFailedJobs: (shopId: string, page = 1) =>
-    request<FailedJobListResponse>(`/api/v1/shops/${shopId}/failed-jobs${buildQuery({ page: String(page) })}`),
+  listFailedJobs: (
+    shopId: string,
+    options?: { page?: number; status?: string; queue_name?: string; job_type?: string; date_from?: string; date_to?: string },
+  ) =>
+    request<FailedJobListResponse>(
+      `/api/v1/shops/${shopId}/failed-jobs${buildQuery({
+        page: String(options?.page ?? 1),
+        status: options?.status,
+        queue_name: options?.queue_name,
+        job_type: options?.job_type,
+        date_from: options?.date_from,
+        date_to: options?.date_to,
+      })}`,
+    ),
   listAccessibleFailedJobs: (options?: { shopId?: string; unscopedOnly?: boolean; page?: number }) =>
     request<FailedJobListResponse>(
       `/api/v1/failed-jobs${buildQuery({

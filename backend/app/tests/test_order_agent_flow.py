@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from app.domain.enums import AgentMode, AgentWorkflowState, MessageDirection, OrderStatus
 from app.domain.models import ConversationSlots, Message, Order, ShopAgentSettings, SuggestedReply
 from app.tests.fixtures.agent import build_orchestrator, seed_order_flow_data
@@ -5,11 +7,27 @@ from app.services.pilot_service import PilotService
 from app.tests.fixtures.orders import create_text_message, seed_complete_slots
 
 
+def _enable_controlled_autopilot(db_session, shop_id) -> None:
+    db_session.add(
+        ShopAgentSettings(
+            shop_id=shop_id,
+            mode=AgentMode.CONTROLLED_AUTOPILOT,
+            auto_send_enabled=True,
+            preview_required_for_low_confidence=False,
+            preview_required_for_first_order=False,
+            preview_required_for_high_value_order=False,
+        )
+    )
+    db_session.commit()
+
+
 def test_agent_flow_creates_draft_and_payment_link(db_session, demo_shop) -> None:
     data = seed_order_flow_data(db_session, demo_shop)
+    _enable_controlled_autopilot(db_session, demo_shop.id)
     slots = seed_complete_slots(db_session, data["conversation"].id)
     slots.product_id = data["product"].id
     slots.product_variant_id = data["variant"].id
+    slots.instagram_post_url = data["post_url"]
     db_session.commit()
 
     data["conversation"].workflow_state = AgentWorkflowState.WAITING_FOR_CONFIRMATION
@@ -63,6 +81,7 @@ def test_agent_flow_creates_draft_and_payment_link(db_session, demo_shop) -> Non
 
 def test_agent_creates_draft_on_complete_slots(db_session, demo_shop) -> None:
     data = seed_order_flow_data(db_session, demo_shop)
+    _enable_controlled_autopilot(db_session, demo_shop.id)
     llm_response = {
         "intent": "provide_info",
         "product_reference": {"instagram_post_url": data["post_url"], "instagram_media_id": "media-abc"},

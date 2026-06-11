@@ -9,7 +9,7 @@ from app.services.compensation_service import CompensationService
 from app.tests.fixtures.orders import seed_order_flow_data
 
 
-def test_payment_failed_releases_and_fails(db_session, demo_shop, order_product) -> None:
+def test_payment_failed_releases_and_fails(db_session, demo_shop) -> None:
     data = seed_order_flow_data(db_session, demo_shop)
     order = Order(
         shop_id=demo_shop.id,

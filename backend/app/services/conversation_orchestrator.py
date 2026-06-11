@@ -96,14 +96,35 @@ class ConversationOrchestrator:
         self.trace_service = DecisionTraceService(db)
         self.allow_simulated_order_side_effects = allow_simulated_order_side_effects
 
-        chat_client = chat_client or LiveOpenAIChatClient(self.settings)
-        qdrant_client = qdrant_client or LiveQdrantClient(self.settings)
+        if chat_client is None:
+            if self.settings.llm_mode == "mock":
+                from app.integrations.openai_client import MockOpenAIChatClient
+
+                chat_client = MockOpenAIChatClient()
+            else:
+                chat_client = LiveOpenAIChatClient(self.settings)
+        if qdrant_client is None:
+            if self.settings.llm_mode == "mock":
+                from app.integrations.qdrant_client import MockQdrantClient
+
+                qdrant_client = MockQdrantClient()
+            else:
+                qdrant_client = LiveQdrantClient(self.settings)
         self.llm_service = llm_service or LLMExtractionService(chat_client, self.settings)
-        self.semantic_search = semantic_search or ProductSemanticSearchService(
-            db,
-            qdrant_client=qdrant_client,
-            settings=self.settings,
-        )
+        if semantic_search is None:
+            embedding_client = None
+            if self.settings.llm_mode == "mock":
+                from app.integrations.openai_client import MockOpenAIEmbeddingClient
+
+                embedding_client = MockOpenAIEmbeddingClient()
+            self.semantic_search = ProductSemanticSearchService(
+                db,
+                qdrant_client=qdrant_client,
+                embedding_client=embedding_client,
+                settings=self.settings,
+            )
+        else:
+            self.semantic_search = semantic_search
 
     def process_inbound_message(self, conversation_id: UUID, message_id: UUID) -> bool:
         conversation = self.conversations.get_by_id(conversation_id)

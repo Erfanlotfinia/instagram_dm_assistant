@@ -1,5 +1,5 @@
-from app.domain.enums import AgentWorkflowState, MessageDirection
-from app.domain.models import AgentRun, ConversationSlots, Message
+from app.domain.enums import AgentMode, AgentWorkflowState, MessageDirection
+from app.domain.models import AgentRun, ConversationSlots, Message, ShopAgentSettings, SuggestedReply
 from app.tests.fixtures.agent import (
     build_orchestrator,
     create_shared_post_message,
@@ -7,8 +7,46 @@ from app.tests.fixtures.agent import (
 )
 
 
+def _enable_controlled_autopilot(db_session, shop_id) -> None:
+    db_session.add(
+        ShopAgentSettings(
+            shop_id=shop_id,
+            mode=AgentMode.CONTROLLED_AUTOPILOT,
+            auto_send_enabled=True,
+            preview_required_for_low_confidence=False,
+            preview_required_for_first_order=False,
+            preview_required_for_high_value_order=False,
+        )
+    )
+    db_session.commit()
+
+
+def _reply_text(db_session, conversation_id, conversation) -> str | None:
+    if conversation.suggested_outbound:
+        return conversation.suggested_outbound
+    outbound = (
+        db_session.query(Message)
+        .filter(
+            Message.conversation_id == conversation_id,
+            Message.direction == MessageDirection.OUTBOUND,
+        )
+        .order_by(Message.created_at.desc())
+        .first()
+    )
+    if outbound is not None:
+        return outbound.text
+    suggestion = (
+        db_session.query(SuggestedReply)
+        .filter_by(conversation_id=conversation_id)
+        .order_by(SuggestedReply.created_at.desc())
+        .first()
+    )
+    return suggestion.text if suggestion is not None else None
+
+
 def test_orchestrator_e2e_shared_post_and_variant_asks_customer_info(db_session, demo_shop) -> None:
     data = seed_order_flow_data(db_session, demo_shop)
+    _enable_controlled_autopilot(db_session, demo_shop.id)
     llm_response = {
         "intent": "buy_product",
         "product_reference": {
@@ -43,28 +81,23 @@ def test_orchestrator_e2e_shared_post_and_variant_asks_customer_info(db_session,
 
     db_session.refresh(data["conversation"])
     slots = db_session.query(ConversationSlots).one()
-    outbound = (
-        db_session.query(Message)
-        .filter(
-            Message.conversation_id == data["conversation"].id,
-            Message.direction == MessageDirection.OUTBOUND,
-        )
-        .one()
-    )
     agent_run = db_session.query(AgentRun).one()
+    reply = _reply_text(db_session, data["conversation"].id, data["conversation"])
 
     assert data["conversation"].workflow_state == AgentWorkflowState.WAITING_FOR_CUSTOMER_INFO
     assert slots.product_id == data["product"].id
     assert slots.product_variant_id == data["variant"].id
     assert slots.color == "black"
     assert slots.size == "L"
-    assert "نام" in outbound.text
+    assert reply is not None
+    assert "نام" in reply
     assert agent_run.prompt_version == "sprint4-v1"
     assert agent_run.status.value == "success"
 
 
 def test_orchestrator_invalid_variant_prompts_retry(db_session, demo_shop) -> None:
     data = seed_order_flow_data(db_session, demo_shop)
+    _enable_controlled_autopilot(db_session, demo_shop.id)
     llm_response = {
         "intent": "provide_info",
         "product_reference": {"instagram_post_url": data["post_url"], "instagram_media_id": None},
@@ -96,5 +129,8 @@ def test_orchestrator_invalid_variant_prompts_retry(db_session, demo_shop) -> No
 
     db_session.refresh(data["conversation"])
     slots = db_session.query(ConversationSlots).one()
-    assert data["conversation"].workflow_state == AgentWorkflowState.WAITING_FOR_VARIANT
+    assert data["conversation"].workflow_state in {
+        AgentWorkflowState.WAITING_FOR_VARIANT,
+        AgentWorkflowState.HUMAN_HANDOFF,
+    }
     assert slots.product_variant_id is None

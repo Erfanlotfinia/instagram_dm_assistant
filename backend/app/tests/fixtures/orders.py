@@ -74,13 +74,16 @@ def seed_draft_order(
     return order
 
 
-def create_text_message(db_session, conversation_id: UUID, text: str) -> Message:
+def create_text_message(
+    db_session, conversation_id: UUID, text: str, *, instagram_message_id: str | None = None
+) -> Message:
     from app.domain.enums import MessageChannel, MessageDirection, MessageType
 
     message = Message(
         conversation_id=conversation_id,
         direction=MessageDirection.INBOUND,
         channel=MessageChannel.INSTAGRAM,
+        instagram_message_id=instagram_message_id,
         message_type=MessageType.TEXT,
         text=text,
         raw_payload={},

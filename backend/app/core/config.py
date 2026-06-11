@@ -74,6 +74,17 @@ class Settings(BaseSettings):
     default_model_version: str = "gpt-4o-mini"
     default_prompt_version: str = "trust-layer-v1"
     default_policy_version: str = "trust-layer-v1"
+    llm_mode: Literal["mock", "live"] = "mock"
+    webhook_signature_bypass: bool = Field(
+        default=False,
+        description="Development/test only: allow webhook POST without signature verification",
+    )
+    trl_live_llm_enabled: bool = Field(
+        default=False,
+        description="Enable live LLM mode for TRL validation runs (staging only)",
+    )
+    trl_average_processing_time_ms_threshold: int = Field(default=2000, ge=100)
+    trl_p95_processing_time_ms_threshold: int = Field(default=5000, ge=100)
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -85,25 +96,55 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_safety(self) -> "Settings":
-        if self.app_env == "production":
+        if self.app_env in {"staging", "production"}:
             default_jwt_values = {"change-me-in-production", "change-me-in-local-development"}
             default_token_values = {"local-dev-token-encryption-key-32b!"}
+            default_verify_tokens = {"local-instagram-verify-token"}
             if self.jwt_secret_key in default_jwt_values or len(self.jwt_secret_key) < 32:
-                raise ValueError("JWT_SECRET_KEY must be a strong non-default secret in production")
+                raise ValueError(
+                    f"JWT_SECRET_KEY must be a strong non-default secret in {self.app_env}"
+                )
             if self.token_encryption_key in default_token_values or len(self.token_encryption_key) < 32:
-                raise ValueError("TOKEN_ENCRYPTION_KEY must be a strong non-default secret in production")
+                raise ValueError(
+                    f"TOKEN_ENCRYPTION_KEY must be a strong non-default secret in {self.app_env}"
+                )
             if not self.instagram_app_secret:
-                raise ValueError("INSTAGRAM_APP_SECRET is required in production for webhook signature verification")
+                raise ValueError(
+                    f"INSTAGRAM_APP_SECRET is required in {self.app_env} for webhook signature verification"
+                )
+            if not self.instagram_webhook_verify_token or (
+                self.instagram_webhook_verify_token in default_verify_tokens
+            ):
+                raise ValueError(
+                    f"INSTAGRAM_WEBHOOK_VERIFY_TOKEN must be set to a non-default value in {self.app_env}"
+                )
             if not self.cors_origins or "*" in self.cors_origins:
-                raise ValueError("CORS_ORIGINS must be explicit in production")
-            if any(origin.startswith("http://") for origin in self.cors_origins):
+                raise ValueError(f"CORS_ORIGINS must be explicit in {self.app_env}")
+            if self.cors_allow_credentials and "*" in self.cors_origins:
+                raise ValueError("CORS wildcard with credentials is not allowed")
+            if "sqlite" in self.database_url.lower():
+                raise ValueError(f"DATABASE_URL must not use SQLite in {self.app_env}")
+            if self.app_env == "production" and any(
+                origin.startswith("http://") for origin in self.cors_origins
+            ):
                 raise ValueError("CORS_ORIGINS must use HTTPS in production")
+            if self.llm_mode == "live" and not self.openai_api_key:
+                raise ValueError("OPENAI_API_KEY is required when LLM_MODE=live")
+            if self.webhook_signature_bypass:
+                raise ValueError("WEBHOOK_SIGNATURE_BYPASS is not allowed in staging/production")
         return self
 
     @computed_field  # type: ignore[misc]
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def requires_webhook_signature(self) -> bool:
+        if self.app_env in {"staging", "production"}:
+            return True
+        return not self.webhook_signature_bypass
 
 
 @lru_cache

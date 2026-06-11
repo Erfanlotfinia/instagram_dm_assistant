@@ -1,12 +1,13 @@
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import encrypt_secret
 from app.domain.enums import InstagramAccountStatus
-from app.domain.models import InstagramAccount
+from app.domain.models import InstagramAccount, OutboxEvent
 from app.services.webhook_ingestion_service import WebhookIngestionService
 from app.tests.fixtures.instagram_webhook import SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD
 
@@ -68,19 +69,17 @@ def test_instagram_webhook_receiver_via_service(
     service = WebhookIngestionService(db_session, publisher=mock_publisher)
     result = service.handle_instagram_payload(SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD)
     assert result.status == "ok"
-    assert mock_publisher.publish.call_count == 1
+    mock_publisher.publish.assert_not_called()
+    outbox_count = db_session.scalar(select(func.count()).select_from(OutboxEvent))
+    assert outbox_count == 1
 
 
-def test_instagram_webhook_receiver_via_api(client, instagram_account, monkeypatch) -> None:
-    publish = MagicMock()
-    monkeypatch.setattr(
-        "app.services.webhook_ingestion_service.RabbitMQPublisher.publish",
-        publish,
-    )
+def test_instagram_webhook_receiver_via_api(client, instagram_account, db_session) -> None:
     response = client.post("/api/v1/webhooks/instagram", json=SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD)
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-    assert publish.call_count == 1
+    outbox_count = db_session.scalar(select(func.count()).select_from(OutboxEvent))
+    assert outbox_count == 1
 
 
 def test_instagram_webhook_duplicate_message_is_idempotent(
@@ -94,4 +93,7 @@ def test_instagram_webhook_duplicate_message_is_idempotent(
 
     assert first.status == "ok"
     assert second.status == "ok"
-    assert mock_publisher.publish.call_count == 1
+    assert second.dedupe_outcome == "duplicate"
+    mock_publisher.publish.assert_not_called()
+    outbox_count = db_session.scalar(select(func.count()).select_from(OutboxEvent))
+    assert outbox_count == 1

@@ -33,6 +33,7 @@ from app.domain.enums import (
     ConversationPriorityLevel,
     ConversationState,
     FailedJobStatus,
+    OutboxEventStatus,
     InstagramAccountStatus,
     InventoryMovementType,
     InventoryReservationStatus,
@@ -370,6 +371,32 @@ class WebhookEvent(Base, TimestampMixin):
     dedupe_outcome: Mapped[WebhookDedupeOutcome | None] = mapped_column(
         pg_enum(WebhookDedupeOutcome, name="webhook_dedupe_outcome"), nullable=True
     )
+
+
+class OutboxEvent(Base):
+    __tablename__ = "outbox_events"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    aggregate_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    aggregate_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    shop_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    status: Mapped[OutboxEventStatus] = mapped_column(
+        pg_enum(OutboxEventStatus, name="outbox_event_status"),
+        nullable=False,
+        default=OutboxEventStatus.PENDING,
+        index=True,
+    )
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Message(Base):
@@ -791,6 +818,12 @@ class Order(Base, TimestampMixin):
     is_simulation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     customer_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     customer_confirmation_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    admin_override_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    payment_confirmed_by: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    inventory_finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     confidence_score: Mapped[Any | None] = mapped_column(Numeric(5, 4), nullable=True)
     confidence_source: Mapped[ConfidenceSource | None] = mapped_column(
         pg_enum(ConfidenceSource, name="confidence_source"), nullable=True
@@ -864,6 +897,7 @@ class InventoryReservation(Base):
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ttl_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -1384,6 +1418,9 @@ class TRLValidationRun(Base):
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    validation_mode: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="deterministic_regression", index=True
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="running", index=True)
     total_scenarios: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     passed_scenarios: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

@@ -73,20 +73,21 @@ def test_webhook_parses_shared_post(db_session, demo_shop) -> None:
 
 
 def test_rabbitmq_publish_payload(db_session, demo_shop) -> None:
+    from app.domain.models import OutboxEvent
+
     _create_account(db_session, demo_shop)
     publisher = MagicMock()
     service = WebhookIngestionService(db_session, publisher=publisher)
 
     service.handle_instagram_payload(SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD)
 
-    publisher.publish.assert_called_once()
-    queue_name, payload = publisher.publish.call_args.args
-    assert queue_name == "instagram.message.received"
-    assert "message_id" in payload
-    assert "conversation_id" in payload
-    assert "shop_id" in payload
-    assert "instagram_account_id" in payload
-    assert "customer_id" in payload
+    publisher.publish.assert_not_called()
+    outbox_events = db_session.scalars(select(OutboxEvent)).all()
+    assert len(outbox_events) == 1
+    body = outbox_events[0].payload["_body"]
+    assert "message_id" in body
+    assert "conversation_id" in body
+    assert "shop_id" in body
 
 
 def test_unknown_recipient_still_stores_event(db_session, demo_shop) -> None:

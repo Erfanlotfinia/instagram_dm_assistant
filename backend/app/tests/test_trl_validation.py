@@ -1,6 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import pytest
+
 from app.domain.models import AgentAction, Conversation, Customer, InstagramAccount, Message, Order, Product, ProductVariant, TRLValidationScenarioResult
 from app.scripts.seed_trl_demo_data import seed_trl_demo_data
 from app.services.trl_validation_runner import TRLValidationRunner, THRESHOLDS
@@ -55,6 +57,34 @@ def test_trl_runner_can_run_twice_without_customer_unique_collision(db_session: 
     second = runner.run(summary["shop_id"], scenario_limit=1)
     assert first.status == "completed"
     assert second.status == "completed"
+
+
+def test_trl_deterministic_mode_labels_metrics(db_session: Session):
+    summary = seed_trl_demo_data(reset=True, db=db_session)
+    run = TRLValidationRunner(db_session).run(
+        summary["shop_id"],
+        scenario_limit=2,
+        validation_mode="deterministic_regression",
+    )
+    assert run.validation_mode == "deterministic_regression"
+    assert run.metrics_json["validation_mode"] == "deterministic_regression"
+    assert run.metrics_json["proves_live_llm"] is False
+    assert run.metrics_json["model_version"] == "trl-rule-based-simulator"
+
+
+def test_trl_live_llm_mode_requires_enabled_flag(db_session: Session, monkeypatch) -> None:
+    monkeypatch.setenv("TRL_LIVE_LLM_ENABLED", "false")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    summary = seed_trl_demo_data(reset=True, db=db_session)
+    with pytest.raises(ValueError, match="TRL live LLM staging requires"):
+        TRLValidationRunner(db_session).run(
+            summary["shop_id"],
+            scenario_limit=1,
+            validation_mode="live_llm_staging",
+        )
+    get_settings.cache_clear()
 
 
 def test_trl_reset_only_deletes_trl_owned_simulation_records(db_session: Session):

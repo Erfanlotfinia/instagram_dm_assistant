@@ -288,6 +288,12 @@ class FailedJobStatus(str, enum.Enum):
     IGNORED = "ignored"
 
 
+class OutboxEventStatus(str, enum.Enum):
+    PENDING = "pending"
+    PUBLISHED = "published"
+    FAILED = "failed"
+
+
 class ConversationEventType(str, enum.Enum):
     INBOUND_MESSAGE = "inbound_message_received"
     OUTBOUND_MESSAGE = "outbound_message_sent"

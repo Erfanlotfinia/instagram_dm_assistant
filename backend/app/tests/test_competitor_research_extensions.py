@@ -39,8 +39,20 @@ def test_trigger_keyword_duplicate_and_flow(db_session, demo_shop, admin_user):
 
 def test_variant_resolver_logs_unavailable_demand(db_session, demo_shop):
     product = Product(shop_id=demo_shop.id, title="Dress", base_price=Decimal("50"), currency="USD")
-    variant = ProductVariant(product_id=product.id, color="white", normalized_color="white", size="M", normalized_size="M", sku="D-W-M", price=Decimal("50"), stock_quantity=1)
-    db_session.add_all([product, variant]); db_session.commit()
+    db_session.add(product)
+    db_session.flush()
+    variant = ProductVariant(
+        product_id=product.id,
+        color="white",
+        normalized_color="white",
+        size="M",
+        normalized_size="M",
+        sku="D-W-M",
+        price=Decimal("50"),
+        stock_quantity=1,
+    )
+    db_session.add(variant)
+    db_session.commit()
     result = VariantResolver(db_session).resolve(shop_id=demo_shop.id, product_id=product.id, raw_color="مشکی", raw_size="L", quantity=1)
     assert "color_unavailable" in result.mismatch_reasons
     assert db_session.query(UnavailableDemand).count() == 1
@@ -54,20 +66,21 @@ def test_agent_settings_preview_rules_and_discount_safety(db_session, demo_shop,
     assert demo_shop.agent_settings["variant_confidence_threshold"] == 0.85
     decision = service.decide_auto_send(demo_shop.id, AutoSendDecisionRequest(variant_confidence=0.1, order_total=Decimal("150")), admin_user)
     assert decision.preview_required is True
-    assert any("Variant confidence" in reason for reason in decision.reasons)
-    assert any("High-value" in reason for reason in decision.reasons)
+    assert any("low_variant_confidence" in reason for reason in decision.reasons)
+    assert any("high_value_order_requires_preview" in reason for reason in decision.reasons)
 
 
 def test_orchestrator_preview_uses_agent_studio_settings(db_session, demo_shop, admin_user):
+    from app.tests.fixtures.agent import seed_order_flow_data
+
+    data = seed_order_flow_data(db_session, demo_shop)
     service = AgentSettingsService(db_session)
     service.update(
         demo_shop.id,
         ShopAgentStudioSettingsUpdate(auto_send_enabled=False, confidence_threshold_intent=Decimal("0.95")),
         admin_user,
     )
-    conversation = Conversation(shop_id=demo_shop.id, shop=demo_shop)
-    db_session.add(conversation)
-    db_session.flush()
+    conversation = data["conversation"]
 
     preview_required, reason = ConversationOrchestrator(db_session)._preview_decision(
         conversation,

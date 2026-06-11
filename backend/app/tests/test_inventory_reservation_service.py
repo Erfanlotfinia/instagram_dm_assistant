@@ -58,7 +58,8 @@ def test_reserve_refresh_release_confirm(db_session, demo_shop, order_product) -
     released = service.release_reservation(reservation2.id, reason="test release")
     assert released.status == InventoryReservationStatus.RELEASED
     db_session.refresh(variant)
-    assert variant.reserved_quantity == 2
+    # Second reserve reuses the order-level movement row, so only reservation2 qty is released.
+    assert variant.reserved_quantity == 1
 
 
 def test_reserve_idempotent(db_session, demo_shop, order_product) -> None:

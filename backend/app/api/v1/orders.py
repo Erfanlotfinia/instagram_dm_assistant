@@ -9,7 +9,7 @@ from app.api.deps import get_current_user, get_shop_membership, require_shop_rol
 from app.db.session import get_db_session
 from app.domain.enums import OrderPaymentStatus, OrderShippingStatus, OrderStatus, UserRole
 from app.domain.models import ShopMember, User
-from app.schemas.order import OrderCancelRequest, OrderRead, OrderShipRequest
+from app.schemas.order import OrderCancelRequest, OrderRead, OrderShipRequest, PaymentLinkRequest
 from app.services.order_service import OrderService
 from app.services.payment_service import PaymentService
 from app.services.shipping_service import ShippingService
@@ -79,11 +79,17 @@ def cancel_order(
 def send_payment_link(
     shop_id: UUID,
     order_id: UUID,
+    payload: PaymentLinkRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     _: Annotated[ShopMember, Depends(require_shop_role(UserRole.OPERATOR))],
     db: Annotated[Session, Depends(get_db_session)],
 ) -> OrderRead:
-    order = PaymentService(db).send_payment_link(shop_id, order_id, current_user)
+    order = PaymentService(db).send_payment_link(
+        shop_id,
+        order_id,
+        current_user,
+        admin_override_reason=payload.admin_override_reason,
+    )
     return OrderService(db).get_order_read(shop_id, order.id, current_user)
 
 

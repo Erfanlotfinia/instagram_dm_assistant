@@ -32,6 +32,7 @@ def run_trl_validation(
         created_by_user_id=current_user.id,
         reset_demo_data=payload.reset_demo_data,
         scenario_limit=payload.scenario_limit,
+        validation_mode=payload.validation_mode,
     )
     return TRLValidationRunRead.model_validate(run)
 

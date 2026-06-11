@@ -394,7 +394,12 @@ class OrderService:
         order.payment_status = OrderPaymentStatus.PAID
         order.expires_at = None
         order.shipping_status = OrderShippingStatus.PREPARING
+        order.paid_at = datetime.now(UTC)
+        if user is not None:
+            order.payment_confirmed_by = user.id
         self._finalize_paid_inventory(order)
+        if order.inventory_finalized_at is None:
+            order.inventory_finalized_at = datetime.now(UTC)
         from app.services.customer_preferences_service import CustomerPreferencesService
         from app.services.order_recovery_service import OrderRecoveryService
 

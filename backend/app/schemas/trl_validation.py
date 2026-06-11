@@ -4,12 +4,15 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class TRLValidationRunRequest(BaseModel):
     reset_demo_data: bool = False
     scenario_limit: int | None = Field(default=None, ge=1, le=1000)
+    validation_mode: Literal["deterministic_regression", "live_llm_staging"] = "deterministic_regression"
 
 
 class TRLValidationResetResponse(BaseModel):
@@ -24,6 +27,7 @@ class TRLValidationRunRead(BaseModel):
 
     id: UUID
     shop_id: UUID
+    validation_mode: str
     status: str
     total_scenarios: int
     passed_scenarios: int

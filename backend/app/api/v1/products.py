@@ -15,7 +15,7 @@ from app.schemas.instagram_product_map import (
     ResolveInstagramProductResponse,
 )
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
-from app.schemas.variant import VariantCreate, VariantRead, VariantUpdate
+from app.schemas.variant import VariantArchiveRequest, VariantCreate, VariantRead, VariantUpdate
 from app.services.instagram_product_resolver import InstagramProductResolver
 from app.services.product_service import ProductService
 from app.services.variant_service import VariantService
@@ -120,7 +120,26 @@ def delete_variant(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db_session)],
 ) -> None:
-    VariantService(db).delete_variant(shop_id, variant_id, current_user)
+    VariantService(db).archive_variant(shop_id, variant_id, current_user)
+
+
+@router.post("/{shop_id}/products/{product_id}/variants/{variant_id}/archive", response_model=VariantRead)
+def archive_variant(
+    shop_id: UUID,
+    product_id: UUID,
+    variant_id: UUID,
+    payload: VariantArchiveRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> VariantRead:
+    _ = product_id
+    return VariantService(db).archive_variant(
+        shop_id,
+        variant_id,
+        current_user,
+        force=payload.force,
+        reason=payload.reason,
+    )
 
 @router.get("/{shop_id}/instagram-product-maps", response_model=list[InstagramProductMapRead])
 def list_instagram_product_maps(

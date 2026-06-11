@@ -19,6 +19,14 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
+        selling_style = postgresql.ENUM(
+            "educational",
+            "balanced",
+            "promotional",
+            name="selling_style",
+            create_type=False,
+        )
+        selling_style.create(bind, checkfirst=True)
         with op.get_context().autocommit_block():
             for value in ("friendly", "formal", "concise"):
                 op.execute(f"ALTER TYPE selling_style ADD VALUE IF NOT EXISTS '{value}'")

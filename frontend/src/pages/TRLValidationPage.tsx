@@ -413,6 +413,11 @@ export function TRLValidationPage() {
             ) : null}
 
             <div className="stats-grid">
+              <MetricCard label="Validation mode" value={String(selectedRun.validation_mode ?? metrics.validation_mode ?? 'deterministic_regression')} />
+              <MetricCard
+                label="Evidence type"
+                value={metrics.proves_live_llm ? 'Live/staging LLM' : 'Deterministic regression'}
+              />
               <MetricCard label="Scenarios passed" value={`${selectedRun.passed_scenarios}/${selectedRun.total_scenarios}`} />
               <MetricCard
                 label="Pass rate"

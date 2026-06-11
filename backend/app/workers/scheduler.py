@@ -42,6 +42,12 @@ class SchedulerWorker:
             refreshed = self._refresh_embeddings(db)
             if refreshed:
                 logger.info("Refreshed embeddings for %s products", refreshed)
+
+            from app.services.outbox_publisher_service import OutboxPublisherService
+
+            outbox_published = OutboxPublisherService(db, self.settings).publish_pending()
+            if outbox_published:
+                logger.info("Published %s outbox events", outbox_published)
         except Exception:
             db.rollback()
             logger.exception("Background job cycle failed")

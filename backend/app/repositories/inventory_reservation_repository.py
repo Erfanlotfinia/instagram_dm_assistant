@@ -48,5 +48,12 @@ class InventoryReservationRepository:
         )
         return list(self.db.scalars(stmt).all())
 
+    def list_active_for_variant(self, variant_id: UUID) -> list[InventoryReservation]:
+        stmt = select(InventoryReservation).where(
+            InventoryReservation.product_variant_id == variant_id,
+            InventoryReservation.status == InventoryReservationStatus.ACTIVE,
+        )
+        return list(self.db.scalars(stmt).all())
+
     def commit(self) -> None:
         self.db.commit()

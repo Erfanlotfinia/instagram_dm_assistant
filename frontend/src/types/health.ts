@@ -20,7 +20,7 @@ export interface FailedJob {
   shop_id: string | null;
   queue_name: string;
   job_type: string;
-  payload: Record<string, unknown>;
+  redacted_payload: Record<string, unknown>;
   error_message: string | null;
   traceback: string | null;
   retry_count: number;
@@ -28,6 +28,15 @@ export interface FailedJob {
   status: 'failed' | 'retried' | 'ignored';
   created_at: string;
   updated_at: string;
+}
+
+export interface FailedJobFilters {
+  status?: string;
+  queue_name?: string;
+  job_type?: string;
+  date_from?: string;
+  date_to?: string;
+  page?: number;
 }
 
 export interface FailedJobListResponse {

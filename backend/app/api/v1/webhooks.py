@@ -14,6 +14,25 @@ from app.services.webhook_ingestion_service import WebhookIngestionService
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
+def _enforce_webhook_signature(
+    settings: Settings,
+    body: bytes,
+    signature_header: str | None,
+) -> None:
+    if not settings.requires_webhook_signature:
+        return
+    if not settings.instagram_app_secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Webhook signature verification is not configured",
+        )
+    if not verify_meta_signature(body, signature_header, settings.instagram_app_secret):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid webhook signature",
+        )
+
+
 @router.get("/instagram")
 def verify_instagram_webhook(
     settings: Annotated[Settings, Depends(get_settings)],
@@ -34,13 +53,7 @@ async def receive_instagram_webhook(
     _: Annotated[None, Depends(rate_limit_webhook)],
 ) -> WebhookAckResponse | WebhookIgnoredResponse:
     body = await request.body()
-    if settings.instagram_app_secret:
-        signature = request.headers.get("X-Hub-Signature-256")
-        if not verify_meta_signature(body, signature, settings.instagram_app_secret):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid webhook signature",
-            )
+    _enforce_webhook_signature(settings, body, request.headers.get("X-Hub-Signature-256"))
 
     try:
         import json
@@ -65,13 +78,7 @@ async def receive_meta_webhook(
 ) -> WebhookAckResponse | WebhookIgnoredResponse:
     """Alias for Instagram/Meta webhook ingestion with idempotency."""
     body = await request.body()
-    if settings.instagram_app_secret:
-        signature = request.headers.get("X-Hub-Signature-256")
-        if not verify_meta_signature(body, signature, settings.instagram_app_secret):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid webhook signature",
-            )
+    _enforce_webhook_signature(settings, body, request.headers.get("X-Hub-Signature-256"))
 
     try:
         import json

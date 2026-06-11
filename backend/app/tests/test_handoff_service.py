@@ -34,4 +34,4 @@ def test_repeated_failures_trigger_handoff() -> None:
     settings = Settings(agent_max_failures=2)
     decision = evaluate_handoff(extraction, failure_count=3, settings=settings)
     assert decision.required is True
-    assert "Repeated agent failures" in (decision.reason or "")
+    assert "Repeated unclear messages or agent failures" in (decision.reason or "")

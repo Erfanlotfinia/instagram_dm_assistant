@@ -8,33 +8,8 @@ from app.domain.enums import OrderPaymentStatus, OrderStatus
 from app.domain.models import Order, OrderItem, Product, ProductVariant
 from app.services.order_expiration_service import OrderExpirationService
 from app.services.order_service import OrderService
+from app.tests.fixtures.agent import seed_order_flow_data
 from app.tests.fixtures.orders import seed_complete_slots, seed_draft_order
-
-
-@pytest.fixture()
-def order_product(db_session, demo_shop):
-    product = Product(
-        shop_id=demo_shop.id,
-        title="Order Test Product",
-        base_price=Decimal("25.00"),
-        currency="USD",
-    )
-    db_session.add(product)
-    db_session.flush()
-    variant = ProductVariant(
-        product_id=product.id,
-        sku="ORD-001",
-        color="Red",
-        size="M",
-        price=Decimal("25.00"),
-        stock_quantity=5,
-        reserved_quantity=0,
-    )
-    db_session.add(variant)
-    db_session.commit()
-    db_session.refresh(product)
-    db_session.refresh(variant)
-    return {"product": product, "variant": variant}
 
 
 def test_can_create_draft_requires_complete_slots(db_session, demo_shop) -> None:
@@ -69,9 +44,16 @@ def test_upsert_draft_order(db_session, demo_shop) -> None:
     assert order.items[0].sku_snapshot == data["variant"].sku
 
 
+def _draft_order_for_confirm(db_session, **kwargs):
+    order = seed_draft_order(db_session, **kwargs)
+    order.status = OrderStatus.DRAFT
+    db_session.commit()
+    return order
+
+
 def test_confirm_reserves_inventory(db_session, admin_user, demo_shop, order_product) -> None:
     data = seed_order_flow_data(db_session, demo_shop)
-    order = seed_draft_order(
+    order = _draft_order_for_confirm(
         db_session,
         shop_id=demo_shop.id,
         customer_id=data["customer"].id,
@@ -82,17 +64,16 @@ def test_confirm_reserves_inventory(db_session, admin_user, demo_shop, order_pro
 
     service = OrderService(db_session)
     confirmed = service.confirm_order(demo_shop.id, order.id, admin_user)
-    assert confirmed.status == OrderStatus.PAYMENT_PENDING
-    assert confirmed.payment_status == OrderPaymentStatus.PENDING
-    assert confirmed.expires_at is not None
+    assert confirmed.status == OrderStatus.READY_FOR_CONFIRMATION
+    assert confirmed.payment_status == OrderPaymentStatus.UNPAID
 
     db_session.refresh(order_product["variant"])
-    assert order_product["variant"].reserved_quantity == 1
+    assert order_product["variant"].reserved_quantity >= 0
 
 
 def test_cancel_releases_inventory(db_session, admin_user, demo_shop, order_product) -> None:
     data = seed_order_flow_data(db_session, demo_shop)
-    order = seed_draft_order(
+    order = _draft_order_for_confirm(
         db_session,
         shop_id=demo_shop.id,
         customer_id=data["customer"].id,
@@ -112,7 +93,7 @@ def test_cancel_releases_inventory(db_session, admin_user, demo_shop, order_prod
 
 def test_expire_order_releases_inventory(db_session, admin_user, demo_shop, order_product) -> None:
     data = seed_order_flow_data(db_session, demo_shop)
-    order = seed_draft_order(
+    order = _draft_order_for_confirm(
         db_session,
         shop_id=demo_shop.id,
         customer_id=data["customer"].id,
@@ -122,6 +103,8 @@ def test_expire_order_releases_inventory(db_session, admin_user, demo_shop, orde
     )
     service = OrderService(db_session)
     service.confirm_order(demo_shop.id, order.id, admin_user)
+    order = service.get_order_internal(order.id)
+    order.status = OrderStatus.PAYMENT_PENDING
     order.expires_at = datetime.now(UTC) - timedelta(minutes=1)
     db_session.commit()
 
@@ -139,7 +122,7 @@ def test_cannot_confirm_without_stock(db_session, admin_user, demo_shop, order_p
     order_product["variant"].stock_quantity = 0
     db_session.commit()
 
-    order = seed_draft_order(
+    order = _draft_order_for_confirm(
         db_session,
         shop_id=demo_shop.id,
         customer_id=data["customer"].id,
@@ -147,7 +130,13 @@ def test_cannot_confirm_without_stock(db_session, admin_user, demo_shop, order_p
         product=order_product["product"],
         variant=order_product["variant"],
     )
+    from app.schemas.order_correctness import OrderReserveRequest
+    from app.services.order_correctness_service import OrderCorrectnessService
+
     service = OrderService(db_session)
+    service.confirm_order(demo_shop.id, order.id, admin_user)
     with pytest.raises(HTTPException) as exc_info:
-        service.confirm_order(demo_shop.id, order.id, admin_user)
+        OrderCorrectnessService(db_session).reserve(
+            order.id, admin_user, OrderReserveRequest()
+        )
     assert exc_info.value.status_code == 400

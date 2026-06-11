@@ -92,6 +92,7 @@ def test_customer_profile_patch(client, auth_headers, db_session, demo_shop) -> 
 
 @patch("app.services.instagram_send_service.InstagramSendService.send_text_message")
 def test_send_payment_link(mock_send, client, auth_headers, db_session, demo_shop, admin_user) -> None:
+    from datetime import UTC, datetime
     from app.domain.models import Message
     from app.domain.enums import MessageDirection, MessageType, MessageChannel
 
@@ -111,17 +112,22 @@ def test_send_payment_link(mock_send, client, auth_headers, db_session, demo_sho
         product=data["product"],
         variant=data["variant"],
     )
-    OrderService(db_session).confirm_order(demo_shop.id, order.id, admin_user)
+    order.customer_confirmed_at = datetime.now(UTC)
+    db_session.commit()
 
     response = client.post(
         f"/api/v1/shops/{demo_shop.id}/orders/{order.id}/send-payment-link",
         headers=auth_headers,
+        json={},
     )
     assert response.status_code == 200
     assert response.json()["payment_status"] == "pending"
 
 
 def test_mark_paid_and_cancel_order(client, auth_headers, db_session, demo_shop, admin_user) -> None:
+    from datetime import UTC, datetime
+    from app.services.payment_service import PaymentService
+
     data = seed_order_flow_data(db_session, demo_shop)
     order = seed_draft_order(
         db_session,
@@ -131,7 +137,9 @@ def test_mark_paid_and_cancel_order(client, auth_headers, db_session, demo_shop,
         product=data["product"],
         variant=data["variant"],
     )
-    OrderService(db_session).confirm_order(demo_shop.id, order.id, admin_user)
+    order.customer_confirmed_at = datetime.now(UTC)
+    db_session.commit()
+    PaymentService(db_session).send_payment_link(demo_shop.id, order.id, admin_user)
 
     paid = client.post(
         f"/api/v1/shops/{demo_shop.id}/orders/{order.id}/mark-paid",

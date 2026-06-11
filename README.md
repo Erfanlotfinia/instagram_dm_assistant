@@ -36,7 +36,9 @@ This repository is an advanced MVP for an Instagram DM ordering agent. It includ
 
 Docker Compose starts the following services:
 
-- `backend`: FastAPI API server on <http://localhost:8000> (runs Alembic migrations before startup)
+- `backend`: FastAPI API server on <http://localhost:8800> (container port 8000; runs Alembic migrations before startup)
+- `worker`: RabbitMQ consumer for inbound message processing
+- `scheduler`: periodic background jobs (outbox publisher, retention, etc.)
 - `frontend`: Vite admin app on <http://localhost:5173>
 - `postgres`: PostgreSQL database on `localhost:5432`
 - `redis`: Redis cache/broker support on `localhost:6379`
@@ -90,10 +92,10 @@ docker compose down -v
 Health endpoints:
 
 ```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/ready
-curl http://localhost:8000/api/v1/health
-curl http://localhost:8000/api/v1/ready
+curl http://localhost:8800/health
+curl http://localhost:8800/ready
+curl http://localhost:8800/api/v1/health
+curl http://localhost:8800/api/v1/ready
 ```
 
 ## Backend development
@@ -178,6 +180,29 @@ npm test
 npm run build
 ```
 
+## CI and verification
+
+GitHub Actions (`.github/workflows/ci.yml`) runs backend lint/tests, migration checks, frontend typecheck/lint/test/build, and an optional Docker smoke test.
+
+Local equivalents:
+
+```bash
+# Backend
+cd backend
+ruff check .
+pytest app/tests -q
+bash scripts/check_migrations.sh
+
+# Frontend
+cd frontend
+npm run typecheck && npm run lint && npm test && npm run build
+
+# Full stack smoke (requires Docker)
+bash scripts/docker_smoke_test.sh
+```
+
+Operational docs: [docs/security_configuration.md](docs/security_configuration.md), [docs/production_incident_response.md](docs/production_incident_response.md), [docs/migration_guide.md](docs/migration_guide.md).
+
 ## Implementation notes
 
 - API routers remain thin and expose only HTTP boundaries.
@@ -222,7 +247,7 @@ Webhook endpoints exposed by the API:
 ### Local development with ngrok
 
 1. Start the stack: `docker compose up --build`
-2. Expose the backend: `ngrok http 8000`
+2. Expose the backend: `ngrok http 8800`
 3. In the Meta developer dashboard, create a webhook subscription for your Instagram app:
    - Callback URL: `https://<your-ngrok-host>/api/v1/webhooks/instagram`
    - Verify token: same value as `INSTAGRAM_WEBHOOK_VERIFY_TOKEN`
@@ -353,9 +378,9 @@ cd frontend && npm test
 ### Health and metrics
 
 ```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/api/v1/ready
-curl http://localhost:8000/api/v1/metrics
+curl http://localhost:8800/health
+curl http://localhost:8800/api/v1/ready
+curl http://localhost:8800/api/v1/metrics
 ```
 
 
@@ -435,7 +460,7 @@ docker compose exec backend python -m app.scripts.seed_trl_demo_data
 # API (replace shop_id and token)
 curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
   -d '{"reset_demo_data": false}' \
-  http://localhost:8000/api/v1/shops/<shop_id>/trl-validation/run
+  http://localhost:8800/api/v1/shops/<shop_id>/trl-validation/run
 ```
 
 Or open **TRL Validation** in the sidebar (`/trl-validation`) and click **Run validation**. The runner executes 100 labeled scenarios from `backend/app/tests/fixtures/trl_scenarios.json` using a rule-based LLM substitute and records metrics in `trl_validation_runs`.
@@ -469,7 +494,7 @@ Credentials: `trl-admin@example.com` / `trl-operator@example.com`, password `Pas
 
 ```bash
 curl -H "Authorization: Bearer <token>" \
-  http://localhost:8000/api/v1/shops/<shop_id>/pilot-readiness
+  http://localhost:8800/api/v1/shops/<shop_id>/pilot-readiness
 ```
 
 Admin UI: <http://localhost:5173/pilot-readiness> — criteria, checklist, metrics, and event log. The shop is considered TRL 6 pilot-ready only when `ready_for_trl6_pilot` is `true`.
@@ -482,10 +507,10 @@ Immediately blocks auto-send and auto-order progression when pilot mode is enabl
 
 ```bash
 curl -X POST -H "Authorization: Bearer <token>" \
-  http://localhost:8000/api/v1/shops/<shop_id>/pilot/emergency-stop
+  http://localhost:8800/api/v1/shops/<shop_id>/pilot/emergency-stop
 
 curl -X POST -H "Authorization: Bearer <token>" \
-  http://localhost:8000/api/v1/shops/<shop_id>/pilot/resume
+  http://localhost:8800/api/v1/shops/<shop_id>/pilot/resume
 ```
 
 Or use **Emergency stop** / **Resume** on the Pilot Readiness page. Test before admitting real customer traffic; readiness requires at least one `emergency_stop` pilot event.

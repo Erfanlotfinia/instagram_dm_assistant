@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import traceback
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -81,9 +82,24 @@ class FailedJobService:
         *,
         page: int = 1,
         page_size: int = 25,
+        status_filter: FailedJobStatus | None = FailedJobStatus.FAILED,
+        queue_name: str | None = None,
+        job_type: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> FailedJobListResponse:
-        self.shop_service.get_shop(shop_id, user)
-        items, total = self.repo.list_for_shop(shop_id, page=page, page_size=page_size)
+        self._require_admin(shop_id, user)
+        items, total = self.repo.list_for_shop(
+            shop_id,
+            page=page,
+            page_size=page_size,
+            status=status_filter,
+            queue_name=queue_name,
+            job_type=job_type,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        self._audit_viewed(shop_id, user, total)
         return self._to_list_response(items, total, page, page_size)
 
     def list_accessible_jobs(
@@ -94,10 +110,17 @@ class FailedJobService:
         unscoped_only: bool = False,
         page: int = 1,
         page_size: int = 25,
+        status_filter: FailedJobStatus | None = FailedJobStatus.FAILED,
+        queue_name: str | None = None,
+        job_type: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> FailedJobListResponse:
-        shop_ids = self._accessible_shop_ids(user)
+        admin_shop_ids = self._admin_shop_ids(user)
+        if not admin_shop_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires admin role or higher")
         if shop_id is not None:
-            if shop_id not in shop_ids:
+            if shop_id not in admin_shop_ids:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this shop")
         if unscoped_only and shop_id is not None:
             raise HTTPException(
@@ -105,12 +128,19 @@ class FailedJobService:
                 detail="Use either shop_id or unscoped_only, not both",
             )
         items, total = self.repo.list_accessible(
-            shop_ids,
+            admin_shop_ids,
             shop_filter=shop_id,
             unscoped_only=unscoped_only,
             page=page,
             page_size=page_size,
+            status=status_filter,
+            queue_name=queue_name,
+            job_type=job_type,
+            date_from=date_from,
+            date_to=date_to,
         )
+        audit_shop_id = shop_id or admin_shop_ids[0]
+        self._audit_viewed(audit_shop_id, user, total)
         return self._to_list_response(items, total, page, page_size)
 
     def retry_job(self, shop_id: UUID, job_id: UUID, user: User) -> FailedJobActionResponse:
@@ -187,15 +217,35 @@ class FailedJobService:
         page_size: int,
     ) -> FailedJobListResponse:
         return FailedJobListResponse(
-            items=[FailedJobRead.model_validate(item) for item in items],
+            items=[FailedJobRead.from_job(item) for item in items],
             total=total,
             page=page,
             page_size=page_size,
         )
 
+    def _audit_viewed(self, shop_id: UUID, user: User, total: int) -> None:
+        AuditService(self.db).log(
+            action="failed_job_viewed",
+            entity_type="failed_job",
+            shop_id=shop_id,
+            actor_user_id=user.id,
+            metadata={"total": total},
+        )
+        self.repo.commit()
+
     def _accessible_shop_ids(self, user: User) -> list[UUID]:
         return list(
             self.db.scalars(select(ShopMember.shop_id).where(ShopMember.user_id == user.id)).all()
+        )
+
+    def _admin_shop_ids(self, user: User) -> list[UUID]:
+        return list(
+            self.db.scalars(
+                select(ShopMember.shop_id).where(
+                    ShopMember.user_id == user.id,
+                    ShopMember.role.in_([UserRole.OWNER, UserRole.ADMIN]),
+                )
+            ).all()
         )
 
     def _get_accessible_job_or_404(self, job_id: UUID, user: User) -> FailedJob:

@@ -11,11 +11,13 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.domain.enums import (
     ConversationEventType,
+    InventoryReservationStatus,
     OrderPaymentStatus,
     OrderStatus,
     PaymentProvider,
     PaymentRecordStatus,
     PilotEventSeverity,
+    UserRole,
 )
 from app.domain.models import Order, Payment, User
 from app.repositories.payment_repository import PaymentRepository
@@ -26,6 +28,7 @@ from app.services.instagram_send_service import InstagramSendService
 from app.services.order_service import OrderService
 from app.services.payment_providers import get_payment_provider
 from app.services.pilot_service import PilotService
+from app.services.shop_service import ShopService
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,7 @@ class PaymentService:
         self.settings = settings or get_settings()
         self.payments = PaymentRepository(db)
         self.order_service = OrderService(db, settings=self.settings)
+        self.shop_service = ShopService(db)
 
     def initiate_payment(
         self,
@@ -120,23 +124,46 @@ class PaymentService:
 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported callback status")
 
-    def send_payment_link(self, shop_id: UUID, order_id: UUID, user: User) -> Order:
+    def send_payment_link(
+        self,
+        shop_id: UUID,
+        order_id: UUID,
+        user: User,
+        *,
+        admin_override_reason: str | None = None,
+    ) -> Order:
         order = self.order_service.get_order_for_shop(shop_id, order_id, user)
         if order.status == OrderStatus.DRAFT:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Order must be confirmed before sending payment link",
             )
-        if order.status in {
-            OrderStatus.READY_FOR_CONFIRMATION,
-            OrderStatus.RESERVED,
-        }:
-            self.order_service._confirm_for_payment(order)
-        if order.status != OrderStatus.PAYMENT_PENDING:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot send payment link for order in status {order.status.value}",
+
+        if order.customer_confirmed_at is None:
+            if not admin_override_reason:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Customer confirmation is required before sending payment link",
+                )
+            self._require_admin_override(shop_id, user)
+            order.admin_override_reason = admin_override_reason
+            AuditService(self.db).log(
+                action="payment_link_admin_override",
+                entity_type="order",
+                shop_id=shop_id,
+                actor_user_id=user.id,
+                entity_id=str(order.id),
+                metadata={"reason": admin_override_reason},
             )
+
+        if order.status != OrderStatus.PAYMENT_PENDING:
+            if order.status in {OrderStatus.READY_FOR_CONFIRMATION, OrderStatus.RESERVED}:
+                self.order_service._confirm_for_payment(order)
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cannot send payment link for order in status {order.status.value}",
+                )
 
         pending = next(
             (
@@ -170,18 +197,49 @@ class PaymentService:
         return order
 
     def mark_paid_manually(self, shop_id: UUID, order_id: UUID, user: User) -> Order:
+        self._require_admin_override(shop_id, user)
         order = self.order_service.get_order_for_shop(shop_id, order_id, user)
-        if order.status not in {OrderStatus.PAYMENT_PENDING, OrderStatus.READY_FOR_CONFIRMATION}:
+
+        if order.status == OrderStatus.READY_FOR_CONFIRMATION:
+            if order.customer_confirmed_at is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Customer confirmation is required before manual payment",
+                )
+            self.order_service._confirm_for_payment(order)
+            self.payments.commit()
+            order = self.order_service.get_order_for_shop(shop_id, order_id, user)
+
+        if order.status != OrderStatus.PAYMENT_PENDING:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot mark paid from status {order.status.value}",
             )
 
+        from app.services.inventory_reservation_service import InventoryReservationService
+
+        reservations = InventoryReservationService(self.db).reservations.list_for_order(order.id)
+        active = [
+            r
+            for r in reservations
+            if r.status in {InventoryReservationStatus.ACTIVE, InventoryReservationStatus.CONFIRMED}
+        ]
+        if not active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Active inventory reservation is required before marking paid",
+            )
+
+        idempotency_ref = f"manual-{order.id}"
+        existing = self.payments.get_by_provider_reference(idempotency_ref)
+        if existing is not None and existing.status == PaymentRecordStatus.PAID:
+            return self.order_service.get_order_internal(order.id) or order
+
         payment = Payment(
             order_id=order.id,
             provider=PaymentProvider.MANUAL,
             status=PaymentRecordStatus.PAID,
-            provider_reference=f"manual-{datetime.now(UTC).isoformat()}",
+            provider_reference=idempotency_ref,
         )
         self.payments.create(payment)
         order = self.order_service.mark_paid_internal(order.id, payment=payment, user=user)
@@ -206,3 +264,8 @@ class PaymentService:
         )
         self.payments.commit()
         return order
+
+    def _require_admin_override(self, shop_id: UUID, user: User) -> None:
+        membership = self.shop_service.get_membership(shop_id, user.id)
+        if membership is None or membership.role not in {UserRole.OWNER, UserRole.ADMIN}:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires admin role or higher")

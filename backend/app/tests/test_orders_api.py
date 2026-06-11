@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.domain.enums import OrderStatus, PaymentRecordStatus
@@ -35,10 +36,16 @@ def test_mock_payment_callback_marks_order_paid(client, db_session, admin_user, 
         product=product,
         variant=variant,
     )
+    order.status = OrderStatus.DRAFT
+    order.customer_confirmed_at = datetime.now(UTC)
+    db_session.commit()
 
     from app.services.order_service import OrderService
 
-    OrderService(db_session).confirm_order(demo_shop.id, order.id, admin_user)
+    order_service = OrderService(db_session)
+    order_service.confirm_order(demo_shop.id, order.id, admin_user)
+    PaymentService(db_session).send_payment_link(demo_shop.id, order.id, admin_user)
+    order = order_service.get_order_internal(order.id)
     payment = PaymentService(db_session).initiate_payment(order)
 
     response = client.post(
@@ -70,9 +77,13 @@ def test_admin_mark_paid(client, db_session, admin_user, demo_shop, auth_headers
         product=product,
         variant=variant,
     )
+    order.status = OrderStatus.DRAFT
+    order.customer_confirmed_at = __import__("datetime").datetime.now(__import__("datetime").UTC)
+    db_session.commit()
     from app.services.order_service import OrderService
 
     OrderService(db_session).confirm_order(demo_shop.id, order.id, admin_user)
+    PaymentService(db_session).send_payment_link(demo_shop.id, order.id, admin_user)
 
     response = client.post(
         f"/api/v1/shops/{demo_shop.id}/orders/{order.id}/mark-paid",

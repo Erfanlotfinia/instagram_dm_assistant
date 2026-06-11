@@ -1,13 +1,17 @@
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.models import ProductVariant, User
+from app.domain.enums import InventoryReservationStatus, OrderStatus, UserRole
+from app.domain.models import Order, OrderItem, ProductVariant, User
+from app.repositories.inventory_reservation_repository import InventoryReservationRepository
 from app.repositories.product_repository import ProductRepository
 from app.repositories.variant_repository import VariantRepository
-from app.schemas.variant import VariantCreate, VariantRead, VariantUpdate
+from app.schemas.variant import VariantArchiveRequest, VariantCreate, VariantRead, VariantUpdate
+from app.services.audit_service import AuditService
 from app.services.fashion_normalization import normalize_color, normalize_size
 from app.services.shop_service import ShopService
 
@@ -99,16 +103,82 @@ class VariantService:
         return VariantRead.from_variant(variant)
 
 
-    def delete_variant(self, shop_id: UUID, variant_id: UUID, user: User) -> None:
+    def archive_variant(
+        self,
+        shop_id: UUID,
+        variant_id: UUID,
+        user: User,
+        *,
+        force: bool = False,
+        reason: str | None = None,
+    ) -> VariantRead:
         self.shop_service.get_shop(shop_id, user)
         variant = self._get_variant_for_shop_or_404(shop_id, variant_id)
+        if not variant.is_active:
+            return VariantRead.from_variant(variant)
+
         if variant.reserved_quantity > 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete variant with reserved inventory",
+                detail="Cannot archive variant with reserved inventory",
             )
-        self.variants.delete(variant)
+
+        active_reservations = InventoryReservationRepository(self.db).list_active_for_variant(variant_id)
+        if active_reservations:
+            if not force or not reason:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Variant has active reservations; admin force archive requires reason",
+                )
+            membership = self.shop_service.get_membership(shop_id, user.id)
+            if membership is None or membership.role not in {UserRole.OWNER, UserRole.ADMIN}:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires admin role or higher")
+
+        open_order_ids = list(
+            self.db.scalars(
+                select(OrderItem.order_id)
+                .join(Order, Order.id == OrderItem.order_id)
+                .where(
+                    OrderItem.product_variant_id == variant_id,
+                    Order.shop_id == shop_id,
+                    Order.status.in_(
+                        [
+                            OrderStatus.DRAFT,
+                            OrderStatus.WAITING_FOR_CLARIFICATION,
+                            OrderStatus.READY_FOR_CONFIRMATION,
+                            OrderStatus.RESERVED,
+                            OrderStatus.PAYMENT_PENDING,
+                        ]
+                    ),
+                )
+            ).all()
+        )
+        if open_order_ids:
+            if not force or not reason:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Variant has open orders; admin force archive requires reason",
+                )
+            membership = self.shop_service.get_membership(shop_id, user.id)
+            if membership is None or membership.role not in {UserRole.OWNER, UserRole.ADMIN}:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires admin role or higher")
+
+        variant.is_active = False
         self.variants.commit()
+        self.variants.refresh(variant)
+        AuditService(self.db).log(
+            action="variant_archived",
+            entity_type="product_variant",
+            shop_id=shop_id,
+            actor_user_id=user.id,
+            entity_id=str(variant.id),
+            metadata={"force": force, "reason": reason},
+        )
+        self.variants.commit()
+        return VariantRead.from_variant(variant)
+
+    def delete_variant(self, shop_id: UUID, variant_id: UUID, user: User) -> None:
+        self.archive_variant(shop_id, variant_id, user)
 
     def _require_product(self, shop_id: UUID, product_id: UUID, user: User):
         self.shop_service.get_shop(shop_id, user)
