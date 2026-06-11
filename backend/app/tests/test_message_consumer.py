@@ -1,3 +1,4 @@
+import pytest
 from unittest.mock import MagicMock
 from uuid import uuid4
 
@@ -12,10 +13,10 @@ from app.domain.models import (
 )
 from app.domain.enums import MessageChannel, MessageDirection, MessageType, WebhookProvider
 from app.integrations.redis_lock import ConversationLockService
-from app.schemas.queue_events import MessageReceivedJob
+from app.schemas.queue_events import InvalidJobPayloadError, MessageReceivedJob, validate_message_received_payload
 from app.services.webhook_ingestion_service import WebhookIngestionService
 from app.tests.fixtures.instagram_webhook import SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD
-from app.workers.message_consumer import MessageConsumer
+from app.workers.message_consumer import MessageConsumer, handle_delivery
 
 
 def test_message_consumer_marks_webhook_processed(db_session, demo_shop) -> None:
@@ -110,3 +111,15 @@ def test_message_consumer_is_idempotent_for_processed_event(db_session, demo_sho
 
     consumer = MessageConsumer(db_session, lock_service=lock_service)
     assert consumer.process_job(job.model_dump(mode="json")) is True
+
+
+def test_validate_message_received_payload_reports_missing_fields() -> None:
+    with pytest.raises(InvalidJobPayloadError, match="missing required fields"):
+        validate_message_received_payload({"raw": "malformed-worker-payload", "retry_count": 3})
+
+
+def test_handle_delivery_rejects_malformed_payload() -> None:
+    body = b'{"raw": "malformed-worker-payload", "retry_count": 3}'
+
+    with pytest.raises(InvalidJobPayloadError, match="missing required fields"):
+        handle_delivery(body)

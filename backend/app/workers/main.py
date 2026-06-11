@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import signal
 import sys
@@ -12,7 +11,7 @@ from app.core.logging import configure_logging
 from app.core.metrics import PROCESSED_MESSAGES, QUEUE_LAG
 from app.integrations.rabbitmq import RETRY_COUNT_HEADER, RabbitMQPublisher, setup_message_queues
 from app.services.failed_job_service import FailedJobService, format_traceback
-from app.workers.message_consumer import ConversationLockedError, handle_delivery
+from app.workers.message_consumer import ConversationLockedError, InvalidJobPayloadError, handle_delivery, parse_delivery_body
 
 logger = logging.getLogger(__name__)
 
@@ -84,14 +83,17 @@ class WorkerApp:
             self._update_queue_lag()
         except ConversationLockedError:
             channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        except InvalidJobPayloadError as exc:
+            logger.error("Worker received non-retryable payload retry_count=%s: %s", retry_count, exc)
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+            payload = self._payload_from_body(body)
+            self._publisher.publish_to_dlq(payload, retry_count)
+            self._persist_failed_job(payload, retry_count, exc)
         except Exception as exc:
             logger.exception("Worker failed to process message retry_count=%s", retry_count)
             channel.basic_ack(delivery_tag=method.delivery_tag)
             next_retry = retry_count + 1
-            try:
-                payload = json.loads(body.decode("utf-8"))
-            except json.JSONDecodeError:
-                payload = {"raw": body.decode("utf-8", errors="replace")}
+            payload = self._payload_from_body(body)
             if next_retry > self.settings.rabbitmq_max_retries:
                 self._publisher.publish_to_dlq(payload, next_retry)
                 self._persist_failed_job(payload, next_retry, exc)
@@ -101,6 +103,12 @@ class WorkerApp:
                     payload,
                     retry_count=next_retry,
                 )
+
+    def _payload_from_body(self, body: bytes) -> dict:
+        try:
+            return parse_delivery_body(body)
+        except InvalidJobPayloadError:
+            return {"raw": body.decode("utf-8", errors="replace")}
 
     def _persist_failed_job(self, payload: dict, retry_count: int, exc: Exception | None) -> None:
         from app.db.session import SessionLocal

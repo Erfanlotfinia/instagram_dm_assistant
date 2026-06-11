@@ -221,6 +221,29 @@ def test_failed_jobs_list_retry_ignore(client, auth_headers, db_session, demo_sh
     assert "failed_job_ignored" in audit_actions
 
 
+def test_failed_jobs_retry_rejects_malformed_payload(client, auth_headers, db_session, demo_shop) -> None:
+    job = FailedJob(
+        shop_id=demo_shop.id,
+        queue_name="instagram.message.received.dlq",
+        job_type="message_received",
+        payload={"raw": "malformed-worker-payload", "retry_count": 3},
+        error_message="Invalid message_received job payload",
+        retry_count=3,
+        max_retries=3,
+        status=FailedJobStatus.FAILED,
+        resolved=False,
+    )
+    db_session.add(job)
+    db_session.commit()
+
+    response = client.post(
+        f"/api/v1/shops/{demo_shop.id}/failed-jobs/{job.id}/retry",
+        headers=auth_headers,
+    )
+    assert response.status_code == 400
+    assert "missing required fields" in response.json()["detail"]
+
+
 def test_agent_run_idempotency(db_session, demo_shop) -> None:
     data = seed_order_flow_data(db_session, demo_shop)
     message = create_text_message(db_session, data["conversation"].id, "hello again")

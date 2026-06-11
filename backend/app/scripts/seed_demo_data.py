@@ -17,6 +17,7 @@ from app.domain.enums import (
     AgentRunStatus,
     AgentWorkflowState,
     ConfidenceSource,
+    ConversationEventType,
     ConversationPriorityLevel,
     ConversationState,
     FailedJobStatus,
@@ -47,6 +48,7 @@ from app.domain.models import (
     ColorAlias,
     CommentToDmTrigger,
     Conversation,
+    ConversationEvent,
     ConversationSlots,
     Customer,
     FailedJob,
@@ -71,6 +73,7 @@ from app.domain.models import (
     User,
 )
 from app.repositories.shop_repository import ShopMemberRepository, ShopRepository
+from app.services.conversation_event_service import EVENT_TITLES
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +216,244 @@ def _ensure_message(
     if created_at is not None:
         message.created_at = created_at
     db.add(message)
+
+
+def _add_conversation_event(
+    db: Session,
+    *,
+    conversation_id: UUID,
+    event_type: ConversationEventType,
+    created_at: datetime,
+    description: str | None = None,
+    metadata: dict | None = None,
+    created_by_user_id: UUID | None = None,
+) -> None:
+    db.add(
+        ConversationEvent(
+            conversation_id=conversation_id,
+            event_type=event_type,
+            title=EVENT_TITLES[event_type],
+            description=description,
+            event_metadata=metadata,
+            created_by_user_id=created_by_user_id,
+            created_at=created_at,
+        )
+    )
+
+
+def _conversation_has_events(db: Session, conversation_id: UUID) -> bool:
+    return (
+        db.scalar(
+            select(ConversationEvent).where(ConversationEvent.conversation_id == conversation_id).limit(1)
+        )
+        is not None
+    )
+
+
+def _seed_conversation_events(
+    db: Session,
+    *,
+    now: datetime,
+    admin: User,
+    conv_order_ready: Conversation,
+    conv_handoff: Conversation,
+    conv_sim: Conversation,
+    hoodie: Product,
+    hoodie_variant: ProductVariant | None,
+) -> None:
+    seeded = False
+
+    if not _conversation_has_events(db, conv_order_ready.id):
+        seeded = True
+        _add_conversation_event(
+            db,
+            conversation_id=conv_order_ready.id,
+            event_type=ConversationEventType.INBOUND_MESSAGE,
+            description="این هودی مشکی سایز L می‌خوام",
+            created_at=now - timedelta(minutes=20),
+            metadata={"instagram_message_id": "demo-msg-ali-in-1"},
+        )
+        _add_conversation_event(
+            db,
+            conversation_id=conv_order_ready.id,
+            event_type=ConversationEventType.PRODUCT_RESOLVED,
+            description=hoodie.title,
+            created_at=now - timedelta(minutes=19),
+            metadata={"product_id": str(hoodie.id), "source": "instagram_post"},
+        )
+        if hoodie_variant is not None:
+            _add_conversation_event(
+                db,
+                conversation_id=conv_order_ready.id,
+                event_type=ConversationEventType.VARIANT_RESOLVED,
+                description=f"{hoodie_variant.color} / {hoodie_variant.size}",
+                created_at=now - timedelta(minutes=18, seconds=30),
+                metadata={"variant_id": str(hoodie_variant.id), "sku": hoodie_variant.sku},
+            )
+            _add_conversation_event(
+                db,
+                conversation_id=conv_order_ready.id,
+                event_type=ConversationEventType.INVENTORY_CHECKED,
+                description="Variant in stock",
+                created_at=now - timedelta(minutes=18),
+                metadata={"available_quantity": hoodie_variant.stock_quantity - hoodie_variant.reserved_quantity},
+            )
+        _add_conversation_event(
+            db,
+            conversation_id=conv_order_ready.id,
+            event_type=ConversationEventType.OUTBOUND_MESSAGE,
+            description="عالیه! لطفاً نام، تلفن و آدرس را بفرستید.",
+            created_at=now - timedelta(minutes=17),
+        )
+        _add_conversation_event(
+            db,
+            conversation_id=conv_order_ready.id,
+            event_type=ConversationEventType.CUSTOMER_INFO_COMPLETED,
+            description="Ali Rezaei · Tehran",
+            created_at=now - timedelta(minutes=15),
+        )
+        _add_conversation_event(
+            db,
+            conversation_id=conv_order_ready.id,
+            event_type=ConversationEventType.DRAFT_ORDER_CREATED,
+            description="Draft order ready for confirmation",
+            created_at=now - timedelta(minutes=14),
+        )
+        _add_conversation_event(
+            db,
+            conversation_id=conv_order_ready.id,
+            event_type=ConversationEventType.CONFIRMATION_REQUESTED,
+            description="Awaiting customer confirmation before payment",
+            created_at=now - timedelta(minutes=13),
+        )
+        _add_conversation_event(
+            db,
+            conversation_id=conv_order_ready.id,
+            event_type=ConversationEventType.CONVERSATION_ASSIGNED,
+            description=admin.full_name,
+            created_at=now - timedelta(minutes=12),
+            created_by_user_id=admin.id,
+            metadata={"operator_id": str(admin.id)},
+        )
+        _add_conversation_event(
+            db,
+            conversation_id=conv_order_ready.id,
+            event_type=ConversationEventType.PAYMENT_RECEIVED,
+            description="Order marked paid",
+            created_at=now - timedelta(minutes=10),
+        )
+
+    if not _conversation_has_events(db, conv_handoff.id):
+        seeded = True
+        _add_conversation_event(
+            db,
+            conversation_id=conv_handoff.id,
+            event_type=ConversationEventType.INBOUND_MESSAGE,
+            description="Do you have this in XL?",
+            created_at=now - timedelta(minutes=6),
+            metadata={"instagram_message_id": "demo-msg-sara-in-1"},
+        )
+        _add_conversation_event(
+            db,
+            conversation_id=conv_handoff.id,
+            event_type=ConversationEventType.PRODUCT_RESOLVED,
+            description=hoodie.title,
+            created_at=now - timedelta(minutes=5, seconds=30),
+            metadata={"product_id": str(hoodie.id)},
+        )
+        _add_conversation_event(
+            db,
+            conversation_id=conv_handoff.id,
+            event_type=ConversationEventType.HANDOFF_REQUIRED,
+            description="Variant confidence below threshold (0.42)",
+            created_at=now - timedelta(minutes=5),
+            metadata={"reason": "low_confidence_variant"},
+        )
+        _add_conversation_event(
+            db,
+            conversation_id=conv_handoff.id,
+            event_type=ConversationEventType.SUGGESTED_REPLY_CREATED,
+            description="I can check alternative sizes for you — one moment.",
+            created_at=now - timedelta(minutes=4),
+        )
+
+    if not _conversation_has_events(db, conv_sim.id):
+        seeded = True
+        _add_conversation_event(
+            db,
+            conversation_id=conv_sim.id,
+            event_type=ConversationEventType.INBOUND_MESSAGE,
+            description="تست شبیه‌ساز",
+            created_at=now - timedelta(hours=2),
+            metadata={"instagram_message_id": "demo-msg-reza-in-1", "is_simulation": True},
+        )
+
+    if seeded:
+        logger.info("Seeded demo conversation events for activity timeline")
+
+
+def _seed_dress_inquiry_events(
+    db: Session,
+    *,
+    now: datetime,
+    dress: Product,
+    dress_variant: ProductVariant | None,
+) -> None:
+    conv_dress = db.scalar(
+        select(Conversation).where(Conversation.channel_conversation_id == "demo-conv-dress-inquiry")
+    )
+    if conv_dress is None or _conversation_has_events(db, conv_dress.id):
+        return
+
+    _add_conversation_event(
+        db,
+        conversation_id=conv_dress.id,
+        event_type=ConversationEventType.INBOUND_MESSAGE,
+        description="Is the red dress available in S?",
+        created_at=now - timedelta(hours=6),
+        metadata={"instagram_message_id": "demo-msg-nadia-in-1"},
+    )
+    _add_conversation_event(
+        db,
+        conversation_id=conv_dress.id,
+        event_type=ConversationEventType.PRODUCT_RESOLVED,
+        description=dress.title,
+        created_at=now - timedelta(hours=5, minutes=55),
+        metadata={"product_id": str(dress.id), "source": "instagram_post"},
+    )
+    if dress_variant is not None:
+        _add_conversation_event(
+            db,
+            conversation_id=conv_dress.id,
+            event_type=ConversationEventType.VARIANT_RESOLVED,
+            description=f"{dress_variant.color} / {dress_variant.size}",
+            created_at=now - timedelta(hours=5, minutes=50),
+            metadata={"variant_id": str(dress_variant.id), "sku": dress_variant.sku},
+        )
+        _add_conversation_event(
+            db,
+            conversation_id=conv_dress.id,
+            event_type=ConversationEventType.INVENTORY_CHECKED,
+            description="Variant in stock",
+            created_at=now - timedelta(hours=5, minutes=48),
+            metadata={"available_quantity": dress_variant.stock_quantity - dress_variant.reserved_quantity},
+        )
+    _add_conversation_event(
+        db,
+        conversation_id=conv_dress.id,
+        event_type=ConversationEventType.INBOUND_MESSAGE,
+        description="Perfect, I'll take it",
+        created_at=now - timedelta(hours=5, minutes=45),
+        metadata={"instagram_message_id": "demo-msg-nadia-in-2"},
+    )
+    _add_conversation_event(
+        db,
+        conversation_id=conv_dress.id,
+        event_type=ConversationEventType.CUSTOMER_INFO_COMPLETED,
+        description="Nadia Hosseini · awaiting shipping details",
+        created_at=now - timedelta(hours=5, minutes=30),
+    )
+    logger.info("Seeded demo conversation events for dress inquiry timeline")
 
 
 def _seed_dashboard_metrics_demo(
@@ -1250,6 +1491,17 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
         account.status = InstagramAccountStatus.CONNECTED
     account.webhook_enabled = True
 
+    _seed_conversation_events(
+        db,
+        now=now,
+        admin=admin,
+        conv_order_ready=conv_order_ready,
+        conv_handoff=conv_handoff,
+        conv_sim=conv_sim,
+        hoodie=hoodie,
+        hoodie_variant=hoodie_variant,
+    )
+
     _seed_dashboard_metrics_demo(
         db,
         shop=shop,
@@ -1267,6 +1519,13 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
         conv_order_ready=conv_order_ready,
         conv_handoff=conv_handoff,
         conv_sim=conv_sim,
+    )
+
+    _seed_dress_inquiry_events(
+        db,
+        now=now,
+        dress=dress,
+        dress_variant=dress_variant,
     )
 
     _seed_failed_jobs(

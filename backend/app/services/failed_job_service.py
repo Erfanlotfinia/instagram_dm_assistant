@@ -15,7 +15,7 @@ from app.domain.models import FailedJob, ShopMember, User
 from app.integrations.rabbitmq import RabbitMQPublisher
 from app.repositories.failed_job_repository import FailedJobRepository
 from app.schemas.failed_job import FailedJobActionResponse, FailedJobListResponse, FailedJobRead
-from app.schemas.queue_events import MessageReceivedJob
+from app.schemas.queue_events import InvalidJobPayloadError, validate_message_received_payload
 from app.services.audit_service import AuditService
 from app.services.shop_service import ShopService
 from app.services.pilot_service import PilotService
@@ -43,8 +43,8 @@ class FailedJobService:
         settings = settings or get_settings()
         shop_id: UUID | None = None
         try:
-            shop_id = MessageReceivedJob.model_validate(payload).shop_id
-        except Exception:  # noqa: BLE001
+            shop_id = validate_message_received_payload(payload).shop_id
+        except (InvalidJobPayloadError, Exception):  # noqa: BLE001
             raw_shop = payload.get("shop_id")
             if raw_shop:
                 shop_id = UUID(str(raw_shop))
@@ -168,6 +168,14 @@ class FailedJobService:
     def _retry_job(self, job: FailedJob, *, audit_shop_id: UUID, user: User) -> FailedJobActionResponse:
         if job.status != FailedJobStatus.FAILED:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only failed jobs can be retried")
+        if job.job_type == "message_received":
+            try:
+                validate_message_received_payload(job.payload)
+            except InvalidJobPayloadError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=str(exc),
+                ) from exc
 
         publisher = RabbitMQPublisher(self.settings)
         try:

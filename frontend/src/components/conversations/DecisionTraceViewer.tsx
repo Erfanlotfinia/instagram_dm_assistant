@@ -4,49 +4,152 @@ import { apiClient } from '../../services/apiClient';
 import type { AgentDecisionTrace } from '../../types/conversation';
 import { RiskBadge } from './RiskBadge';
 
-export function DecisionTraceViewer({ shopId, conversationId }: { shopId: string; conversationId: string }) {
+type FactTone = 'neutral' | 'success' | 'warning' | 'danger';
+
+function formatTraceTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function humanize(value: string): string {
+  return value.replace(/_/g, ' ');
+}
+
+function StatusFact({ label, value, tone }: { label: string; value: string; tone: FactTone }) {
+  return (
+    <div className="context-facts__item">
+      <dt>{label}</dt>
+      <dd>
+        <span className={`status-pill status-pill--${tone}`}>{value}</span>
+      </dd>
+    </div>
+  );
+}
+
+function buildRawPayload(trace: AgentDecisionTrace) {
+  return {
+    extracted_slots: trace.extracted_slots,
+    normalized_slots: trace.normalized_slots,
+    product_candidates: trace.product_candidates,
+    selected_product_id: trace.selected_product_id,
+    variant_resolution: trace.variant_resolution,
+    inventory_result: trace.inventory_result,
+    risk_score: trace.risk_score,
+    order_action: trace.order_action,
+    outbound_message_id: trace.outbound_message_id,
+  };
+}
+
+export function DecisionTraceViewer({
+  shopId,
+  conversationId,
+}: {
+  shopId: string;
+  conversationId: string;
+}) {
   const [traces, setTraces] = useState<AgentDecisionTrace[]>([]);
-  const [selected, setSelected] = useState<AgentDecisionTrace | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!apiClient.listConversationDecisionTraces) { setTraces([]); return; }
-    apiClient.listConversationDecisionTraces(shopId, conversationId)
-      .then((rows) => { setTraces(rows); setSelected(rows[0] ?? null); })
+    if (!apiClient.listConversationDecisionTraces) {
+      setTraces([]);
+      return;
+    }
+    apiClient
+      .listConversationDecisionTraces(shopId, conversationId)
+      .then((rows) => {
+        setTraces(rows);
+        setSelectedId(rows[0]?.id ?? null);
+      })
       .catch((exc) => setError(exc instanceof Error ? exc.message : 'Failed to load decision traces'));
   }, [shopId, conversationId]);
 
+  const selected = traces.find((trace) => trace.id === selectedId) ?? null;
+
   return (
-    <section className="card" id="decision-trace">
-      <h2>Decision trace</h2>
-      <p className="muted">Business-level audit trail only; no private chain-of-thought is stored.</p>
-      {error ? <div role="alert" className="alert alert--error">{error}</div> : null}
-      {!traces.length ? <p>No decision traces yet.</p> : (
-        <div className="split-panel">
-          <ul className="trace-list" aria-label="Decision traces">
-            {traces.map((trace) => (
-              <li key={trace.id}>
-                <button className="button button--ghost" type="button" onClick={() => setSelected(trace)}>
-                  {new Date(trace.created_at).toLocaleString()} · {trace.intent ?? 'unknown'} <RiskBadge level={trace.risk_score?.risk_level} score={trace.risk_score?.score} />
-                </button>
-              </li>
-            ))}
+    <section className="decision-trace" id="decision-trace" aria-label="Decision trace">
+      <header className="decision-trace__header">
+        <h2 className="decision-trace__title">Decision trace</h2>
+        <p className="decision-trace__note">
+          Business-level audit trail only; no private chain-of-thought is stored.
+        </p>
+      </header>
+
+      {error ? (
+        <div role="alert" className="cc-alert cc-alert--error">
+          {error}
+        </div>
+      ) : null}
+
+      {!traces.length && !error ? (
+        <p className="empty-state">No decision traces yet.</p>
+      ) : null}
+
+      {traces.length ? (
+        <div className="decision-trace__layout">
+          <ul className="decision-trace__list" aria-label="Decision traces">
+            {traces.map((trace) => {
+              const active = trace.id === selectedId;
+              return (
+                <li key={trace.id}>
+                  <button
+                    type="button"
+                    className={`decision-trace__item${active ? ' decision-trace__item--active' : ''}`}
+                    aria-current={active}
+                    onClick={() => setSelectedId(trace.id)}
+                  >
+                    <span className="decision-trace__item-top">
+                      <span className="decision-trace__item-intent">{trace.intent ?? 'unknown'}</span>
+                      <RiskBadge level={trace.risk_score?.risk_level} score={trace.risk_score?.score} />
+                    </span>
+                    <time className="decision-trace__item-time" dateTime={trace.created_at}>
+                      {formatTraceTime(trace.created_at)}
+                    </time>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
+
           {selected ? (
-            <div>
-              <h3>{selected.intent ?? 'Unknown intent'}</h3>
-              <RiskBadge level={selected.risk_score?.risk_level} score={selected.risk_score?.score} />
-              <dl className="detail-list">
-                <dt>Next state</dt><dd>{selected.next_state}</dd>
-                <dt>Auto-send</dt><dd>{selected.auto_send_allowed ? 'Allowed' : 'Blocked'}</dd>
-                <dt>Handoff</dt><dd>{selected.human_handoff_required ? 'Required' : 'Not required'}</dd>
-                <dt>Reasoning summary</dt><dd>{selected.reasoning_summary ?? '—'}</dd>
+            <div className="decision-trace__detail">
+              <div className="decision-trace__detail-head">
+                <h3 className="decision-trace__detail-title">{selected.intent ?? 'Unknown intent'}</h3>
+                <RiskBadge level={selected.risk_score?.risk_level} score={selected.risk_score?.score} />
+              </div>
+
+              <dl className="context-facts">
+                <StatusFact label="Next state" value={humanize(selected.next_state)} tone="neutral" />
+                <StatusFact
+                  label="Auto-send"
+                  value={selected.auto_send_allowed ? 'Allowed' : 'Blocked'}
+                  tone={selected.auto_send_allowed ? 'success' : 'warning'}
+                />
+                <StatusFact
+                  label="Handoff"
+                  value={selected.human_handoff_required ? 'Required' : 'Not required'}
+                  tone={selected.human_handoff_required ? 'warning' : 'success'}
+                />
               </dl>
-              <pre>{JSON.stringify({ extracted_slots: selected.extracted_slots, normalized_slots: selected.normalized_slots, product_candidates: selected.product_candidates, selected_product_id: selected.selected_product_id, variant_resolution: selected.variant_resolution, inventory_result: selected.inventory_result, risk_score: selected.risk_score, order_action: selected.order_action, outbound_message_id: selected.outbound_message_id }, null, 2)}</pre>
+
+              <div className="decision-trace__reasoning">
+                <h4 className="context-section__title">Reasoning summary</h4>
+                <p className="context-section__body">{selected.reasoning_summary ?? '—'}</p>
+              </div>
+
+              <details className="decision-trace__raw">
+                <summary>Raw trace payload</summary>
+                <pre>{JSON.stringify(buildRawPayload(selected), null, 2)}</pre>
+              </details>
             </div>
           ) : null}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

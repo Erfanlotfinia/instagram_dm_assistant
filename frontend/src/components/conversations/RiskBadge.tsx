@@ -11,10 +11,13 @@ const LABELS: Record<string, string> = {
 };
 
 export function RiskBadge({ level, score }: RiskBadgeProps) {
-  const normalized = level ?? 'unknown';
+  // Avoid surfacing an "unknown" badge as visual noise before risk is scored.
+  if (!level || !LABELS[level]) {
+    return null;
+  }
   return (
-    <span className={`status-pill status-pill--${normalized}`} aria-label={`Risk level ${normalized}`}>
-      {LABELS[normalized] ?? 'Risk unknown'}{typeof score === 'number' ? ` · ${Math.round(score * 100)}%` : ''}
+    <span className={`status-pill status-pill--${level}`} aria-label={`Risk level ${level}`}>
+      {LABELS[level]}{typeof score === 'number' ? ` · ${Math.round(score * 100)}%` : ''}
     </span>
   );
 }

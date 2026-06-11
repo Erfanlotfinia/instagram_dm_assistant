@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type KeyboardEvent } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -62,6 +62,22 @@ function customerInitial(name: string): string {
   return name.charAt(0).toUpperCase();
 }
 
+function formatActivityTime(iso: string | null | undefined): string | null {
+  if (!iso) {
+    return null;
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export function ConversationDetailPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const [searchParams] = useSearchParams();
@@ -90,7 +106,6 @@ export function ConversationDetailPage() {
     enabled: Boolean(shopId && conversationId),
   });
   const latestRisk = tracesQuery.data?.[0]?.risk_score;
-  const isAdmin = user?.role === 'owner' || user?.role === 'admin';
 
   const messageForm = useForm<MessageFormValues>({
     resolver: zodResolver(messageSchema),
@@ -236,6 +251,21 @@ export function ConversationDetailPage() {
     onError: (error) => showToast(error instanceof Error ? error.message : 'Reject failed', 'error'),
   });
 
+  const messageText = messageForm.watch('text') ?? '';
+  const trimmedMessage = messageText.trim();
+
+  const submitMessage = messageForm.handleSubmit((values) => sendMessageMutation.mutate(values));
+
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    // Enter sends, Shift+Enter inserts a newline. Ignore while composing (IME).
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      if (trimmedMessage && !sendMessageMutation.isPending) {
+        void submitMessage();
+      }
+    }
+  }
+
   const pendingSuggestedReply = conversation?.suggested_replies?.[0];
   const isMutating =
     takeOverMutation.isPending ||
@@ -267,7 +297,31 @@ export function ConversationDetailPage() {
   }
 
   if (conversationQuery.isLoading) {
-    return <p className="loading-state">Loading conversation...</p>;
+    return (
+      <div className="conversation-workspace conversation-skeleton" aria-busy="true" aria-live="polite">
+        <span className="visually-hidden">Loading conversation…</span>
+        <div className="dashboard-card dashboard-card--wide conversation-skeleton__header">
+          <div className="skeleton-line skeleton-line--avatar" />
+          <div className="conversation-skeleton__header-text">
+            <div className="skeleton-line skeleton-line--title" />
+            <div className="skeleton-line skeleton-line--badges" />
+          </div>
+        </div>
+        <div className="conversation-workspace__body">
+          <section className="dashboard-card conversation-skeleton__chat">
+            <div className="skeleton-bubble skeleton-bubble--inbound" />
+            <div className="skeleton-bubble skeleton-bubble--outbound" />
+            <div className="skeleton-bubble skeleton-bubble--inbound" />
+            <div className="skeleton-line skeleton-line--composer" />
+          </section>
+          <div className="dashboard-card conversation-skeleton__panel">
+            <div className="skeleton-line" />
+            <div className="skeleton-line" />
+            <div className="skeleton-line skeleton-line--short" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (conversationQuery.error || !conversation) {
@@ -292,6 +346,8 @@ export function ConversationDetailPage() {
   const displayName = customerDisplayName(conversation);
   const stateLabel = STATE_LABELS[conversation.state] ?? conversation.state;
   const workflowLabel = WORKFLOW_LABELS[conversation.workflow_state] ?? conversation.workflow_state;
+  const lastActivity = formatActivityTime(conversation.last_message_at ?? conversation.updated_at);
+  const instagramHandle = conversation.customer?.instagram_user_id;
 
   return (
     <div className="conversation-workspace">
@@ -324,6 +380,29 @@ export function ConversationDetailPage() {
                   <span className="status-pill status-pill--accent">Agent paused</span>
                 ) : null}
               </div>
+
+              <dl className="conversation-workspace__meta">
+                {instagramHandle ? (
+                  <div className="conversation-workspace__meta-item">
+                    <dt>Instagram</dt>
+                    <dd>@{instagramHandle}</dd>
+                  </div>
+                ) : null}
+                <div className="conversation-workspace__meta-item">
+                  <dt>Operator</dt>
+                  <dd>{conversation.assigned_operator?.full_name ?? 'Unassigned'}</dd>
+                </div>
+                {lastActivity ? (
+                  <div className="conversation-workspace__meta-item">
+                    <dt>Last activity</dt>
+                    <dd>
+                      <time dateTime={conversation.last_message_at ?? conversation.updated_at}>
+                        {lastActivity}
+                      </time>
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
             </div>
           </div>
         </div>
@@ -349,7 +428,7 @@ export function ConversationDetailPage() {
           <h2 className="conversation-chat__title">Message timeline</h2>
 
           <div className="conversation-chat__thread">
-            <MessageThread messages={conversation.messages} isAdmin={isAdmin} />
+            <MessageThread messages={conversation.messages} />
           </div>
 
           <SuggestedReplyPanel
@@ -370,27 +449,32 @@ export function ConversationDetailPage() {
             isRejecting={rejectSuggestedMutation.isPending}
           />
 
-          <form
-            className="conversation-chat__composer"
-            onSubmit={messageForm.handleSubmit((values) => sendMessageMutation.mutate(values))}
-          >
+          <form className="conversation-chat__composer" onSubmit={submitMessage}>
             <label className="form-field conversation-chat__compose-field">
               <span className="visually-hidden">Message</span>
               <textarea
                 rows={3}
+                maxLength={4000}
                 placeholder="Write a manual reply to the customer…"
                 dir="auto"
                 {...messageForm.register('text')}
+                onKeyDown={handleComposerKeyDown}
               />
               {messageForm.formState.errors.text ? (
                 <span className="field-error">{messageForm.formState.errors.text.message}</span>
               ) : null}
             </label>
-            <div className="conversation-chat__composer-actions">
+            <div className="conversation-chat__composer-footer">
+              <p className="conversation-chat__composer-hint">
+                <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line
+                {messageText.length > 0 ? (
+                  <span className="conversation-chat__composer-count">{messageText.length} / 4000</span>
+                ) : null}
+              </p>
               <button
                 className="button button--primary"
                 type="submit"
-                disabled={sendMessageMutation.isPending}
+                disabled={!trimmedMessage || sendMessageMutation.isPending}
               >
                 {sendMessageMutation.isPending ? 'Sending…' : 'Send message'}
               </button>

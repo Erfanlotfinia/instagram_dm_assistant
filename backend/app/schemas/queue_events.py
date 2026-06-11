@@ -1,6 +1,10 @@
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+
+
+class InvalidJobPayloadError(Exception):
+    """Raised when a job payload cannot be processed and should not be retried."""
 
 
 class MessageReceivedJob(BaseModel):
@@ -10,3 +14,15 @@ class MessageReceivedJob(BaseModel):
     instagram_account_id: UUID
     customer_id: UUID
     webhook_event_id: UUID | None = None
+
+
+def validate_message_received_payload(payload: dict) -> MessageReceivedJob:
+    try:
+        return MessageReceivedJob.model_validate(payload)
+    except ValidationError as exc:
+        missing = [str(err["loc"][0]) for err in exc.errors() if err["type"] == "missing"]
+        if missing:
+            detail = f"Invalid message_received job payload: missing required fields ({', '.join(missing)})"
+        else:
+            detail = "Invalid message_received job payload"
+        raise InvalidJobPayloadError(detail) from exc

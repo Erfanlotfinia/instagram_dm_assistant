@@ -8,14 +8,13 @@ interface OrderDraftPanelProps {
 
 export function OrderDraftPanel({ order }: OrderDraftPanelProps) {
   return (
-    <section className="order-draft-panel dashboard-card" aria-label="Order draft">
+    <section className="order-draft-panel" aria-label="Order draft">
       <div className="order-draft-panel__header">
         <h3 className="context-section__title">Order draft</h3>
         <PilotModeBadge snapshot={order.pilot_mode_snapshot} />
       </div>
 
       <div className="order-draft-panel__meta">
-        <span className="status-pill status-pill--neutral">{order.status.replace(/_/g, ' ')}</span>
         <ReservationStatusChip reservations={order.reservations} />
         {order.confidence_score && (
           <span className="status-pill status-pill--accent">Confidence: {order.confidence_score}</span>

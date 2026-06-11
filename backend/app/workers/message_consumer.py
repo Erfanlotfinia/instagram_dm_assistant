@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -13,15 +12,33 @@ from app.integrations.redis_lock import ConversationLockService
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.webhook_event_repository import WebhookEventRepository
-from app.schemas.queue_events import MessageReceivedJob
+from app.schemas.queue_events import InvalidJobPayloadError, MessageReceivedJob, validate_message_received_payload
 from app.services.conversation_orchestrator import ConversationOrchestrator
-from app.services.failed_job_service import FailedJobService, format_traceback
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "ConversationLockedError",
+    "InvalidJobPayloadError",
+    "MessageConsumer",
+    "handle_delivery",
+    "parse_delivery_body",
+    "validate_message_received_payload",
+]
 
 
 class ConversationLockedError(Exception):
     """Raised when a conversation lock cannot be acquired."""
+
+
+def parse_delivery_body(body: bytes) -> dict:
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise InvalidJobPayloadError("Job body is not valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise InvalidJobPayloadError("Job body must be a JSON object")
+    return payload
 
 
 class MessageConsumer:
@@ -39,7 +56,7 @@ class MessageConsumer:
         self.webhook_events = WebhookEventRepository(db)
 
     def process_job(self, payload: dict) -> bool:
-        job = MessageReceivedJob.model_validate(payload)
+        job = validate_message_received_payload(payload)
         lock_token = self.lock_service.acquire(str(job.conversation_id))
         if lock_token is None:
             logger.info("Conversation %s is locked; requeueing job", job.conversation_id)
@@ -86,24 +103,15 @@ class MessageConsumer:
 
 
 def handle_delivery(body: bytes) -> bool:
-    payload = json.loads(body.decode("utf-8"))
+    payload = parse_delivery_body(body)
     db = SessionLocal()
     try:
         return MessageConsumer(db).process_job(payload)
-    except Exception as exc:
+    except ConversationLockedError:
         db.rollback()
-        try:
-            FailedJobService.record_failure(
-                db,
-                queue_name=get_settings().rabbitmq_queue_message_received,
-                job_type="message_received",
-                payload=payload,
-                error_message=str(exc),
-                retry_count=int(payload.get("retry_count", 0) or 0),
-                tb=format_traceback(exc),
-            )
-        except Exception:  # noqa: BLE001
-            db.rollback()
+        raise
+    except Exception:
+        db.rollback()
         logger.exception("Failed to process RabbitMQ job")
         raise
     finally:

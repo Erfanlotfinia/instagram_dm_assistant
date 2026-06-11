@@ -85,52 +85,40 @@ export function ConversationContextPanel({
         hidden={activeTab !== 'order'}
         className="conversation-context__panel"
       >
-        {correctnessQuery.data ? (
-          <OrderDraftPanel order={correctnessQuery.data} />
-        ) : null}
         {conversation.linked_order ? (
-          <dl className="context-facts">
-            <div className="context-facts__item">
-              <dt>Order</dt>
-              <dd>
-                <Link
-                  className="table-link"
-                  to={`/orders/${conversation.linked_order.id}?shopId=${shopId}`}
-                >
-                  {conversation.linked_order.id.slice(0, 8)}…
-                </Link>
-              </dd>
+          <div className="order-summary">
+            <div className="order-summary__identity">
+              <p className="order-summary__eyebrow">Linked order</p>
+              <p className="order-summary__id">#{conversation.linked_order.id.slice(0, 8)}</p>
             </div>
-            <div className="context-facts__item">
-              <dt>Status</dt>
-              <dd>
-                <span className="status-pill status-pill--neutral">
-                  {formatWorkflowLabel(conversation.linked_order.status)}
-                </span>
-              </dd>
+            <div className="order-summary__status">
+              <span className="status-pill status-pill--neutral">
+                {formatWorkflowLabel(conversation.linked_order.status)}
+              </span>
+              <span
+                className={`status-pill${
+                  conversation.linked_order.payment_status === 'paid'
+                    ? ' status-pill--success'
+                    : ' status-pill--warning'
+                }`}
+              >
+                {formatWorkflowLabel(conversation.linked_order.payment_status)}
+              </span>
             </div>
-            <div className="context-facts__item">
-              <dt>Payment</dt>
-              <dd>
-                <span
-                  className={`status-pill${
-                    conversation.linked_order.payment_status === 'paid'
-                      ? ' status-pill--success'
-                      : ' status-pill--warning'
-                  }`}
-                >
-                  {formatWorkflowLabel(conversation.linked_order.payment_status)}
-                </span>
-              </dd>
-            </div>
-            <div className="context-facts__item">
-              <dt>Total</dt>
-              <dd>{conversation.linked_order.total_amount}</dd>
-            </div>
-          </dl>
+            <Link
+              className="order-summary__open"
+              to={`/orders/${conversation.linked_order.id}?shopId=${shopId}`}
+            >
+              Open order →
+            </Link>
+          </div>
         ) : (
           <p className="empty-state">No active order linked to this conversation.</p>
         )}
+
+        {correctnessQuery.data ? (
+          <OrderDraftPanel order={correctnessQuery.data} />
+        ) : null}
       </div>
 
       <div
@@ -229,9 +217,14 @@ export function ConversationContextPanel({
         role="tabpanel"
         aria-labelledby="context-tab-activity"
         hidden={activeTab !== 'activity'}
-        className="conversation-context__panel"
+        className="conversation-context__panel conversation-context__panel--activity"
       >
-        <h2 className="visually-hidden">Conversation events</h2>
+        <div className="activity-panel__head">
+          <h2 className="activity-panel__title">Activity</h2>
+          <span className="activity-panel__count">
+            {(conversation.events ?? []).length} {(conversation.events ?? []).length === 1 ? 'event' : 'events'}
+          </span>
+        </div>
         <ConversationEventsTimeline events={(conversation.events ?? []) as ConversationEvent[]} />
       </div>
     </aside>
