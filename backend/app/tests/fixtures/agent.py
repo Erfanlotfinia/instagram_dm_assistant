@@ -125,7 +125,14 @@ def build_orchestrator(
     )
 
 
-def create_shared_post_message(db_session, conversation_id: UUID, post_url: str, text: str) -> Message:
+def create_shared_post_message(
+    db_session,
+    conversation_id: UUID,
+    post_url: str,
+    text: str,
+    *,
+    instagram_media_id: str = "media-abc",
+) -> Message:
     message = Message(
         conversation_id=conversation_id,
         direction=MessageDirection.INBOUND,
@@ -134,7 +141,7 @@ def create_shared_post_message(db_session, conversation_id: UUID, post_url: str,
         text=text,
         raw_payload={
             "_meta": {"shared_post_url": post_url},
-            "message": {"attachments": [{"payload": {"ig_post_media_id": "media-abc"}}]},
+            "message": {"attachments": [{"payload": {"ig_post_media_id": instagram_media_id}}]},
         },
     )
     db_session.add(message)

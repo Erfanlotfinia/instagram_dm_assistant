@@ -76,6 +76,10 @@ def get_request_context() -> RequestContext | None:
     return _request_context.get()
 
 
+def clear_request_context() -> None:
+    _request_context.set(None)
+
+
 def get_request_id() -> str | None:
     ctx = get_request_context()
     return ctx.request_id if ctx else None

@@ -51,5 +51,6 @@ def test_webhook_signature_required_in_production(monkeypatch) -> None:
     monkeypatch.setenv("INSTAGRAM_APP_SECRET", "prod-secret")
     monkeypatch.setenv("INSTAGRAM_WEBHOOK_VERIFY_TOKEN", "prod-verify-token")
     monkeypatch.setenv("CORS_ORIGINS", '["https://app.example.com"]')
+    monkeypatch.delenv("WEBHOOK_SIGNATURE_BYPASS", raising=False)
     settings = Settings()
     assert settings.requires_webhook_signature is True

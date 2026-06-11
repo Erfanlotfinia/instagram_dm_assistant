@@ -4,7 +4,7 @@ from app.domain.enums import AgentMode, AgentWorkflowState, MessageDirection, Or
 from app.domain.models import ConversationSlots, Message, Order, ShopAgentSettings, SuggestedReply
 from app.tests.fixtures.agent import build_orchestrator, seed_order_flow_data
 from app.services.pilot_service import PilotService
-from app.tests.fixtures.orders import create_text_message, seed_complete_slots
+from app.tests.fixtures.orders import create_text_message, seed_complete_slots, seed_draft_order
 
 
 def _enable_controlled_autopilot(db_session, shop_id) -> None:
@@ -28,6 +28,14 @@ def test_agent_flow_creates_draft_and_payment_link(db_session, demo_shop) -> Non
     slots.product_id = data["product"].id
     slots.product_variant_id = data["variant"].id
     slots.instagram_post_url = data["post_url"]
+    seed_draft_order(
+        db_session,
+        shop_id=demo_shop.id,
+        customer_id=data["customer"].id,
+        conversation_id=data["conversation"].id,
+        product=data["product"],
+        variant=data["variant"],
+    )
     db_session.commit()
 
     data["conversation"].workflow_state = AgentWorkflowState.WAITING_FOR_CONFIRMATION

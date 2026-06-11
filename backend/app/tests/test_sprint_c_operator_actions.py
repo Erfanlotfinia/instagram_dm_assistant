@@ -50,14 +50,21 @@ def test_manual_message_creates_audit_and_event(
     from app.domain.enums import MessageDirection, MessageType, MessageChannel
 
     conversation_id = _create_conversation(client, auth_headers, db_session, demo_shop)
-    mock_send.return_value = Message(
-        id=uuid4(),
-        conversation_id=conversation_id,
-        direction=MessageDirection.OUTBOUND,
-        channel=MessageChannel.INSTAGRAM,
-        message_type=MessageType.TEXT,
-        text="Hello from operator",
-    )
+
+    def _persist_outbound_message(conv_id, text, **_kwargs):
+        message = Message(
+            id=uuid4(),
+            conversation_id=conv_id,
+            direction=MessageDirection.OUTBOUND,
+            channel=MessageChannel.INSTAGRAM,
+            message_type=MessageType.TEXT,
+            text=text,
+        )
+        db_session.add(message)
+        db_session.flush()
+        return message
+
+    mock_send.side_effect = _persist_outbound_message
     client.post(
         f"/api/v1/shops/{demo_shop.id}/conversations/{conversation_id}/take-over",
         headers=auth_headers,
@@ -148,14 +155,25 @@ def test_mark_paid_and_cancel_order(client, auth_headers, db_session, demo_shop,
     assert paid.status_code == 200
     assert paid.json()["status"] == OrderStatus.PAID.value
 
-    data2 = seed_order_flow_data(db_session, demo_shop)
+    from app.domain.models import Conversation, Customer
+
+    customer2 = Customer(shop_id=demo_shop.id, instagram_user_id="cust-cancel-2")
+    db_session.add(customer2)
+    db_session.flush()
+    conversation2 = Conversation(
+        shop_id=demo_shop.id,
+        instagram_account_id=data["account"].id,
+        customer_id=customer2.id,
+    )
+    db_session.add(conversation2)
+    db_session.flush()
     order2 = seed_draft_order(
         db_session,
         shop_id=demo_shop.id,
-        customer_id=data2["customer"].id,
-        conversation_id=data2["conversation"].id,
-        product=data2["product"],
-        variant=data2["variant"],
+        customer_id=customer2.id,
+        conversation_id=conversation2.id,
+        product=data["product"],
+        variant=data["variant"],
     )
     cancelled = client.post(
         f"/api/v1/shops/{demo_shop.id}/orders/{order2.id}/cancel",

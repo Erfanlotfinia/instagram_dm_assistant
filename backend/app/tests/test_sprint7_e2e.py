@@ -8,11 +8,28 @@ from app.integrations.rabbitmq import NoOpPublisher
 from app.services.webhook_ingestion_service import WebhookIngestionService
 from app.tests.fixtures.agent import build_orchestrator, create_shared_post_message, seed_order_flow_data
 from app.tests.fixtures.instagram_webhook import SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD, SAMPLE_SHARED_POST_PAYLOAD
+from app.domain.enums import AgentMode
+from app.domain.models import ShopAgentSettings
 from app.tests.fixtures.orders import create_text_message, seed_complete_slots
+
+
+def _enable_controlled_autopilot(db_session, shop_id) -> None:
+    db_session.add(
+        ShopAgentSettings(
+            shop_id=shop_id,
+            mode=AgentMode.CONTROLLED_AUTOPILOT,
+            auto_send_enabled=True,
+            preview_required_for_low_confidence=False,
+            preview_required_for_first_order=False,
+            preview_required_for_high_value_order=False,
+        )
+    )
+    db_session.commit()
 
 
 def test_e2e_inbound_to_paid_order(db_session, demo_shop) -> None:
     data = seed_order_flow_data(db_session, demo_shop)
+    _enable_controlled_autopilot(db_session, demo_shop.id)
 
     service = WebhookIngestionService(db_session, publisher=NoOpPublisher())
     service.handle_instagram_payload(SAMPLE_SHARED_POST_PAYLOAD)
@@ -106,6 +123,7 @@ def test_failure_product_not_found(db_session, demo_shop) -> None:
         data["conversation"].id,
         "https://www.instagram.com/p/UNKNOWN/",
         "مشکی سایز L",
+        instagram_media_id="media-unknown",
     )
     llm_response = {
         "intent": "provide_info",

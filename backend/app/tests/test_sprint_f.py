@@ -261,8 +261,14 @@ def test_duplicate_payment_callback_idempotent(db_session, demo_shop) -> None:
         customer_id=data["customer"].id,
         status=OrderStatus.PAYMENT_PENDING,
         payment_status=OrderPaymentStatus.PENDING,
+        subtotal_amount=Decimal("99.99"),
         total_amount=Decimal("99.99"),
         currency="USD",
+        customer_name="Ali Rezaei",
+        phone="09121234567",
+        city="Tehran",
+        address="Valiasr St 10",
+        postal_code="1234567890",
     )
     db_session.add(order)
     db_session.commit()

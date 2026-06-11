@@ -35,8 +35,14 @@ def test_priority_increases_after_order_waiting_payment(db_session, demo_shop) -
         conversation_id=conversation.id,
         status=OrderStatus.PAYMENT_PENDING,
         payment_status=OrderPaymentStatus.PENDING,
+        subtotal_amount=Decimal("150.00"),
         total_amount=Decimal("150.00"),
         currency="USD",
+        customer_name="Ali Rezaei",
+        phone="09121234567",
+        city="Tehran",
+        address="Valiasr St 10",
+        postal_code="1234567890",
     )
     db_session.add(order)
     db_session.commit()

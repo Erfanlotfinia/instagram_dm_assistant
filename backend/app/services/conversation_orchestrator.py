@@ -143,7 +143,7 @@ class ConversationOrchestrator:
             self.db.commit()
             return True
 
-        trace_id = self.trace_service.current_trace_id() or self.trace_service.bind_trace_context()
+        trace_id = self.trace_service.bind_trace_context(self.trace_service.new_trace_id())
         policy_eval = None
         operating_mode: PilotOperatingMode | None = None
 
@@ -398,30 +398,6 @@ class ConversationOrchestrator:
                         risk_flags.append("high_value_order")
                     active_order.risk_flags = risk_flags
                     active_order.approval_source = "operator_required"
-            if (
-                active_order is not None
-                and conversation.workflow_state == AgentWorkflowState.WAITING_FOR_PAYMENT
-                and extraction.intent == AgentIntent.CONFIRM_ORDER
-            ):
-                try:
-                    confirmed = self.order_service.confirm_after_customer(active_order)
-                    payment = self.payment_service.initiate_payment(confirmed)
-                    payment_url = payment.payment_url
-                    self._log_action(
-                        conversation_id,
-                        "create_payment",
-                        {"order_id": str(confirmed.id)},
-                        {"payment_id": str(payment.id), "payment_url": payment_url},
-                        confidence=None,
-                    )
-                except Exception as exc:
-                    logger.warning("Order confirmation failed conversation=%s: %s", conversation_id, exc)
-                    conversation.workflow_state = AgentWorkflowState.WAITING_FOR_CONFIRMATION
-                    if variant_match and (variant_match.invalid_color or variant_match.invalid_size):
-                        conversation.workflow_state = AgentWorkflowState.WAITING_FOR_VARIANT
-                    elif inventory_available is False:
-                        conversation.workflow_state = AgentWorkflowState.WAITING_FOR_VARIANT
-                        slots.missing_fields = ["stock"]
         elif not order_side_effects_allowed:
             self._log_action(
                 conversation_id,
@@ -430,6 +406,34 @@ class ConversationOrchestrator:
                 {"reasons": combined_reasons},
                 confidence=extraction.confidence.intent,
             )
+
+        if (
+            order_side_effects_allowed
+            and extraction.intent == AgentIntent.CONFIRM_ORDER
+            and active_order is not None
+            and state_decision.next_state == AgentWorkflowState.WAITING_FOR_PAYMENT
+            and not handoff.required
+        ):
+            try:
+                confirmed = self.order_service.confirm_after_customer(active_order)
+                payment = self.payment_service.initiate_payment(confirmed)
+                payment_url = payment.payment_url
+                active_order = confirmed
+                self._log_action(
+                    conversation_id,
+                    "create_payment",
+                    {"order_id": str(confirmed.id)},
+                    {"payment_id": str(payment.id), "payment_url": payment_url},
+                    confidence=None,
+                )
+            except Exception as exc:
+                logger.warning("Order confirmation failed conversation=%s: %s", conversation_id, exc)
+                conversation.workflow_state = AgentWorkflowState.WAITING_FOR_CONFIRMATION
+                if variant_match and (variant_match.invalid_color or variant_match.invalid_size):
+                    conversation.workflow_state = AgentWorkflowState.WAITING_FOR_VARIANT
+                elif inventory_available is False:
+                    conversation.workflow_state = AgentWorkflowState.WAITING_FOR_VARIANT
+                    slots.missing_fields = ["stock"]
 
         upsell_text: str | None = None
         if (
@@ -650,7 +654,7 @@ class ConversationOrchestrator:
             agent_run.id,
             conversation.workflow_state.value,
         )
-        return True
+        return extraction_error is None
 
     def _resolve_product(
         self,

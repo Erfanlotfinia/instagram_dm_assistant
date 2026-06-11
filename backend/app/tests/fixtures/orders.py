@@ -1,28 +1,35 @@
 from decimal import Decimal
 from uuid import UUID
 
-from app.domain.enums import AgentWorkflowState, OrderStatus
-from app.domain.models import Conversation, ConversationSlots, Message, Order, Product, ProductVariant
-from app.tests.fixtures.agent import build_orchestrator, seed_order_flow_data
+from app.domain.enums import OrderStatus
+from app.domain.models import ConversationSlots, Order, Product, ProductVariant
+from app.tests.fixtures.agent import build_orchestrator, create_text_message, seed_order_flow_data
+
+__all__ = [
+    "build_orchestrator",
+    "create_text_message",
+    "seed_complete_slots",
+    "seed_draft_order",
+    "seed_order_flow_data",
+]
 
 
 def seed_complete_slots(db_session, conversation_id: UUID) -> ConversationSlots:
-    slots = ConversationSlots(
-        conversation_id=conversation_id,
-        product_id=None,
-        product_variant_id=None,
-        color="Black",
-        size="L",
-        quantity=1,
-        customer_name="Ali Rezaei",
-        phone="09121234567",
-        city="Tehran",
-        address="Valiasr St 10",
-        postal_code="1234567890",
-        missing_fields=[],
-        confidence={},
-    )
-    db_session.add(slots)
+    from app.repositories.conversation_slots_repository import ConversationSlotsRepository
+
+    slots = ConversationSlotsRepository(db_session).get_or_create(conversation_id)
+    slots.product_id = None
+    slots.product_variant_id = None
+    slots.color = "Black"
+    slots.size = "L"
+    slots.quantity = 1
+    slots.customer_name = "Ali Rezaei"
+    slots.phone = "09121234567"
+    slots.city = "Tehran"
+    slots.address = "Valiasr St 10"
+    slots.postal_code = "1234567890"
+    slots.missing_fields = []
+    slots.confidence = {}
     db_session.commit()
     db_session.refresh(slots)
     return slots
@@ -72,23 +79,3 @@ def seed_draft_order(
     db_session.commit()
     db_session.refresh(order)
     return order
-
-
-def create_text_message(
-    db_session, conversation_id: UUID, text: str, *, instagram_message_id: str | None = None
-) -> Message:
-    from app.domain.enums import MessageChannel, MessageDirection, MessageType
-
-    message = Message(
-        conversation_id=conversation_id,
-        direction=MessageDirection.INBOUND,
-        channel=MessageChannel.INSTAGRAM,
-        instagram_message_id=instagram_message_id,
-        message_type=MessageType.TEXT,
-        text=text,
-        raw_payload={},
-    )
-    db_session.add(message)
-    db_session.commit()
-    db_session.refresh(message)
-    return message

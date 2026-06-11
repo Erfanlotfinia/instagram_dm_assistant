@@ -182,26 +182,40 @@ npm run build
 
 ## CI and verification
 
-GitHub Actions (`.github/workflows/ci.yml`) runs backend lint/tests, migration checks, frontend typecheck/lint/test/build, and an optional Docker smoke test.
+GitHub Actions (`.github/workflows/ci.yml`) runs:
 
-Local equivalents:
+- **backend** — `ruff check`, clean-db `alembic upgrade head`, `pytest app/tests`, resolver benchmark, golden replay suite
+- **frontend** — `typecheck`, `lint`, `vitest`, `build`
+- **docker-smoke** — `docker compose config`, build, `/health`, `/api/v1/ready`, frontend HTTP checks
+
+One-shot local gate (Postgres on `localhost:5432`, Redis on `6379`):
+
+```bash
+# Linux / macOS / Git Bash
+bash scripts/verify_local.sh
+
+# Windows PowerShell
+powershell -File scripts/verify_local.ps1
+```
+
+Individual steps:
 
 ```bash
 # Backend
-cd backend
-ruff check .
-pytest app/tests -q
-bash scripts/check_migrations.sh
+cd backend && ruff check . && pytest app/tests -q
+bash scripts/check_migrations.sh    # from repo root
 
 # Frontend
-cd frontend
-npm run typecheck && npm run lint && npm test && npm run build
+cd frontend && npm run typecheck && npm run lint && npm test && npm run build
 
 # Full stack smoke (requires Docker)
-bash scripts/docker_smoke_test.sh
+bash scripts/docker_smoke_test.sh          # Linux / macOS / Git Bash
+powershell -File scripts/docker_smoke_test.ps1   # Windows
 ```
 
-Operational docs: [docs/security_configuration.md](docs/security_configuration.md), [docs/production_incident_response.md](docs/production_incident_response.md), [docs/migration_guide.md](docs/migration_guide.md).
+Latest remediation verification: [docs/verification_report.md](docs/verification_report.md).
+
+Operational docs: [docs/security_configuration.md](docs/security_configuration.md), [docs/production_incident_response.md](docs/production_incident_response.md), [docs/migration_guide.md](docs/migration_guide.md), [docs/failed-jobs-runbook.md](docs/failed-jobs-runbook.md), [docs/analytics-guide.md](docs/analytics-guide.md).
 
 ## Implementation notes
 

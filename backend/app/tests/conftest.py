@@ -100,6 +100,15 @@ def _reset_redis_for_tests() -> Generator[None, None, None]:
 
 
 @pytest.fixture(autouse=True)
+def _reset_request_context() -> Generator[None, None, None]:
+    from app.core.request_context import clear_request_context
+
+    clear_request_context()
+    yield
+    clear_request_context()
+
+
+@pytest.fixture(autouse=True)
 def _clear_webhook_idempotency_keys() -> Generator[None, None, None]:
     try:
         import redis

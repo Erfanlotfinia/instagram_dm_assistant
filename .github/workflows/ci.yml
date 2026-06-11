@@ -38,6 +38,8 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       RABBITMQ_URL: amqp://guest:guest@localhost:5672/
       RATE_LIMIT_ENABLED: "false"
+      LLM_MODE: mock
+      WEBHOOK_SIGNATURE_BYPASS: "true"
 
     steps:
       - uses: actions/checkout@v4
@@ -47,11 +49,11 @@ jobs:
       - name: Install backend dependencies
         working-directory: backend
         run: |
-          pip install -e ".[dev]" || pip install -r requirements.txt
+          pip install -e ".[dev]" || pip install -r requirements-dev.txt
           pip install pytest alembic
       - name: Run migrations on clean database
         working-directory: backend
-        run: alembic upgrade head
+        run: bash scripts/check_migrations.sh
       - name: Run backend tests
         working-directory: backend
         run: pytest app/tests -q --tb=short
