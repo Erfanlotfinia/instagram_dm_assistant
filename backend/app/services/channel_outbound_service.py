@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.enums import MessageDirection
-from app.domain.models import ChannelAccount, ChannelMessage
+from app.domain.models import ChannelAccount, ChannelConversation, ChannelMessage
 from app.schemas.channels import NormalizedOutboundMessage, ProviderSendResult
 from app.services.channel_account_service import adapter_for_provider
 from app.services.channel_policy_service import ChannelPolicyService
@@ -15,7 +16,22 @@ class ChannelOutboundService:
         self.policy = ChannelPolicyService()
 
     async def send(self, message: NormalizedOutboundMessage) -> ProviderSendResult:
-        decision = self.policy.evaluate_outbound(message)
+        conversation_window = None
+        if message.metadata.get("conversation_id"):
+            channel_conversation = self.db.scalar(
+                select(ChannelConversation).where(
+                    ChannelConversation.conversation_id
+                    == message.metadata.get("conversation_id"),
+                    ChannelConversation.channel_account_id
+                    == message.channel_account_id,
+                )
+            )
+            conversation_window = (
+                channel_conversation.messaging_window_expires_at
+                if channel_conversation
+                else None
+            )
+        decision = self.policy.evaluate_outbound(message, conversation_window)
         if not decision.allowed:
             return ProviderSendResult(
                 provider=message.provider,
@@ -39,7 +55,9 @@ class ChannelOutboundService:
             direction=MessageDirection.OUTBOUND,
             message_type=message.message_type,
             text=message.text,
-            media_json={"items": [m.model_dump(mode="json") for m in message.media_items]},
+            media_json={
+                "items": [m.model_dump(mode="json") for m in message.media_items]
+            },
             interactive_json={"buttons": [b.model_dump() for b in message.buttons]},
             raw_payload_json={},
             normalized_payload_json=message.model_dump(mode="json"),
@@ -60,9 +78,13 @@ class ChannelOutboundService:
         self.db.commit()
         if channel_message.is_simulation:
             return ProviderSendResult(
-                provider=message.provider, success=True, raw_response={"simulation": True}
+                provider=message.provider,
+                success=True,
+                raw_response={"simulation": True},
             )
-        result = await adapter_for_provider(message.provider).send_message(message)
+        result = await adapter_for_provider(message.provider, account).send_message(
+            message
+        )
         channel_message.external_message_id = result.external_message_id
         channel_message.raw_payload_json = result.raw_response or {}
         self.db.commit()

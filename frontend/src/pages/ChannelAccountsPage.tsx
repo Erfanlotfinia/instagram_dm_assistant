@@ -29,6 +29,8 @@ export function ChannelAccountsPage() {
   const [webhookSecret, setWebhookSecret] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [botToken, setBotToken] = useState('');
+  const [defaultLanguageCode, setDefaultLanguageCode] = useState('en_US');
+  const [webhookInfo, setWebhookInfo] = useState<unknown | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const selectedProvider = useMemo(() => PROVIDERS.find((item) => item.value === provider)!, [provider]);
@@ -68,6 +70,12 @@ export function ChannelAccountsPage() {
         webhook_secret: webhookSecret || undefined,
         access_token: accessToken || undefined,
         bot_token: botToken || undefined,
+        app_secret: provider === 'whatsapp' ? webhookSecret || undefined : undefined,
+        default_language_code: provider === 'whatsapp' ? defaultLanguageCode : undefined,
+        settings_json: {
+          ...(provider === 'telegram' ? { allowed_updates_json: ['message', 'callback_query'], use_local_bot_api: false } : {}),
+          ...(provider === 'whatsapp' ? { message_template_namespace: null } : {}),
+        },
       });
       setDisplayName('');
       setExternalAccountId('');
@@ -78,6 +86,7 @@ export function ChannelAccountsPage() {
       setWebhookSecret('');
       setAccessToken('');
       setBotToken('');
+      setDefaultLanguageCode('en_US');
       await loadAccounts();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create channel account');
@@ -92,6 +101,37 @@ export function ChannelAccountsPage() {
       window.alert(`${providerLabel(account.provider)} webhook test accepted`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Webhook test failed');
+    }
+  }
+
+  async function handleTelegramWebhookInfo(account: ChannelAccount) {
+    if (!selectedShopId) return;
+    setError(null);
+    try {
+      setWebhookInfo(await apiClient.getTelegramWebhookInfo(selectedShopId, account.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Webhook info failed');
+    }
+  }
+
+  async function handleSetTelegramWebhook(account: ChannelAccount) {
+    if (!selectedShopId) return;
+    setError(null);
+    try {
+      setWebhookInfo(await apiClient.setTelegramWebhook(selectedShopId, account.id));
+      await loadAccounts();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Set webhook failed');
+    }
+  }
+
+  async function handleDeleteTelegramWebhook(account: ChannelAccount) {
+    if (!selectedShopId) return;
+    setError(null);
+    try {
+      setWebhookInfo(await apiClient.deleteTelegramWebhook(selectedShopId, account.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete webhook failed');
     }
   }
 
@@ -117,14 +157,18 @@ export function ChannelAccountsPage() {
           <label className="form-field"><span>Display name</span><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>
           {(provider === 'instagram' || provider === 'whatsapp') && <label className="form-field"><span>External account ID</span><input value={externalAccountId} onChange={(event) => setExternalAccountId(event.target.value)} /></label>}
           {provider === 'whatsapp' && <label className="form-field"><span>Phone number ID</span><input value={phoneNumberId} onChange={(event) => setPhoneNumberId(event.target.value)} required /></label>}
+          {provider === 'whatsapp' && <label className="form-field"><span>Business account ID</span><input value={externalAccountId} onChange={(event) => setExternalAccountId(event.target.value)} placeholder="Optional WABA ID" /></label>}
+          {provider === 'whatsapp' && <label className="form-field"><span>Default language</span><input value={defaultLanguageCode} onChange={(event) => setDefaultLanguageCode(event.target.value)} placeholder="en_US" /></label>}
           {provider !== 'instagram' && provider !== 'whatsapp' && <label className="form-field"><span>Bot username</span><input value={botUsername} onChange={(event) => setBotUsername(event.target.value)} /></label>}
           {provider !== 'instagram' && provider !== 'whatsapp' && <label className="form-field"><span>Bot ID</span><input value={botId} onChange={(event) => setBotId(event.target.value)} /></label>}
           <label className="form-field"><span>Webhook verify token</span><input value={webhookVerifyToken} onChange={(event) => setWebhookVerifyToken(event.target.value)} /></label>
-          <label className="form-field"><span>Webhook secret</span><input type="password" value={webhookSecret} onChange={(event) => setWebhookSecret(event.target.value)} /></label>
+          <label className="form-field"><span>{provider === 'whatsapp' ? 'App secret' : 'Webhook secret token'}</span><input type="password" value={webhookSecret} onChange={(event) => setWebhookSecret(event.target.value)} /></label>
           {(provider === 'instagram' || provider === 'whatsapp') && <label className="form-field"><span>Access token</span><input type="password" value={accessToken} onChange={(event) => setAccessToken(event.target.value)} /></label>}
           {provider !== 'instagram' && <label className="form-field"><span>Bot token</span><input type="password" value={botToken} onChange={(event) => setBotToken(event.target.value)} /></label>}
           <button className="button button--primary" type="submit" disabled={!selectedShopId}>Add channel</button>
         </form>
+        {provider === 'whatsapp' && <div className="alert alert--info">Configure Meta webhook URL <code>/api/v1/channels/whatsapp/webhook</code>; use the verify token above and keep App Secret set in staging/production for X-Hub-Signature-256 validation. Use approved templates outside the 24-hour customer service window.</div>}
+        {provider === 'telegram' && <div className="alert alert--info">Configure Telegram webhook URL <code>/api/v1/channels/telegram/webhook</code>. If a secret token is set via setWebhook, Telegram sends it in <code>X-Telegram-Bot-Api-Secret-Token</code>.</div>}
       </section>
 
       <section className="dashboard-card">
@@ -140,11 +184,23 @@ export function ChannelAccountsPage() {
                 <td>{account.status}</td>
                 <td>{account.external_account_id ?? account.phone_number_id ?? account.bot_id ?? '—'}</td>
                 <td>{Object.entries(account.capabilities_json).filter(([, enabled]) => enabled === true).slice(0, 4).map(([key]) => key.replace('supports_', '')).join(', ') || '—'}</td>
-                <td><button className="button button--secondary" type="button" onClick={() => void handleWebhookTest(account)}>Webhook test</button></td>
+                <td><div className="button-row"><button className="button button--secondary" type="button" onClick={() => void handleWebhookTest(account)}>Webhook test</button>{account.provider === 'telegram' && <><button className="button button--secondary" type="button" onClick={() => void handleSetTelegramWebhook(account)}>Set webhook</button><button className="button button--secondary" type="button" onClick={() => void handleDeleteTelegramWebhook(account)}>Delete webhook</button><button className="button button--secondary" type="button" onClick={() => void handleTelegramWebhookInfo(account)}>Webhook info</button></>}{account.provider === 'whatsapp' && <span className="status-pill status-pill--warning">Template picker enabled outside window</span>}</div></td>
               </tr>
             ))}
           </tbody></table></div>
         )}
+      </section>
+
+      <section className="dashboard-card">
+        <h2>WhatsApp Templates</h2>
+        <p>Create local template records in this sprint through the backend model. Sync with Meta Template APIs is prepared as a provider limitation until template-management credentials are enabled.</p>
+        <div className="button-row"><span className="status-pill">approved</span><span className="status-pill status-pill--warning">submitted</span><span className="status-pill status-pill--danger">rejected</span></div>
+        <p><strong>Filters:</strong> language, category and status are supported by the template data model.</p>
+      </section>
+
+      <section className="dashboard-card">
+        <h2>Telegram webhook info panel</h2>
+        {webhookInfo ? <pre>{JSON.stringify(webhookInfo, null, 2)}</pre> : <p>Select Webhook info on a Telegram account to inspect Telegram's current webhook state.</p>}
       </section>
     </div>
   );

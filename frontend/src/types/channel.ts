@@ -33,6 +33,7 @@ export interface ChannelAccount {
   phone_number_id?: string | null;
   bot_username?: string | null;
   bot_id?: string | null;
+  webhook_verify_token?: string | null;
   status: ChannelAccountStatus;
   capabilities_json: Partial<ChannelCapabilities>;
   settings_json: Record<string, unknown>;
@@ -51,5 +52,14 @@ export interface ChannelAccountCreate {
   webhook_secret?: string;
   access_token?: string;
   bot_token?: string;
+  app_secret?: string;
+  default_language_code?: string;
   settings_json?: Record<string, unknown>;
+}
+
+
+export interface TelegramWebhookInfo {
+  ok?: boolean;
+  result?: Record<string, unknown>;
+  description?: string;
 }

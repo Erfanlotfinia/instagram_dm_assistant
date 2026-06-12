@@ -17,7 +17,7 @@ def test_provider_capabilities_cover_whatsapp_and_telegram() -> None:
     assert whatsapp.supports_templates is True
     assert whatsapp.supports_customer_service_window is True
     assert whatsapp.default_customer_service_window_hours == 24
-    assert whatsapp.webhook_security_type == WebhookSecurityType.VERIFY_TOKEN
+    assert whatsapp.webhook_security_type == WebhookSecurityType.SIGNATURE
     assert telegram.supports_inline_keyboard is True
     assert telegram.webhook_security_type == WebhookSecurityType.SECRET_TOKEN_HEADER
 
@@ -30,7 +30,9 @@ def test_whatsapp_normalization_text_payload() -> None:
                     {
                         "value": {
                             "metadata": {"phone_number_id": "phone-1"},
-                            "contacts": [{"wa_id": "15551234567", "profile": {"name": "Ava"}}],
+                            "contacts": [
+                                {"wa_id": "15551234567", "profile": {"name": "Ava"}}
+                            ],
                             "messages": [
                                 {
                                     "from": "15551234567",
@@ -108,7 +110,9 @@ def _request_with_headers(headers: dict[str, str], body: bytes = b"{}") -> Reque
             "type": "http",
             "method": "POST",
             "path": "/webhook",
-            "headers": [(key.lower().encode(), value.encode()) for key, value in headers.items()],
+            "headers": [
+                (key.lower().encode(), value.encode()) for key, value in headers.items()
+            ],
         },
         receive,
     )
@@ -124,6 +128,8 @@ def test_static_token_adapter_accepts_matching_webhook_secret() -> None:
     request = _request_with_headers({"X-Telegram-Bot-Api-Secret-Token": "secret"})
 
     assert (
-        asyncio.run(TelegramProviderAdapter(webhook_secret="secret").verify_webhook(request))
+        asyncio.run(
+            TelegramProviderAdapter(webhook_secret="secret").verify_webhook(request)
+        )
         is True
     )

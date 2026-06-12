@@ -348,6 +348,11 @@ export function ConversationDetailPage() {
   const workflowLabel = WORKFLOW_LABELS[conversation.workflow_state] ?? conversation.workflow_state;
   const lastActivity = formatActivityTime(conversation.last_message_at ?? conversation.updated_at);
   const instagramHandle = conversation.customer?.instagram_user_id;
+  const channelProvider = conversation.channel_provider ?? 'instagram';
+  const windowExpiresAt = conversation.messaging_window_expires_at ? new Date(conversation.messaging_window_expires_at) : null;
+  const windowMsRemaining = windowExpiresAt ? windowExpiresAt.getTime() - Date.now() : null;
+  const templateRequired = channelProvider === 'whatsapp' && windowMsRemaining !== null && windowMsRemaining <= 0;
+  const windowCountdown = windowMsRemaining !== null && windowMsRemaining > 0 ? `${Math.floor(windowMsRemaining / 3_600_000)}h ${Math.floor((windowMsRemaining % 3_600_000) / 60_000)}m` : null;
 
   return (
     <div className="conversation-workspace">
@@ -367,6 +372,10 @@ export function ConversationDetailPage() {
               <div className="conversation-workspace__badges">
                 <span className="status-pill status-pill--neutral">{stateLabel}</span>
                 <span className="status-pill status-pill--neutral">{workflowLabel}</span>
+                <span className="status-pill status-pill--accent">{channelProvider === 'whatsapp' ? 'WhatsApp' : channelProvider === 'telegram' ? 'Telegram' : channelProvider}</span>
+                {windowCountdown ? <span className="status-pill status-pill--neutral">WhatsApp window: {windowCountdown}</span> : null}
+                {templateRequired ? <span className="status-pill status-pill--warning">Template required</span> : null}
+                {channelProvider === 'telegram' && conversation.chat_type && conversation.chat_type !== 'private' ? <span className="status-pill status-pill--warning">Group chat: commands, mentions or replies only</span> : null}
                 <PriorityBadge
                   level={conversation.priority_level}
                   score={conversation.priority_score}
@@ -382,6 +391,18 @@ export function ConversationDetailPage() {
               </div>
 
               <dl className="conversation-workspace__meta">
+                {channelProvider === 'whatsapp' ? (
+                  <div className="conversation-workspace__meta-item">
+                    <dt>WhatsApp</dt>
+                    <dd>{templateRequired ? 'Choose an approved template before sending.' : 'Free-form replies allowed while the service window is open.'}</dd>
+                  </div>
+                ) : null}
+                {channelProvider === 'telegram' ? (
+                  <div className="conversation-workspace__meta-item">
+                    <dt>Telegram</dt>
+                    <dd>{conversation.chat_type ?? 'private'} chat · callback query responses are shown in the message payload.</dd>
+                  </div>
+                ) : null}
                 {instagramHandle ? (
                   <div className="conversation-workspace__meta-item">
                     <dt>Instagram</dt>
