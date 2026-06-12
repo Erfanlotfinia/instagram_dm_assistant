@@ -78,6 +78,8 @@ from app.domain.enums import (
     SimulatorRunSourceType,
     SimulatorRunStatus,
     TraceEventType,
+    WhatsAppTemplateCategory,
+    WhatsAppTemplateStatus,
     WebhookDedupeOutcome,
     WebhookProcessingStatus,
     WebhookProvider,
@@ -293,6 +295,37 @@ class ChannelMessage(Base):
     idempotency_key: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
     is_simulation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class ChannelDeliveryStatusEvent(Base):
+    __tablename__ = "channel_delivery_status_events"
+    __table_args__ = (UniqueConstraint("provider", "channel_account_id", "external_message_id", "status", name="uq_channel_delivery_status_event"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider: Mapped[ChannelProvider] = mapped_column(pg_enum(ChannelProvider, name="channel_provider"), nullable=False, index=True)
+    channel_account_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("channel_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    external_message_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    external_chat_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    raw_payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class WhatsAppMessageTemplate(Base, TimestampMixin):
+    __tablename__ = "whatsapp_message_templates"
+    __table_args__ = (UniqueConstraint("shop_id", "channel_account_id", "template_name", "language_code", name="uq_whatsapp_template_name_language"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    channel_account_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("channel_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    template_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    language_code: Mapped[str] = mapped_column(String(16), nullable=False, default="en_US", index=True)
+    category: Mapped[WhatsAppTemplateCategory] = mapped_column(pg_enum(WhatsAppTemplateCategory, name="whatsapp_template_category"), nullable=False, default=WhatsAppTemplateCategory.UNKNOWN, index=True)
+    status: Mapped[WhatsAppTemplateStatus] = mapped_column(pg_enum(WhatsAppTemplateStatus, name="whatsapp_template_status"), nullable=False, default=WhatsAppTemplateStatus.DRAFT, index=True)
+    components_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    external_template_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
 
 
 class Customer(Base, TimestampMixin):

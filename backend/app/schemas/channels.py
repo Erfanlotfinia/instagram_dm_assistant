@@ -108,7 +108,9 @@ class ChannelAccountCreate(BaseModel):
     webhook_verify_token: str | None = None
     webhook_secret: str | None = None
     access_token: str | None = None
+    app_secret: str | None = None
     bot_token: str | None = None
+    default_language_code: str | None = None
     settings_json: dict[str, Any] = Field(default_factory=dict)
 
 

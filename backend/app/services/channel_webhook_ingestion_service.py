@@ -32,6 +32,7 @@ from app.domain.models import (
     ChannelContactIdentity,
     ChannelConversation,
     ChannelMessage,
+    ChannelDeliveryStatusEvent,
     Conversation,
     Customer,
     Message,
@@ -88,12 +89,16 @@ class ChannelWebhookIngestionService:
         shop_id: Any | None = None,
         channel_account_id: Any | None = None,
     ) -> WebhookAckResponse | WebhookIgnoredResponse:
-        messages = self.adapter_for_provider(provider).parse_inbound_update(payload, headers)
+        messages = self.adapter_for_provider(provider).parse_inbound_update(
+            payload, headers
+        )
         if not messages:
             return WebhookIgnoredResponse(reason="no_channel_messages")
         jobs = []
         for normalized in messages:
-            account = self._resolve_account(provider, normalized, shop_id, channel_account_id)
+            account = self._resolve_account(
+                provider, normalized, shop_id, channel_account_id
+            )
             if not account:
                 logger.warning(
                     "No channel account found for provider=%s payload=%s",
@@ -132,6 +137,37 @@ class ChannelWebhookIngestionService:
         self, account: ChannelAccount, normalized: NormalizedInboundMessage
     ) -> MessageReceivedJob | None:
         idempotency_key = channel_idempotency_key(normalized)
+        if normalized.raw_payload.get("event_type") == "delivery_status":
+            status_payload = normalized.raw_payload.get("status", {})
+            external_message_id = str(
+                status_payload.get("id") or normalized.external_message_id or ""
+            )
+            if not external_message_id:
+                return None
+            if self.db.scalar(
+                select(ChannelDeliveryStatusEvent).where(
+                    ChannelDeliveryStatusEvent.provider == account.provider,
+                    ChannelDeliveryStatusEvent.channel_account_id == account.id,
+                    ChannelDeliveryStatusEvent.external_message_id
+                    == external_message_id,
+                    ChannelDeliveryStatusEvent.status
+                    == str(status_payload.get("status", "unknown")),
+                )
+            ):
+                return None
+            self.db.add(
+                ChannelDeliveryStatusEvent(
+                    shop_id=account.shop_id,
+                    provider=account.provider,
+                    channel_account_id=account.id,
+                    external_message_id=external_message_id,
+                    external_chat_id=normalized.external_chat_id,
+                    status=str(status_payload.get("status", "unknown")),
+                    raw_payload_json=mask_pii(normalized.raw_payload),
+                    occurred_at=normalized.received_at,
+                )
+            )
+            return None
         if self.db.scalar(
             select(ChannelMessage).where(
                 ChannelMessage.provider == account.provider,
@@ -236,6 +272,10 @@ class ChannelWebhookIngestionService:
             self.db.add(channel_conversation)
         else:
             channel_conversation.last_inbound_at = normalized.received_at
+            if account.provider == ChannelProvider.WHATSAPP:
+                channel_conversation.messaging_window_expires_at = (
+                    normalized.received_at + timedelta(hours=24)
+                )
         internal_type = (
             MessageType.TEXT
             if normalized.message_type == ChannelMessageType.TEXT
@@ -251,9 +291,11 @@ class ChannelWebhookIngestionService:
             conversation_id=conversation.id,
             direction=MessageDirection.INBOUND,
             channel=MessageChannel(account.provider.value),
-            instagram_message_id=normalized.external_message_id
-            if account.provider == ChannelProvider.INSTAGRAM
-            else None,
+            instagram_message_id=(
+                normalized.external_message_id
+                if account.provider == ChannelProvider.INSTAGRAM
+                else None
+            ),
             channel_message_id=normalized.external_message_id,
             message_type=internal_type,
             text=text,
@@ -273,7 +315,9 @@ class ChannelWebhookIngestionService:
             message_type=normalized.message_type,
             text=normalized.text,
             caption=normalized.caption,
-            media_json={"items": [m.model_dump(mode="json") for m in normalized.media_items]},
+            media_json={
+                "items": [m.model_dump(mode="json") for m in normalized.media_items]
+            },
             interactive_json={
                 "button_id": normalized.button_id,
                 "button_text": normalized.button_text,

@@ -14,7 +14,7 @@ def test_provider_capabilities_cover_whatsapp_and_telegram() -> None:
     assert whatsapp.supports_templates is True
     assert whatsapp.supports_customer_service_window is True
     assert whatsapp.default_customer_service_window_hours == 24
-    assert whatsapp.webhook_security_type == WebhookSecurityType.VERIFY_TOKEN
+    assert whatsapp.webhook_security_type == WebhookSecurityType.SIGNATURE
     assert telegram.supports_inline_keyboard is True
     assert telegram.webhook_security_type == WebhookSecurityType.SECRET_TOKEN_HEADER
 
@@ -27,7 +27,9 @@ def test_whatsapp_normalization_text_payload() -> None:
                     {
                         "value": {
                             "metadata": {"phone_number_id": "phone-1"},
-                            "contacts": [{"wa_id": "15551234567", "profile": {"name": "Ava"}}],
+                            "contacts": [
+                                {"wa_id": "15551234567", "profile": {"name": "Ava"}}
+                            ],
                             "messages": [
                                 {
                                     "from": "15551234567",

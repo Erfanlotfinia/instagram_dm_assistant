@@ -133,6 +133,8 @@ export function MessageThread({ messages }: MessageThreadProps) {
               <p className="message-bubble__text" dir="auto">
                 {message.text ?? '(no text)'}
               </p>
+              {message.raw_payload?.callback_query ? <small>Telegram callback query event</small> : null}
+              {message.raw_payload?.status ? <small>Delivery status: {String((message.raw_payload.status as Record<string, unknown>).status ?? 'unknown')}</small> : null}
             </article>
           </Fragment>
         );

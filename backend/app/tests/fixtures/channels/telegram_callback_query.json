@@ -1,0 +1,1 @@
+{"update_id":1002,"callback_query":{"id":"cb-1","from":{"id":777,"first_name":"Ava","username":"customer"},"message":{"message_id":56,"date":1710000001,"chat":{"id":777,"type":"private"}},"data":"buy:sku-1"}}
