@@ -79,6 +79,9 @@ class ConversationRead(BaseModel):
     id: UUID
     shop_id: UUID
     instagram_account_id: UUID
+    channel_provider: str = "instagram"
+    channel_conversation_id: str | None = None
+    channel_customer_id: str | None = None
     customer_id: UUID
     state: ConversationState
     last_intent: str | None

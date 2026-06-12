@@ -78,7 +78,7 @@ function SimulatorMessagePreview({
       </div>
 
       <p className="dm-simulator-preview__footnote">
-        Nothing is sent to Instagram — this is a local preview only.
+        Nothing is sent to any provider — this is a local preview only.
       </p>
     </aside>
   );
@@ -204,6 +204,10 @@ export function DMSimulatorPage() {
   const { selectedShopId } = useShop();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'live' | 'replay'>('live');
+  const [provider, setProvider] = useState<'instagram' | 'whatsapp' | 'telegram' | 'bale' | 'rubika'>(
+    'instagram',
+  );
+  const [channelAccountId, setChannelAccountId] = useState('');
   const [instagramAccountId, setInstagramAccountId] = useState('');
   const [messageText, setMessageText] = useState<string>(EXAMPLE_MESSAGES[0].text);
   const [postUrl, setPostUrl] = useState('');
@@ -212,6 +216,12 @@ export function DMSimulatorPage() {
   const accountsQuery = useQuery({
     queryKey: ['instagram-accounts', selectedShopId],
     queryFn: () => apiClient.listInstagramAccounts(selectedShopId),
+    enabled: Boolean(selectedShopId),
+  });
+
+  const channelAccountsQuery = useQuery({
+    queryKey: ['channel-accounts', selectedShopId],
+    queryFn: () => apiClient.listChannelAccounts(selectedShopId),
     enabled: Boolean(selectedShopId),
   });
 
@@ -226,6 +236,13 @@ export function DMSimulatorPage() {
       setInstagramAccountId(accountsQuery.data[0].id);
     }
   }, [accountsQuery.data, instagramAccountId]);
+
+  useEffect(() => {
+    const matching = channelAccountsQuery.data?.filter((account) => account.provider === provider) ?? [];
+    if (!channelAccountId && matching.length) {
+      setChannelAccountId(matching[0].id);
+    }
+  }, [channelAccountsQuery.data, channelAccountId, provider]);
 
   const runMutation = useMutation({
     mutationFn: () =>
@@ -320,8 +337,8 @@ export function DMSimulatorPage() {
           <div>
             <h2>Run a simulated DM</h2>
             <p className="dashboard-card__subtitle">
-              Pick an Instagram account, enter a fake customer message, and optionally attach a
-              shared post URL.
+              Pick a provider/channel account, enter a fake customer message, and optionally attach a
+              shared post URL. Non-Instagram choices stay in simulation mode and never send real messages.
             </p>
           </div>
           <span className="priority-badge priority-badge--medium">Test harness</span>
@@ -354,19 +371,51 @@ export function DMSimulatorPage() {
                   <p className="dm-simulator-panel__label">Setup</p>
                   <div className="filter-grid dm-simulator-setup">
                     <label className="form-field">
-                      <span>Instagram account</span>
+                      <span>Provider</span>
                       <select
-                        value={instagramAccountId}
-                        onChange={(event) => setInstagramAccountId(event.target.value)}
-                        required
+                        value={provider}
+                        onChange={(event) => {
+                          setProvider(event.target.value as typeof provider);
+                          setChannelAccountId('');
+                        }}
                       >
-                        <option value="">Select account</option>
-                        {accountsQuery.data?.map((account) => (
-                          <option key={account.id} value={account.id}>
-                            @{account.username}
-                          </option>
-                        ))}
+                        <option value="instagram">Instagram</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="telegram">Telegram</option>
+                        <option value="bale">Bale</option>
+                        <option value="rubika">Rubika</option>
                       </select>
+                    </label>
+
+                    <label className="form-field">
+                      <span>{provider === 'instagram' ? 'Instagram account' : 'Channel account'}</span>
+                      {provider === 'instagram' ? (
+                        <select
+                          value={instagramAccountId}
+                          onChange={(event) => setInstagramAccountId(event.target.value)}
+                          required
+                        >
+                          <option value="">Select account</option>
+                          {accountsQuery.data?.map((account) => (
+                            <option key={account.id} value={account.id}>
+                              @{account.username}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <select
+                          value={channelAccountId}
+                          onChange={(event) => setChannelAccountId(event.target.value)}
+                          required
+                        >
+                          <option value="">Select channel account</option>
+                          {channelAccountsQuery.data?.filter((account) => account.provider === provider).map((account) => (
+                            <option key={account.id} value={account.id}>
+                              {account.display_name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </label>
 
                     <label className="form-field form-field--wide">
