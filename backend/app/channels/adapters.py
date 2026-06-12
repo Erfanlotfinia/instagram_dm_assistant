@@ -33,12 +33,12 @@ class StaticTokenAdapter(ChannelProviderAdapter):
     webhook_secret: str | None = None
 
     async def verify_webhook(self, request: Request) -> bool:
-        if self.webhook_secret:
-            return (
-                request.headers.get("X-Telegram-Bot-Api-Secret-Token") == self.webhook_secret
-                or request.headers.get("X-Webhook-Secret") == self.webhook_secret
-            )
-        return True
+        if not self.webhook_secret:
+            return False
+        return (
+            request.headers.get("X-Telegram-Bot-Api-Secret-Token") == self.webhook_secret
+            or request.headers.get("X-Webhook-Secret") == self.webhook_secret
+        )
 
 
 class InstagramProviderAdapter(StaticTokenAdapter):
@@ -49,7 +49,7 @@ class InstagramProviderAdapter(StaticTokenAdapter):
 
     async def verify_webhook(self, request: Request) -> bool:
         if not self.webhook_secret:
-            return True
+            return False
         body = await request.body()
         signature = request.headers.get("X-Hub-Signature-256")
         if not signature or not signature.startswith("sha256="):
@@ -114,10 +114,12 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
         access_token: str | None = None,
         phone_number_id: str | None = None,
         verify_token: str | None = None,
+        webhook_secret: str | None = None,
     ) -> None:
         self.token = access_token
         self.phone_number_id = phone_number_id
         self.verify_token = verify_token
+        self.webhook_secret = webhook_secret
 
     def parse_inbound_update(
         self, payload: dict[str, Any], headers: dict[str, str] | None = None
