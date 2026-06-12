@@ -55,6 +55,8 @@ class Settings(BaseSettings):
         description="Meta webhook verify token (VERIFY_TOKEN)",
     )
     enable_real_instagram_send: bool = False
+    meta_graph_api_version: str = "v20.0"
+    meta_graph_api_base_url: str = "https://graph.facebook.com"
     conversation_lock_ttl_seconds: int = Field(default=120, ge=1)
     rabbitmq_queue_message_received: str = "instagram.message.received"
     rabbitmq_queue_retry: str = "instagram.message.received.retry"

@@ -23,7 +23,7 @@ import type {
   RecoveryRuleUpdate,
 } from '../types/sprintD';
 import type { DashboardMetrics } from '../types/dashboard';
-import type { ChannelAccount, ChannelAccountCreate } from '../types/channel';
+import type { ChannelAccount, ChannelAccountCreate, TelegramWebhookInfo } from '../types/channel';
 import type { AgentPerformanceMetrics, AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PaginatedLostDemand, PaginatedOperatorPerformance, PostPerformanceRow, ResponseTimeAnalytics, SimulatorRunSummary, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
 import type { SemanticSearchResponse } from '../types/semanticSearch';
 import type { CatalogImportJob, CatalogImportRequest, CatalogProductListResponse, CatalogReindexRequest, ProductAliasesPatchRequest, ProductNormalized } from '../types/catalog';
@@ -187,6 +187,13 @@ export const apiClient = {
     request<ChannelAccount>(`/api/v1/shops/${shopId}/channels`, { method: 'POST', body: JSON.stringify(payload) }),
   testChannelWebhook: (shopId: string, channelAccountId: string) =>
     request<{ status: string }>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/webhook-test`, { method: 'POST', body: JSON.stringify({}) }),
+
+  setTelegramWebhook: (shopId: string, channelAccountId: string, url?: string) =>
+    request<TelegramWebhookInfo>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/set-webhook`, { method: 'POST', body: JSON.stringify({ ...(url ? { url } : {}) }) }),
+  deleteTelegramWebhook: (shopId: string, channelAccountId: string) =>
+    request<TelegramWebhookInfo>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/delete-webhook`, { method: 'POST', body: JSON.stringify({}) }),
+  getTelegramWebhookInfo: (shopId: string, channelAccountId: string) =>
+    request<TelegramWebhookInfo>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/webhook-info`),
 
   getPilotSettings: (shopId: string) => request<PilotSettings>(`/api/v1/shops/${shopId}/pilot-settings`),
   updatePilotSettings: (shopId: string, payload: Partial<PilotSettings>) =>

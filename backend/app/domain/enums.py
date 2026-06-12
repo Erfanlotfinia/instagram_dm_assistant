@@ -125,6 +125,24 @@ class ChannelMessageType(str, enum.Enum):
     UNKNOWN = "unknown"
 
 
+class WhatsAppTemplateCategory(str, enum.Enum):
+    MARKETING = "marketing"
+    UTILITY = "utility"
+    AUTHENTICATION = "authentication"
+    SERVICE = "service"
+    UNKNOWN = "unknown"
+
+
+class WhatsAppTemplateStatus(str, enum.Enum):
+    DRAFT = "draft"
+    SUBMITTED = "submitted"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    PAUSED = "paused"
+    DISABLED = "disabled"
+    UNKNOWN = "unknown"
+
+
 class WebhookSecurityType(str, enum.Enum):
     SIGNATURE = "signature"
     SECRET_TOKEN_HEADER = "secret_token_header"

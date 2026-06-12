@@ -187,6 +187,8 @@ export interface Conversation {
   channel_provider?: 'instagram' | 'whatsapp' | 'telegram' | 'bale' | 'rubika' | 'web_chat';
   channel_conversation_id?: string | null;
   channel_customer_id?: string | null;
+  messaging_window_expires_at?: string | null;
+  chat_type?: string | null;
   customer_id: string;
   state: ConversationState;
   workflow_state: AgentWorkflowState;
