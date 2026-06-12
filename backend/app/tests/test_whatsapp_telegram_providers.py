@@ -3,6 +3,7 @@ import hmac
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import UUID
 
 import httpx
 import pytest
@@ -205,3 +206,71 @@ def test_token_masking() -> None:
         "access_token": "***",
         "from": "***",
     }
+
+
+def test_telegram_default_webhook_url_includes_channel_account_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.api.v1.channels import _default_telegram_webhook_url
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "api_public_base_url", "https://example.test")
+
+    account_id = UUID("11111111-1111-1111-1111-111111111111")
+
+    assert _default_telegram_webhook_url(account_id) == (
+        "https://example.test/api/v1/channels/telegram/"
+        "11111111-1111-1111-1111-111111111111/webhook"
+    )
+
+
+def test_telegram_webhook_account_resolution_uses_secret_header() -> None:
+    from app.api.v1.channels import _resolve_telegram_webhook_account
+    from starlette.requests import Request
+
+    class FakeDb:
+        def __init__(self) -> None:
+            self.statement = None
+
+        def scalar(self, statement):
+            self.statement = statement
+            return None
+
+    db = FakeDb()
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/channels/telegram/webhook",
+            "headers": [(b"x-telegram-bot-api-secret-token", b"secret-for-account-2")],
+        }
+    )
+
+    assert _resolve_telegram_webhook_account(db, request) is None
+    compiled = str(db.statement.compile(compile_kwargs={"literal_binds": True}))
+
+    assert "channel_accounts.webhook_secret = 'secret-for-account-2'" in compiled
+    assert "LIMIT" not in compiled.upper()
+
+
+def test_telegram_webhook_account_resolution_without_secret_skips_lookup() -> None:
+    from app.api.v1.channels import _resolve_telegram_webhook_account
+    from starlette.requests import Request
+
+    class FakeDb:
+        def scalar(self, statement):
+            raise AssertionError(
+                "Telegram account lookup should not run without a secret"
+            )
+
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/channels/telegram/webhook",
+            "headers": [],
+        }
+    )
+
+    assert _resolve_telegram_webhook_account(FakeDb(), request) is None

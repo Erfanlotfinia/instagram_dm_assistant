@@ -31,6 +31,34 @@ from app.services.shop_service import ShopService
 router = APIRouter(tags=["channels"])
 
 
+def _default_telegram_webhook_url(channel_account_id: UUID) -> str:
+    return (
+        f"{get_settings().api_public_base_url}"
+        f"/api/v1/channels/telegram/{channel_account_id}/webhook"
+    )
+
+
+def _resolve_telegram_webhook_account(
+    db: Session, request: Request, channel_account_id: UUID | None = None
+) -> ChannelAccount | None:
+    if channel_account_id:
+        return db.scalar(
+            select(ChannelAccount).where(
+                ChannelAccount.provider == ChannelProvider.TELEGRAM,
+                ChannelAccount.id == channel_account_id,
+            )
+        )
+    secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+    if not secret:
+        return None
+    return db.scalar(
+        select(ChannelAccount).where(
+            ChannelAccount.provider == ChannelProvider.TELEGRAM,
+            ChannelAccount.webhook_secret == secret,
+        )
+    )
+
+
 @router.get("/shops/{shop_id}/channels", response_model=list[ChannelAccountRead])
 def list_channel_accounts(
     shop_id: UUID,
@@ -119,6 +147,30 @@ async def receive_channel_webhook(
     db: Annotated[Session, Depends(get_db_session)],
     _: Annotated[None, Depends(rate_limit_webhook)],
 ) -> WebhookAckResponse | WebhookIgnoredResponse:
+    return await _receive_channel_webhook(provider, request, db)
+
+
+@router.post(
+    "/channels/telegram/{channel_account_id}/webhook",
+    response_model=WebhookAckResponse | WebhookIgnoredResponse,
+)
+async def receive_telegram_channel_webhook(
+    channel_account_id: UUID,
+    request: Request,
+    db: Annotated[Session, Depends(get_db_session)],
+    _: Annotated[None, Depends(rate_limit_webhook)],
+) -> WebhookAckResponse | WebhookIgnoredResponse:
+    return await _receive_channel_webhook(
+        ChannelProvider.TELEGRAM, request, db, channel_account_id=channel_account_id
+    )
+
+
+async def _receive_channel_webhook(
+    provider: ChannelProvider,
+    request: Request,
+    db: Session,
+    channel_account_id: UUID | None = None,
+) -> WebhookAckResponse | WebhookIgnoredResponse:
     body = await request.body()
     try:
         payload: dict[str, Any] = json.loads(body.decode("utf-8"))
@@ -143,9 +195,12 @@ async def receive_channel_webhook(
             )
         )
     elif provider == ChannelProvider.TELEGRAM:
-        account = db.scalar(
-            select(ChannelAccount).where(ChannelAccount.provider == provider).limit(1)
-        )
+        account = _resolve_telegram_webhook_account(db, request, channel_account_id)
+        if channel_account_id and not account:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Telegram channel account not found",
+            )
     adapter = adapter_for_provider(provider, account)
     settings = get_settings()
     if (
@@ -160,10 +215,12 @@ async def receive_channel_webhook(
     if (
         provider == ChannelProvider.TELEGRAM
         and settings.requires_webhook_signature
-        and account
-        and account.webhook_secret
-        and request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-        != account.webhook_secret
+        and (
+            not account
+            or not account.webhook_secret
+            or request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+            != account.webhook_secret
+        )
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -191,7 +248,7 @@ async def receive_provider_compat_webhook(
     db: Annotated[Session, Depends(get_db_session)],
     _: Annotated[None, Depends(rate_limit_webhook)],
 ) -> WebhookAckResponse | WebhookIgnoredResponse:
-    return await receive_channel_webhook(provider, request, db, None)
+    return await _receive_channel_webhook(provider, request, db)
 
 
 @router.post("/shops/{shop_id}/channels/{channel_account_id}/telegram/set-webhook")
@@ -212,8 +269,7 @@ async def set_telegram_webhook(
     return await adapter_for_provider(
         ChannelProvider.TELEGRAM, account
     ).configure_webhook(
-        payload.get("url")
-        or f"{get_settings().api_public_base_url}/api/v1/channels/telegram/webhook",
+        payload.get("url") or _default_telegram_webhook_url(account.id),
         account.webhook_secret,
     )
 

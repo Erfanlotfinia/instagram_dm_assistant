@@ -129,6 +129,8 @@ class ChannelWebhookIngestionService:
         elif provider == ChannelProvider.WHATSAPP:
             phone_number_id = message.raw_payload.get("phone_number_id")
             stmt = stmt.where(ChannelAccount.phone_number_id == phone_number_id)
+        elif provider == ChannelProvider.TELEGRAM:
+            return None
         else:
             stmt = stmt.limit(1)
         return self.db.scalar(stmt)
