@@ -128,11 +128,17 @@ class ChannelWebhookIngestionService:
             stmt = stmt.where(ChannelAccount.shop_id == shop_id)
         elif provider == ChannelProvider.WHATSAPP:
             phone_number_id = message.raw_payload.get("phone_number_id")
+            if not phone_number_id:
+                return None
             stmt = stmt.where(ChannelAccount.phone_number_id == phone_number_id)
-        elif provider == ChannelProvider.TELEGRAM:
-            return None
+        elif provider == ChannelProvider.INSTAGRAM:
+            recipient = message.raw_payload.get("recipient") or {}
+            recipient_id = recipient.get("id") if isinstance(recipient, dict) else None
+            if not recipient_id:
+                return None
+            stmt = stmt.where(ChannelAccount.external_account_id == str(recipient_id))
         else:
-            stmt = stmt.limit(1)
+            return None
         return self.db.scalar(stmt)
 
     def _process_message(

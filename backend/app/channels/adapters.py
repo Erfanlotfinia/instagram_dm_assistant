@@ -34,13 +34,13 @@ class StaticTokenAdapter(ChannelProviderAdapter):
     webhook_secret: str | None = None
 
     async def verify_webhook(self, request: Request) -> bool:
-        if self.webhook_secret:
-            return (
-                request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-                == self.webhook_secret
-                or request.headers.get("X-Webhook-Secret") == self.webhook_secret
-            )
-        return True
+        if not self.webhook_secret:
+            return False
+        return (
+            request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+            == self.webhook_secret
+            or request.headers.get("X-Webhook-Secret") == self.webhook_secret
+        )
 
 
 class InstagramProviderAdapter(StaticTokenAdapter):
@@ -51,7 +51,7 @@ class InstagramProviderAdapter(StaticTokenAdapter):
 
     async def verify_webhook(self, request: Request) -> bool:
         if not self.webhook_secret:
-            return True
+            return False
         body = await request.body()
         signature = request.headers.get("X-Hub-Signature-256")
         if not signature or not signature.startswith("sha256="):
@@ -121,6 +121,7 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
         phone_number_id: str | None = None,
         verify_token: str | None = None,
         app_secret: str | None = None,
+        webhook_secret: str | None = None,
         api_version: str | None = None,
         api_base_url: str | None = None,
     ) -> None:
@@ -128,16 +129,15 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
         self.token = access_token
         self.phone_number_id = phone_number_id
         self.verify_token = verify_token
-        self.webhook_secret = app_secret
+        self.webhook_secret = app_secret or webhook_secret
         self.api_version = api_version or settings.meta_graph_api_version
         self.api_base_url = (api_base_url or settings.meta_graph_api_base_url).rstrip(
             "/"
         )
 
     async def verify_webhook(self, request: Request) -> bool:
-        settings = get_settings()
         if not self.webhook_secret:
-            return not settings.requires_webhook_signature
+            return False
         body = await request.body()
         signature = request.headers.get("X-Hub-Signature-256")
         if not signature or not signature.startswith("sha256="):

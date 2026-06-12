@@ -38,6 +38,43 @@ def _default_telegram_webhook_url(channel_account_id: UUID) -> str:
     )
 
 
+def _instagram_recipient_ids(payload: dict[str, Any]) -> set[str]:
+    recipient_ids: set[str] = set()
+    for entry in payload.get("entry", []):
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("id"):
+            recipient_ids.add(str(entry["id"]))
+        for event in entry.get("messaging", []) or []:
+            if not isinstance(event, dict):
+                continue
+            recipient = event.get("recipient") or {}
+            if isinstance(recipient, dict) and recipient.get("id"):
+                recipient_ids.add(str(recipient["id"]))
+    return recipient_ids
+
+
+def _whatsapp_phone_number_ids(payload: dict[str, Any]) -> set[str]:
+    phone_ids: set[str] = set()
+    for entry in payload.get("entry", []):
+        if not isinstance(entry, dict):
+            continue
+        for change in entry.get("changes", []) or []:
+            if not isinstance(change, dict):
+                continue
+            value = change.get("value") or {}
+            if not isinstance(value, dict):
+                continue
+            phone_id = (value.get("metadata") or {}).get("phone_number_id")
+            if phone_id:
+                phone_ids.add(str(phone_id))
+    return phone_ids
+
+
+def _header_value(headers: dict[str, str], name: str) -> str | None:
+    return headers.get(name) or headers.get(name.lower())
+
+
 def _resolve_telegram_webhook_account(
     db: Session, request: Request, channel_account_id: UUID | None = None
 ) -> ChannelAccount | None:
@@ -56,6 +93,70 @@ def _resolve_telegram_webhook_account(
             ChannelAccount.provider == ChannelProvider.TELEGRAM,
             ChannelAccount.webhook_secret == secret,
         )
+    )
+
+
+def _candidate_webhook_accounts(
+    db: Session,
+    provider: ChannelProvider,
+    payload: dict[str, Any],
+    headers: dict[str, str],
+    channel_account_id: UUID | None = None,
+) -> list[ChannelAccount]:
+    stmt = select(ChannelAccount).where(ChannelAccount.provider == provider)
+    if channel_account_id:
+        stmt = stmt.where(ChannelAccount.id == channel_account_id)
+    elif provider == ChannelProvider.INSTAGRAM:
+        recipient_ids = _instagram_recipient_ids(payload)
+        if recipient_ids:
+            stmt = stmt.where(ChannelAccount.external_account_id.in_(recipient_ids))
+    elif provider == ChannelProvider.WHATSAPP:
+        phone_ids = _whatsapp_phone_number_ids(payload)
+        if phone_ids:
+            stmt = stmt.where(ChannelAccount.phone_number_id.in_(phone_ids))
+    elif provider in {
+        ChannelProvider.TELEGRAM,
+        ChannelProvider.BALE,
+        ChannelProvider.RUBIKA,
+    }:
+        secret = _header_value(
+            headers, "X-Telegram-Bot-Api-Secret-Token"
+        ) or _header_value(headers, "X-Webhook-Secret")
+        if not secret:
+            return []
+        stmt = stmt.where(ChannelAccount.webhook_secret == secret)
+    return list(db.scalars(stmt).all())
+
+
+async def _verified_webhook_account(
+    db: Session,
+    provider: ChannelProvider,
+    payload: dict[str, Any],
+    request: Request,
+    channel_account_id: UUID | None = None,
+) -> ChannelAccount:
+    headers = dict(request.headers)
+    candidates = _candidate_webhook_accounts(
+        db, provider, payload, headers, channel_account_id
+    )
+    if not candidates and channel_account_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Channel account not found for this webhook",
+        )
+    if not candidates:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No channel account configured for this webhook",
+        )
+    for account in candidates:
+        if not account.webhook_secret:
+            continue
+        if await adapter_for_provider(provider, account).verify_webhook(request):
+            return account
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Invalid webhook signature or secret",
     )
 
 
@@ -107,7 +208,6 @@ def test_channel_webhook(
 @router.get("/channels/{provider}/webhook")
 def verify_channel_webhook(
     provider: ChannelProvider,
-    request: Request,
     db: Annotated[Session, Depends(get_db_session)],
     hub_mode: Annotated[str | None, Query(alias="hub.mode")] = None,
     hub_verify_token: Annotated[str | None, Query(alias="hub.verify_token")] = None,
@@ -117,23 +217,17 @@ def verify_channel_webhook(
         provider in {ChannelProvider.INSTAGRAM, ChannelProvider.WHATSAPP}
         and hub_mode == "subscribe"
     ):
-        if provider == ChannelProvider.WHATSAPP:
-            account = db.scalar(
-                select(ChannelAccount).where(
-                    ChannelAccount.provider == ChannelProvider.WHATSAPP,
-                    ChannelAccount.webhook_verify_token == hub_verify_token,
-                )
+        if not hub_verify_token:
+            return Response(status_code=403)
+        account = db.scalar(
+            select(ChannelAccount).where(
+                ChannelAccount.provider == provider,
+                ChannelAccount.webhook_verify_token == hub_verify_token,
             )
-            if account:
-                return Response(content=hub_challenge or "", media_type="text/plain")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Verification failed"
-            )
-        return (
-            Response(content=hub_challenge or "", media_type="text/plain")
-            if hub_verify_token
-            else Response(status_code=403)
         )
+        if account:
+            return Response(content=hub_challenge or "", media_type="text/plain")
+        return Response(status_code=403)
     return Response(content="ok", media_type="text/plain")
 
 
@@ -178,64 +272,15 @@ async def _receive_channel_webhook(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload"
         ) from exc
-    account: ChannelAccount | None = None
-    if provider == ChannelProvider.WHATSAPP:
-        phone_number_id = None
-        for entry in payload.get("entry", []):
-            for change in entry.get("changes", []):
-                phone_number_id = (change.get("value", {}).get("metadata") or {}).get(
-                    "phone_number_id"
-                )
-                if phone_number_id:
-                    break
-        account = db.scalar(
-            select(ChannelAccount).where(
-                ChannelAccount.provider == provider,
-                ChannelAccount.phone_number_id == phone_number_id,
-            )
-        )
-    elif provider == ChannelProvider.TELEGRAM:
-        account = _resolve_telegram_webhook_account(db, request, channel_account_id)
-        if channel_account_id and not account:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Telegram channel account not found",
-            )
-    adapter = adapter_for_provider(provider, account)
-    settings = get_settings()
-    if (
-        provider == ChannelProvider.WHATSAPP
-        and settings.requires_webhook_signature
-        and (not account or not account.webhook_secret)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="WhatsApp app secret is required for webhook signature verification",
-        )
-    if (
-        provider == ChannelProvider.TELEGRAM
-        and settings.requires_webhook_signature
-        and (
-            not account
-            or not account.webhook_secret
-            or request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-            != account.webhook_secret
-        )
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid Telegram webhook secret token",
-        )
-    if not await adapter.verify_webhook(request):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid webhook signature or secret",
-        )
+    account = await _verified_webhook_account(
+        db, provider, payload, request, channel_account_id
+    )
     return ChannelWebhookIngestionService(db).handle_payload(
         provider,
         payload,
         dict(request.headers),
-        channel_account_id=account.id if account else None,
+        shop_id=account.shop_id,
+        channel_account_id=account.id,
     )
 
 

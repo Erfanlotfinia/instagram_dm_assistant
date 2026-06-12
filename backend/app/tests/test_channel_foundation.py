@@ -1,4 +1,7 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
+
+from starlette.requests import Request
 
 from app.channels.adapters import TelegramProviderAdapter, WhatsAppProviderAdapter
 from app.domain.enums import ChannelMessageType, ChannelProvider, WebhookSecurityType
@@ -96,3 +99,37 @@ def test_mask_pii_redacts_phone_like_fields() -> None:
     assert mask_pii(
         {"from": "15551234567", "nested": {"access_token": "secret", "safe": "ok"}}
     ) == {"from": "***", "nested": {"access_token": "***", "safe": "ok"}}
+
+
+def _request_with_headers(headers: dict[str, str], body: bytes = b"{}") -> Request:
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/webhook",
+            "headers": [
+                (key.lower().encode(), value.encode()) for key, value in headers.items()
+            ],
+        },
+        receive,
+    )
+
+
+def test_static_token_adapter_rejects_missing_webhook_secret() -> None:
+    request = _request_with_headers({"X-Telegram-Bot-Api-Secret-Token": "secret"})
+
+    assert asyncio.run(TelegramProviderAdapter().verify_webhook(request)) is False
+
+
+def test_static_token_adapter_accepts_matching_webhook_secret() -> None:
+    request = _request_with_headers({"X-Telegram-Bot-Api-Secret-Token": "secret"})
+
+    assert (
+        asyncio.run(
+            TelegramProviderAdapter(webhook_secret="secret").verify_webhook(request)
+        )
+        is True
+    )
