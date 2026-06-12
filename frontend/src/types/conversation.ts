@@ -184,6 +184,9 @@ export interface Conversation {
   id: string;
   shop_id: string;
   instagram_account_id: string;
+  channel_provider?: 'instagram' | 'whatsapp' | 'telegram' | 'bale' | 'rubika' | 'web_chat';
+  channel_conversation_id?: string | null;
+  channel_customer_id?: string | null;
   customer_id: string;
   state: ConversationState;
   workflow_state: AgentWorkflowState;

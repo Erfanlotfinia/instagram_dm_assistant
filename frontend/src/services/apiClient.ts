@@ -23,6 +23,7 @@ import type {
   RecoveryRuleUpdate,
 } from '../types/sprintD';
 import type { DashboardMetrics } from '../types/dashboard';
+import type { ChannelAccount, ChannelAccountCreate } from '../types/channel';
 import type { AgentPerformanceMetrics, AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PaginatedLostDemand, PaginatedOperatorPerformance, PostPerformanceRow, ResponseTimeAnalytics, SimulatorRunSummary, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
 import type { SemanticSearchResponse } from '../types/semanticSearch';
 import type { CatalogImportJob, CatalogImportRequest, CatalogProductListResponse, CatalogReindexRequest, ProductAliasesPatchRequest, ProductNormalized } from '../types/catalog';
@@ -180,6 +181,12 @@ export const apiClient = {
     request<DashboardMetrics>(`/api/v1/shops/${shopId}/dashboard/metrics`),
   getOnboardingStatus: (shopId: string) =>
     request<OnboardingStatus>(`/api/v1/shops/${shopId}/onboarding-status`),
+
+  listChannelAccounts: (shopId: string) => request<ChannelAccount[]>(`/api/v1/shops/${shopId}/channels`),
+  createChannelAccount: (shopId: string, payload: ChannelAccountCreate) =>
+    request<ChannelAccount>(`/api/v1/shops/${shopId}/channels`, { method: 'POST', body: JSON.stringify(payload) }),
+  testChannelWebhook: (shopId: string, channelAccountId: string) =>
+    request<{ status: string }>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/webhook-test`, { method: 'POST', body: JSON.stringify({}) }),
 
   getPilotSettings: (shopId: string) => request<PilotSettings>(`/api/v1/shops/${shopId}/pilot-settings`),
   updatePilotSettings: (shopId: string, payload: Partial<PilotSettings>) =>

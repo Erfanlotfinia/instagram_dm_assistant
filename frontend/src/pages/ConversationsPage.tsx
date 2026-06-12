@@ -62,6 +62,7 @@ export function ConversationsPage() {
               <tr>
                 <th>Priority</th>
                 <th>Customer</th>
+                <th>Channel</th>
                 <th>Last message</th>
                 <th>Product</th>
                 <th>Order</th>
@@ -93,6 +94,10 @@ export function ConversationsPage() {
                         conversation.customer?.instagram_user_id ??
                         conversation.customer_id}
                     </Link>
+                  </td>
+                  <td>
+                    <span className="status-pill">{conversation.channel_provider ?? 'instagram'}</span>
+                    <div className="muted-text">{conversation.channel_conversation_id ?? conversation.channel_customer_id ?? '—'}</div>
                   </td>
                   <td>{conversation.last_message_text ?? '—'}</td>
                   <td>{conversation.linked_product?.title ?? '—'}</td>

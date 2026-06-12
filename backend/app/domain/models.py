@@ -28,6 +28,10 @@ from app.domain.enums import (
     AgentWorkflowState,
     CatalogAliasSource,
     CatalogImportJobStatus,
+    ChannelAccountStatus,
+    ChannelConversationStatus,
+    ChannelMessageType,
+    ChannelProvider,
     ConfidenceSource,
     ConversationEventType,
     ConversationPriorityLevel,
@@ -210,6 +214,85 @@ class InstagramAccount(Base, TimestampMixin):
 
     shop: Mapped[Shop] = relationship(back_populates="instagram_accounts")
     conversations: Mapped[list[Conversation]] = relationship(back_populates="instagram_account")
+
+
+class ChannelAccount(Base, TimestampMixin):
+    __tablename__ = "channel_accounts"
+    __table_args__ = (UniqueConstraint("shop_id", "provider", "external_account_id", name="uq_channel_accounts_shop_provider_external"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider: Mapped[ChannelProvider] = mapped_column(pg_enum(ChannelProvider, name="channel_provider"), nullable=False, index=True)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    external_account_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    phone_number_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    bot_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    bot_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    webhook_verify_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    webhook_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    encrypted_access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    encrypted_bot_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[ChannelAccountStatus] = mapped_column(pg_enum(ChannelAccountStatus, name="channel_account_status"), nullable=False, default=ChannelAccountStatus.DRAFT, index=True)
+    capabilities_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    settings_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+
+class ChannelContactIdentity(Base, TimestampMixin):
+    __tablename__ = "channel_contact_identities"
+    __table_args__ = (UniqueConstraint("shop_id", "provider", "channel_account_id", "external_user_id", name="uq_channel_contact_identity_external"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider: Mapped[ChannelProvider] = mapped_column(pg_enum(ChannelProvider, name="channel_provider"), nullable=False, index=True)
+    channel_account_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("channel_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    external_user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    raw_profile_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    customer_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
+
+
+class ChannelConversation(Base, TimestampMixin):
+    __tablename__ = "channel_conversations"
+    __table_args__ = (UniqueConstraint("provider", "channel_account_id", "external_chat_id", "external_thread_id", name="uq_channel_conversation_external"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider: Mapped[ChannelProvider] = mapped_column(pg_enum(ChannelProvider, name="channel_provider"), nullable=False, index=True)
+    channel_account_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("channel_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    external_chat_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    external_thread_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    conversation_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    messaging_window_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_inbound_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_outbound_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[ChannelConversationStatus] = mapped_column(pg_enum(ChannelConversationStatus, name="channel_conversation_status"), nullable=False, default=ChannelConversationStatus.OPEN, index=True)
+
+
+class ChannelMessage(Base):
+    __tablename__ = "channel_messages"
+    __table_args__ = (UniqueConstraint("provider", "channel_account_id", "idempotency_key", name="uq_channel_messages_idempotency"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider: Mapped[ChannelProvider] = mapped_column(pg_enum(ChannelProvider, name="channel_provider"), nullable=False, index=True)
+    channel_account_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("channel_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    conversation_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    internal_message_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True)
+    external_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    external_update_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    direction: Mapped[MessageDirection] = mapped_column(pg_enum(MessageDirection, name="message_direction"), nullable=False, index=True)
+    message_type: Mapped[ChannelMessageType] = mapped_column(pg_enum(ChannelMessageType, name="channel_message_type"), nullable=False, default=ChannelMessageType.UNKNOWN)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    media_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    interactive_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    raw_payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    normalized_payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    idempotency_key: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    is_simulation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
 
 class Customer(Base, TimestampMixin):

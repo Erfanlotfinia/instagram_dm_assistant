@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { CatalogCopilotPage } from '../pages/CatalogCopilotPage';
+import { ChannelAccountsPage } from '../pages/ChannelAccountsPage';
 import { ConversationDetailPage } from '../pages/ConversationDetailPage';
 import { ConversationsPage } from '../pages/ConversationsPage';
 import { AgentStudioSettingsPage } from '../pages/AgentStudioSettingsPage';
@@ -197,6 +198,14 @@ export function AppRoutes() {
         element={
           <AuthenticatedShell>
             <InstagramAccountsPage />
+          </AuthenticatedShell>
+        }
+      />
+      <Route
+        path="/channels"
+        element={
+          <AuthenticatedShell>
+            <ChannelAccountsPage />
           </AuthenticatedShell>
         }
       />

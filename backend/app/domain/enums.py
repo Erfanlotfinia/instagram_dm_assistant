@@ -70,6 +70,8 @@ class MessageChannel(str, enum.Enum):
     INSTAGRAM = "instagram"
     WHATSAPP = "whatsapp"
     TELEGRAM = "telegram"
+    BALE = "bale"
+    RUBIKA = "rubika"
     WEB_CHAT = "web_chat"
 
 
@@ -85,10 +87,58 @@ class AgentActionStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class ChannelProvider(str, enum.Enum):
+    INSTAGRAM = "instagram"
+    WHATSAPP = "whatsapp"
+    TELEGRAM = "telegram"
+    BALE = "bale"
+    RUBIKA = "rubika"
+
+
+class ChannelAccountStatus(str, enum.Enum):
+    DRAFT = "draft"
+    CONNECTED = "connected"
+    WEBHOOK_CONFIGURED = "webhook_configured"
+    DISABLED = "disabled"
+    ERROR = "error"
+
+
+class ChannelConversationStatus(str, enum.Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+    ARCHIVED = "archived"
+
+
+class ChannelMessageType(str, enum.Enum):
+    TEXT = "text"
+    IMAGE = "image"
+    VIDEO = "video"
+    AUDIO = "audio"
+    VOICE = "voice"
+    DOCUMENT = "document"
+    LOCATION = "location"
+    CONTACT = "contact"
+    INTERACTIVE = "interactive"
+    BUTTON_CALLBACK = "button_callback"
+    ORDER = "order"
+    PAYMENT = "payment"
+    UNKNOWN = "unknown"
+
+
+class WebhookSecurityType(str, enum.Enum):
+    SIGNATURE = "signature"
+    SECRET_TOKEN_HEADER = "secret_token_header"
+    VERIFY_TOKEN = "verify_token"
+    TOKEN_ONLY = "token_only"
+    UNKNOWN = "unknown"
+
+
 class WebhookProvider(str, enum.Enum):
     INSTAGRAM = "instagram"
     WHATSAPP = "whatsapp"
     TELEGRAM = "telegram"
+    BALE = "bale"
+    RUBIKA = "rubika"
     WEB_CHAT = "web_chat"
 
 

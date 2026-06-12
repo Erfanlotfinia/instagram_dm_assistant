@@ -63,6 +63,7 @@ const navGroups: NavGroup[] = [
     defaultCollapsed: true,
     items: [
       { to: '/shops', label: 'Shops', icon: 'store' },
+      { to: '/channels', label: 'Channel Accounts', icon: 'at-sign' },
       { to: '/instagram-accounts', label: 'Instagram Accounts', icon: 'at-sign' },
       { to: '/settings', label: 'Settings', icon: 'gear' },
       { to: '/system-health', label: 'System Health', icon: 'activity' },
