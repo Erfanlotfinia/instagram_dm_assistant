@@ -23,6 +23,7 @@ whatsapp_template_category = postgresql.ENUM(
     "service",
     "unknown",
     name="whatsapp_template_category",
+    create_type=False,
 )
 whatsapp_template_status = postgresql.ENUM(
     "draft",
@@ -33,6 +34,7 @@ whatsapp_template_status = postgresql.ENUM(
     "disabled",
     "unknown",
     name="whatsapp_template_status",
+    create_type=False,
 )
 channel_provider = postgresql.ENUM(
     "instagram",

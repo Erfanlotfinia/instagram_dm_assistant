@@ -4,6 +4,7 @@ from app.domain.models import (
     AttributeAlias,
     CatalogAttributeDefinition,
     Product,
+    ProductCategory,
     ProductVariant,
     VariantAttribute,
 )
@@ -60,3 +61,57 @@ def test_generic_variant_resolver_reports_missing_required_attribute(db_session,
 
     assert result.matched is False
     assert "missing_shade" in result.mismatch_reasons
+
+
+def test_generic_variant_resolver_scopes_required_attributes_to_product_category(db_session, demo_shop):
+    electronics = ProductCategory(shop_id=demo_shop.id, name="Electronics", slug="electronics")
+    cosmetics = ProductCategory(shop_id=demo_shop.id, name="Cosmetics", slug="cosmetics")
+    db_session.add_all([electronics, cosmetics])
+    db_session.flush()
+
+    product = Product(shop_id=demo_shop.id, title="iPhone 13", base_price=Decimal("700.00"), currency="USD", category="electronics")
+    db_session.add(product)
+    db_session.flush()
+    variant = ProductVariant(product_id=product.id, sku="IPH13-128-BLK", price=Decimal("700.00"), stock_quantity=3, reserved_quantity=0, is_active=True)
+    storage = CatalogAttributeDefinition(shop_id=demo_shop.id, category_id=electronics.id, name="Storage", slug="storage", is_variant_defining=True, is_required=True)
+    color = CatalogAttributeDefinition(shop_id=demo_shop.id, category_id=electronics.id, name="Color", slug="color", is_variant_defining=True, is_required=True)
+    shade = CatalogAttributeDefinition(shop_id=demo_shop.id, category_id=cosmetics.id, name="Shade", slug="shade", is_variant_defining=True, is_required=True)
+    db_session.add_all([product, variant, storage, color, shade])
+    db_session.flush()
+    db_session.add_all([
+        VariantAttribute(product_variant_id=variant.id, attribute_definition_id=storage.id, value_json="128GB", normalized_value_json="128GB"),
+        VariantAttribute(product_variant_id=variant.id, attribute_definition_id=color.id, value_json="black", normalized_value_json="black"),
+    ])
+    db_session.commit()
+
+    result = GenericVariantResolver(db_session).resolve(
+        shop_id=demo_shop.id,
+        product_id=product.id,
+        raw_requested_attributes={"storage": "128GB", "color": "black"},
+        quantity=1,
+    )
+
+    assert result.matched is True
+    assert result.variant_id == variant.id
+    assert "missing_shade" not in result.mismatch_reasons
+
+
+def test_generic_variant_resolver_rejects_blank_requested_attributes(db_session, demo_shop):
+    product = Product(shop_id=demo_shop.id, title="iPhone 13", base_price=Decimal("700.00"), currency="USD", category="electronics")
+    db_session.add(product)
+    db_session.flush()
+    variant = ProductVariant(product_id=product.id, sku="IPH13-128-BLK", price=Decimal("700.00"), stock_quantity=3, reserved_quantity=0, is_active=True)
+    storage = CatalogAttributeDefinition(shop_id=demo_shop.id, name="Storage", slug="storage", is_variant_defining=True, is_required=False)
+    db_session.add_all([product, variant, storage])
+    db_session.commit()
+
+    result = GenericVariantResolver(db_session).resolve(
+        shop_id=demo_shop.id,
+        product_id=product.id,
+        raw_requested_attributes={"storage": None},
+        quantity=1,
+    )
+
+    assert result.matched is False
+    assert result.mismatch_reasons == ["missing_attributes"]
+    assert result.variant_id is None

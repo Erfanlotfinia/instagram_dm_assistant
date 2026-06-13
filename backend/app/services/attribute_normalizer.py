@@ -39,7 +39,7 @@ class AttributeNormalizer:
         cleaned = self._clean(raw_value)
         if definition is not None:
             for alias_shop_id, source in [(shop_id, "shop_alias"), (None, "system_alias")]:
-                alias = self.db.scalar(select(AttributeAlias).where(AttributeAlias.attribute_definition_id == definition.id, AttributeAlias.shop_id.is_(None) if alias_shop_id is None else AttributeAlias.shop_id == alias_shop_id, AttributeAlias.is_active.is_(True), AttributeAlias.raw_value == cleaned).limit(1))
+                alias = self._find_alias(definition.id, alias_shop_id, cleaned)
                 if alias:
                     return AttributeNormalizationResult(attribute_slug, raw_value, alias.normalized_value, True, float(alias.confidence or Decimal("1")), source)
         rule_value = self._rule_normalize(attribute_slug, cleaned)
@@ -64,6 +64,19 @@ class AttributeNormalizer:
 
     def _clean(self, value: str) -> str:
         return " ".join(value.translate(_PERSIAN_DIGITS).strip().lower().split())
+
+    def _find_alias(self, definition_id: UUID, alias_shop_id: UUID | None, cleaned: str) -> AttributeAlias | None:
+        aliases = self.db.scalars(
+            select(AttributeAlias).where(
+                AttributeAlias.attribute_definition_id == definition_id,
+                AttributeAlias.shop_id.is_(None) if alias_shop_id is None else AttributeAlias.shop_id == alias_shop_id,
+                AttributeAlias.is_active.is_(True),
+            )
+        ).all()
+        for alias in aliases:
+            if self._clean(alias.raw_value) == cleaned:
+                return alias
+        return None
 
     def _rule_normalize(self, slug: str, value: str) -> str:
         compact = value.replace(" ", "")
