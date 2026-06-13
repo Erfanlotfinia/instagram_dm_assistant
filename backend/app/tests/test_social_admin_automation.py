@@ -34,6 +34,22 @@ def test_router_deterministic_before_llm():
     assert decision.requires_llm is False
 
 
+def test_router_active_order_cancel_and_summary_before_confirm():
+    router = ScenarioRouter()
+
+    cancel_decision = router.route({"text": "میخوام لغو کنم"}, active_order={"id": "o1"})
+    assert cancel_decision.handler == "CancelOrderHandler"
+    assert cancel_decision.scenario_code == "ORDER_CANCEL"
+
+    summary_decision = router.route({"text": "خلاصه سفارش رو بفرست"}, active_order={"id": "o1"})
+    assert summary_decision.handler == "OrderSummaryHandler"
+    assert summary_decision.scenario_code == "ORDER_SUMMARY"
+
+    confirm_decision = router.route({"text": "تایید میکنم"}, active_order={"id": "o1"})
+    assert confirm_decision.handler == "ConfirmOrderHandler"
+    assert confirm_decision.scenario_code == "ORDER_CONFIRM"
+
+
 def test_catalog_query_planner_category_brand_price():
     plan = CatalogQueryPlanner().plan("همه چکش‌های برند بوش زیر ۵۰۰۰۰۰۰ رو نشون بده")
     assert plan.category_slug == "hammer"
