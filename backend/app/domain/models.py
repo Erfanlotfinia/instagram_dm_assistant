@@ -650,6 +650,85 @@ class ConversationSlots(Base):
     conversation: Mapped[Conversation] = relationship(back_populates="slots")
 
 
+class ProductCategory(Base, TimestampMixin):
+    __tablename__ = "product_categories"
+    __table_args__ = (UniqueConstraint("shop_id", "slug", name="uq_product_categories_shop_slug"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    parent_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("product_categories.id", ondelete="SET NULL"), nullable=True, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_system_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+
+
+class CatalogAttributeDefinition(Base, TimestampMixin):
+    __tablename__ = "catalog_attribute_definitions"
+    __table_args__ = (UniqueConstraint("shop_id", "category_id", "slug", name="uq_catalog_attribute_definitions_scope_slug"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=True, index=True)
+    category_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("product_categories.id", ondelete="CASCADE"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    data_type: Mapped[str] = mapped_column(String(32), nullable=False, default="text")
+    unit: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    is_variant_defining: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    is_searchable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    allowed_values_json: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
+    aliases_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+
+
+class ProductAttribute(Base, TimestampMixin):
+    __tablename__ = "product_attributes"
+    __table_args__ = (UniqueConstraint("product_id", "attribute_definition_id", name="uq_product_attributes_product_definition"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    product_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
+    attribute_definition_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("catalog_attribute_definitions.id", ondelete="CASCADE"), nullable=False, index=True)
+    value_json: Mapped[Any] = mapped_column(JSONB, nullable=False)
+    normalized_value_json: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
+
+
+class VariantAttribute(Base, TimestampMixin):
+    __tablename__ = "variant_attributes"
+    __table_args__ = (UniqueConstraint("product_variant_id", "attribute_definition_id", name="uq_variant_attributes_variant_definition"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    product_variant_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("product_variants.id", ondelete="CASCADE"), nullable=False, index=True)
+    attribute_definition_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("catalog_attribute_definitions.id", ondelete="CASCADE"), nullable=False, index=True)
+    value_json: Mapped[Any] = mapped_column(JSONB, nullable=False)
+    normalized_value_json: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
+
+
+class AttributeAlias(Base, TimestampMixin):
+    __tablename__ = "attribute_aliases"
+    __table_args__ = (UniqueConstraint("shop_id", "attribute_definition_id", "raw_value", "language", name="uq_attribute_aliases_scope_raw_language"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=True, index=True)
+    attribute_definition_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("catalog_attribute_definitions.id", ondelete="CASCADE"), nullable=False, index=True)
+    raw_value: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    normalized_value: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    language: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    confidence: Mapped[Any] = mapped_column(Numeric(4, 3), nullable=False, default=1)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+
+
+class CategoryPreset(Base, TimestampMixin):
+    __tablename__ = "category_presets"
+    __table_args__ = (UniqueConstraint("slug", name="uq_category_presets_slug"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    preset_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    is_system_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+
+
 class Product(Base, TimestampMixin):
     __tablename__ = "products"
 

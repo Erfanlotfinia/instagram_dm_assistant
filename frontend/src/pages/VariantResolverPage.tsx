@@ -297,7 +297,7 @@ export function VariantResolverPage() {
     <div className="page-stack page-stack--wide">
       <section className="dashboard-card dashboard-card--wide">
         <p className="dashboard-card__eyebrow">Catalog intelligence</p>
-        <h1>Variant resolver test</h1>
+        <h1>Product option resolver test</h1>
         <p>
           Test backend-only normalization, variant matching, stock checks, and alternatives without
           calling the LLM.
@@ -429,7 +429,7 @@ export function VariantResolverPage() {
 
       {resolver.isPending ? (
         <section className="dashboard-card dashboard-card--wide">
-          <p className="loading-state">Running variant resolver…</p>
+          <p className="loading-state">Running product option resolver…</p>
         </section>
       ) : null}
 

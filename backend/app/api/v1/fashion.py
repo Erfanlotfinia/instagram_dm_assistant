@@ -25,6 +25,7 @@ from app.schemas.fashion import (
 )
 from app.services.fashion_alias_service import FashionAliasService
 from app.services.fashion_normalization import ColorNormalizer, SizeNormalizer
+from app.services.generic_variant_resolver import GenericVariantResolver
 from app.services.variant_resolver import VariantResolver
 
 router = APIRouter(prefix="/shops/{shop_id}", tags=["fashion"])
@@ -55,6 +56,8 @@ def normalize_size_endpoint(shop_id: UUID, payload: NormalizeSizeRequest, _user:
 @router.post("/fashion/resolve-variant", response_model=VariantResolverResult)
 @router.post("/variant-resolver/test", response_model=VariantResolverResult)
 def resolve_variant_endpoint(shop_id: UUID, payload: VariantResolverRequest, _user: Annotated[User, Depends(get_current_user)], _membership: Annotated[ShopMember, Depends(get_shop_membership)], db: Annotated[Session, Depends(get_db_session)]) -> VariantResolverResult:
+    if payload.raw_requested_attributes:
+        return GenericVariantResolver(db).resolve(shop_id=shop_id, product_id=payload.product_id, raw_requested_attributes=payload.raw_requested_attributes, quantity=payload.quantity)
     return VariantResolver(db).resolve(shop_id=shop_id, product_id=payload.product_id, raw_color=payload.raw_color, raw_size=payload.raw_size, quantity=payload.quantity)
 
 

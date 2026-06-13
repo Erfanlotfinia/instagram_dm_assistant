@@ -24,8 +24,8 @@ const navGroups: NavGroup[] = [
       { to: '/products', label: 'Products', icon: 'box' },
       { to: '/instagram-mapping', label: 'Post Mapping', icon: 'image' },
       { to: '/catalog-copilot', label: 'Catalog Copilot', icon: 'sparkles' },
-      { to: '/variant-resolver', label: 'Variant Resolver', icon: 'sliders' },
-      { to: '/fashion-dictionary', label: 'Fashion Dictionary', icon: 'book' },
+      { to: '/variant-resolver', label: 'Product Option Resolver', icon: 'sliders' },
+      { to: '/fashion-dictionary', label: 'Attribute Dictionary', icon: 'book' },
     ],
   },
   {
