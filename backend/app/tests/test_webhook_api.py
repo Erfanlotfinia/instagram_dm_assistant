@@ -76,7 +76,7 @@ def test_instagram_webhook_receiver_via_service(
 
 def test_instagram_webhook_receiver_via_api(client, instagram_account, db_session) -> None:
     response = client.post("/api/v1/webhooks/instagram", json=SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD)
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     assert response.json()["status"] == "ok"
     outbox_count = db_session.scalar(select(func.count()).select_from(OutboxEvent))
     assert outbox_count == 1

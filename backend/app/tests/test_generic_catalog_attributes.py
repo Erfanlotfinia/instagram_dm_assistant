@@ -115,3 +115,131 @@ def test_generic_variant_resolver_rejects_blank_requested_attributes(db_session,
     assert result.matched is False
     assert result.mismatch_reasons == ["missing_attributes"]
     assert result.variant_id is None
+
+
+def test_attribute_normalizer_normalizes_home_goods_dimensions(db_session, demo_shop):
+    dimensions = CatalogAttributeDefinition(
+        shop_id=demo_shop.id,
+        name="Dimensions",
+        slug="dimensions",
+        is_variant_defining=False,
+        is_required=False,
+    )
+    db_session.add(dimensions)
+    db_session.flush()
+    db_session.add(
+        AttributeAlias(
+            shop_id=demo_shop.id,
+            attribute_definition_id=dimensions.id,
+            raw_value="۸۰×۱۲۰",
+            normalized_value="80x120cm",
+            language="fa",
+            confidence=0.95,
+        )
+    )
+    db_session.commit()
+
+    result = AttributeNormalizer(db_session).normalize(
+        shop_id=demo_shop.id,
+        category_id=None,
+        attribute_slug="dimensions",
+        raw_value="۸۰×۱۲۰",
+    )
+
+    assert result.normalized_value == "80x120cm"
+
+
+def test_generic_variant_resolver_supports_food_grocery_weight(db_session, demo_shop):
+    product = Product(
+        shop_id=demo_shop.id,
+        title="Basmati Rice",
+        base_price=Decimal("8.00"),
+        currency="USD",
+        category="food_grocery",
+    )
+    weight = CatalogAttributeDefinition(
+        shop_id=demo_shop.id,
+        name="Weight",
+        slug="weight",
+        is_variant_defining=True,
+        is_required=True,
+    )
+    db_session.add_all([product, weight])
+    db_session.flush()
+    variant = ProductVariant(
+        product_id=product.id,
+        sku="RICE-5KG",
+        price=Decimal("8.00"),
+        stock_quantity=12,
+        reserved_quantity=0,
+        is_active=True,
+    )
+    db_session.add(variant)
+    db_session.flush()
+    db_session.add(
+        VariantAttribute(
+            product_variant_id=variant.id,
+            attribute_definition_id=weight.id,
+            value_json="5kg",
+            normalized_value_json="5kg",
+        )
+    )
+    db_session.commit()
+
+    result = GenericVariantResolver(db_session).resolve(
+        shop_id=demo_shop.id,
+        product_id=product.id,
+        raw_requested_attributes={"weight": "5kg"},
+        quantity=1,
+    )
+
+    assert result.matched is True
+    assert result.variant_id == variant.id
+
+
+def test_generic_variant_resolver_supports_books_media_format(db_session, demo_shop):
+    product = Product(
+        shop_id=demo_shop.id,
+        title="Design Patterns",
+        base_price=Decimal("45.00"),
+        currency="USD",
+        category="books_media",
+    )
+    book_format = CatalogAttributeDefinition(
+        shop_id=demo_shop.id,
+        name="Format",
+        slug="format",
+        is_variant_defining=True,
+        is_required=True,
+    )
+    db_session.add_all([product, book_format])
+    db_session.flush()
+    variant = ProductVariant(
+        product_id=product.id,
+        sku="BOOK-PB",
+        price=Decimal("45.00"),
+        stock_quantity=7,
+        reserved_quantity=0,
+        is_active=True,
+    )
+    db_session.add(variant)
+    db_session.flush()
+    db_session.add(
+        VariantAttribute(
+            product_variant_id=variant.id,
+            attribute_definition_id=book_format.id,
+            value_json="paperback",
+            normalized_value_json="paperback",
+        )
+    )
+    db_session.commit()
+
+    result = GenericVariantResolver(db_session).resolve(
+        shop_id=demo_shop.id,
+        product_id=product.id,
+        raw_requested_attributes={"format": "paperback"},
+        quantity=1,
+    )
+
+    assert result.matched is True
+    assert result.normalized_attributes["format"] == "paperback"

@@ -46,6 +46,16 @@ os.environ["WEBHOOK_SIGNATURE_BYPASS"] = "true"
 os.environ["LLM_MODE"] = "mock"
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 
+
+def _apply_test_env() -> None:
+    os.environ["APP_ENV"] = "development"
+    os.environ["WEBHOOK_SIGNATURE_BYPASS"] = "true"
+    os.environ["LLM_MODE"] = "mock"
+    os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
+
+
+_apply_test_env()
+
 import pytest
 from alembic import command
 from alembic.config import Config
@@ -62,6 +72,18 @@ from app.main import create_app
 from app.services.auth_service import AuthService
 
 get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _ensure_test_settings(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
+    """Keep cached Settings aligned with test-safe env even when .env differs."""
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("WEBHOOK_SIGNATURE_BYPASS", "true")
+    monkeypatch.setenv("LLM_MODE", "mock")
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def _bootstrap_test_schema() -> None:
@@ -159,6 +181,8 @@ def db_session(engine) -> Generator[Session, None, None]:
 
 @pytest.fixture()
 def client(db_session: Session) -> Generator[TestClient, None, None]:
+    _apply_test_env()
+    get_settings.cache_clear()
     app = create_app()
 
     def override_get_db() -> Generator[Session, None, None]:

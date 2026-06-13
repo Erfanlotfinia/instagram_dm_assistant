@@ -155,11 +155,19 @@ def test_failed_jobs_list_includes_unscoped_jobs(client, auth_headers, db_sessio
 
 
 def test_failed_jobs_list_retry_ignore(client, auth_headers, db_session, demo_shop, monkeypatch) -> None:
+    message_id = uuid4()
+    conversation_id = uuid4()
     job = FailedJob(
         shop_id=demo_shop.id,
         queue_name="instagram.message.received",
         job_type="message_received",
-        payload={"shop_id": str(demo_shop.id), "message_id": str(uuid4()), "conversation_id": str(uuid4())},
+        payload={
+            "shop_id": str(demo_shop.id),
+            "message_id": str(message_id),
+            "conversation_id": str(conversation_id),
+            "instagram_account_id": str(uuid4()),
+            "customer_id": str(uuid4()),
+        },
         error_message="boom",
         retry_count=3,
         max_retries=3,
