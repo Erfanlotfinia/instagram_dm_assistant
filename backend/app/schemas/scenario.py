@@ -30,3 +30,27 @@ class ScenarioPackRead(BaseModel):
     created_by_user_id: UUID | None
 
     model_config = {"from_attributes": True}
+
+class ScenarioCoverageRow(BaseModel):
+    scenario_code: str
+    scenario_name: str
+    description: str
+    supported_providers: list[str]
+    current_status: str
+    deterministic_handler_exists: bool
+    LLM_fallback_exists: bool
+    human_handoff_exists: bool
+    tests_exist: bool
+    frontend_support_exists: bool
+    priority: str
+
+class ScenarioRegressionMetrics(BaseModel):
+    automation_handled_rate: float
+    llm_fallback_rate: float
+    handoff_rate: float
+    scenario_accuracy: float
+    reference_resolution_accuracy: float
+    product_discovery_accuracy: float
+    unsafe_action_count: int
+    false_order_count: int
+    false_payment_count: int

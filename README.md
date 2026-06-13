@@ -605,3 +605,17 @@ This repository is now positioned as a **Multi-channel Catalog Commerce Assistan
 Fashion and clothing support is preserved as a category preset under the generic catalog intelligence system. Existing color/size flows continue to work through compatibility APIs, while new catalog attributes can model electronics, cosmetics, home goods, food, books/media, digital products, and general product shops.
 
 See the catalog documentation for the generic data model, category presets, attribute dictionary, product import, catalog quality checks, and generic resolver behavior.
+
+## AI social media admin replacement roadmap
+
+The architecture is now explicitly automation-first and LLM-second for social commerce administration across Instagram, WhatsApp, Telegram, Bale, and Rubika. Provider adapters normalize inbound/outbound channel details; the central social admin automation layer handles scenarios, context references, catalog discovery, handler routing, safe structured LLM fallback, human handoff packets, operator corrections, and approval-gated admin content tasks.
+
+Safety guarantees:
+
+- Deterministic handlers run before LLM fallback.
+- LLM outputs are structured and validated, and cannot set final product variants, prices, stock, discounts, payment status, shipping status, or final order state.
+- Commerce state changes continue to go through existing order, payment, shipping, inventory, and policy services.
+- Admin content generation produces drafts only and requires approval before use.
+- Signed callback actions reject forged, expired, or cross-shop payloads.
+
+See `docs/scenarios/social_admin_automation.md` for the scenario coverage matrix and module documentation.

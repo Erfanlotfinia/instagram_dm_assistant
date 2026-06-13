@@ -1,0 +1,3002 @@
+[
+  {
+    "scenario_id": "SA-001",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-002",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "STORY_REPLY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-003",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "دومی رو بده"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "SelectFromProductListHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-004",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PRODUCT_DISCOVERY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-005",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_CREATION",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-006",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_EDITING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-007",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PAYMENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-008",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "SHIPPING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-009",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "RETURNS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-010",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "COMPLAINTS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": true,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-011",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "OFF_TOPIC",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-012",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ADMIN_CONTENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-013",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUTTON_CALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-014",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PERSIAN_SLANG",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-015",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "MIXED_LANGUAGE",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-016",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "LLM_FALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-017",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-018",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "STORY_REPLY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-019",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "دومی رو بده"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "SelectFromProductListHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-020",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PRODUCT_DISCOVERY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-021",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_CREATION",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-022",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_EDITING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-023",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PAYMENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-024",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "SHIPPING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-025",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "RETURNS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-026",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "COMPLAINTS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": true,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-027",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "OFF_TOPIC",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-028",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ADMIN_CONTENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-029",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUTTON_CALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-030",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PERSIAN_SLANG",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-031",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "MIXED_LANGUAGE",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-032",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "LLM_FALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-033",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-034",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "STORY_REPLY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-035",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "دومی رو بده"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "SelectFromProductListHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-036",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PRODUCT_DISCOVERY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-037",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_CREATION",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-038",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_EDITING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-039",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PAYMENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-040",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "SHIPPING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-041",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "RETURNS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-042",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "COMPLAINTS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": true,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-043",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "OFF_TOPIC",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-044",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ADMIN_CONTENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-045",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUTTON_CALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-046",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PERSIAN_SLANG",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-047",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "MIXED_LANGUAGE",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-048",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "LLM_FALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-049",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-050",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "STORY_REPLY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-051",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "دومی رو بده"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "SelectFromProductListHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-052",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PRODUCT_DISCOVERY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-053",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_CREATION",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-054",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_EDITING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-055",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PAYMENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-056",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "SHIPPING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-057",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "RETURNS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-058",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "COMPLAINTS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": true,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-059",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "OFF_TOPIC",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-060",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ADMIN_CONTENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-061",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUTTON_CALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-062",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PERSIAN_SLANG",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-063",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "MIXED_LANGUAGE",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-064",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "LLM_FALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-065",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-066",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "STORY_REPLY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-067",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "دومی رو بده"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "SelectFromProductListHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-068",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PRODUCT_DISCOVERY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-069",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_CREATION",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-070",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_EDITING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-071",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PAYMENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-072",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "SHIPPING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-073",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "RETURNS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-074",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "COMPLAINTS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": true,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-075",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "OFF_TOPIC",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-076",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ADMIN_CONTENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-077",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUTTON_CALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-078",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PERSIAN_SLANG",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-079",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "MIXED_LANGUAGE",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-080",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "LLM_FALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-081",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-082",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "STORY_REPLY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-083",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "دومی رو بده"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "SelectFromProductListHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-084",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PRODUCT_DISCOVERY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-085",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_CREATION",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-086",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_EDITING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-087",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PAYMENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-088",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "SHIPPING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-089",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "RETURNS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-090",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "COMPLAINTS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": true,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-091",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "OFF_TOPIC",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-092",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ADMIN_CONTENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-093",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUTTON_CALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-094",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PERSIAN_SLANG",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-095",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "MIXED_LANGUAGE",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-096",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "LLM_FALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-097",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-098",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "STORY_REPLY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-099",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "دومی رو بده"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "SelectFromProductListHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-100",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PRODUCT_DISCOVERY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-101",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_CREATION",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-102",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_EDITING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-103",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PAYMENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-104",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "SHIPPING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-105",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "RETURNS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-106",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "COMPLAINTS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": true,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-107",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "OFF_TOPIC",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-108",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ADMIN_CONTENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-109",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUTTON_CALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-110",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PERSIAN_SLANG",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-111",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "MIXED_LANGUAGE",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-112",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "LLM_FALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-113",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-114",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "STORY_REPLY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-115",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "دومی رو بده"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "SelectFromProductListHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-116",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PRODUCT_DISCOVERY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-117",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_CREATION",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-118",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_EDITING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-119",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PAYMENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-120",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "SHIPPING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-121",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "RETURNS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-122",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "COMPLAINTS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": true,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-123",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "OFF_TOPIC",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-124",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ADMIN_CONTENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-125",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUTTON_CALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-126",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PERSIAN_SLANG",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-127",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "MIXED_LANGUAGE",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-128",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "LLM_FALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-129",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-130",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "STORY_REPLY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-131",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "دومی رو بده"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "SelectFromProductListHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-132",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PRODUCT_DISCOVERY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-133",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_CREATION",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-134",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_EDITING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-135",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PAYMENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-136",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "SHIPPING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-137",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "RETURNS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-138",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "COMPLAINTS",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": true,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-139",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "OFF_TOPIC",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-140",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ADMIN_CONTENT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-141",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUTTON_CALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-142",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PERSIAN_SLANG",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-143",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "MIXED_LANGUAGE",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-144",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "LLM_FALLBACK",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": true,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-145",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-146",
+    "provider": "instagram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "STORY_REPLY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-147",
+    "provider": "whatsapp",
+    "input_sequence": [
+      {
+        "text": "دومی رو بده"
+      }
+    ],
+    "expected_scenario": "BUY_REFERENCED_PRODUCT",
+    "expected_handler": "SelectFromProductListHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-148",
+    "provider": "telegram",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "PRODUCT_DISCOVERY",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-149",
+    "provider": "bale",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_CREATION",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  },
+  {
+    "scenario_id": "SA-150",
+    "provider": "rubika",
+    "input_sequence": [
+      {
+        "text": "price?"
+      }
+    ],
+    "expected_scenario": "ORDER_EDITING",
+    "expected_handler": "AskPriceReferencedProductHandler",
+    "expected_uses_llm": false,
+    "expected_handoff": false,
+    "expected_product_id": null,
+    "expected_order_action": null,
+    "expected_response_type": "text",
+    "expected_safety_assertions": [
+      "no_false_payment",
+      "no_unsafe_order"
+    ]
+  }
+]
