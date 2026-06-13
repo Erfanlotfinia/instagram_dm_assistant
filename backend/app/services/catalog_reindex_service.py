@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.domain.enums import CatalogImportJobStatus, ProductStatus
 from app.domain.models import CatalogImportJob, Product, User
-from app.integrations.openai_client import LiveOpenAIEmbeddingClient, OpenAIEmbeddingClient
+from app.integrations.llm_client import build_embedding_client
+from app.integrations.openai_client import OpenAIEmbeddingClient
 from app.integrations.qdrant_client import LiveQdrantClient, QdrantClient
 from app.repositories.catalog_repository import CatalogImportJobRepository, ProductNormalizedRepository
 from app.repositories.product_repository import ProductRepository
@@ -40,7 +41,7 @@ class CatalogReindexService:
         self.jobs = CatalogImportJobRepository(db)
         self.normalizer = CatalogNormalizationService(db)
         self.qdrant = qdrant_client or LiveQdrantClient(self.settings)
-        self.embeddings = embedding_client or LiveOpenAIEmbeddingClient(self.settings)
+        self.embeddings = embedding_client or build_embedding_client(self.settings)
 
     def reindex(self, payload: CatalogReindexRequest, user: User) -> CatalogReindexJobRead:
         self.shop_service.get_shop(payload.shop_id, user)
@@ -125,7 +126,7 @@ class CatalogReindexService:
         }
         self.qdrant.upsert_product(product.id, vector, payload, sparse_text=index_text)
         normalized.qdrant_point_id = str(product.id)
-        normalized.embedding_model = self.settings.openai_embedding_model
+        normalized.embedding_model = self.settings.embedding_model
         normalized.dense_vector_dim = len(vector)
         normalized.last_indexed_at = datetime.now(UTC)
 

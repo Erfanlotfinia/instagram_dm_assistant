@@ -15,6 +15,7 @@ SENSITIVE_KEYS = frozenset(
         "jwt",
         "api_key",
         "openai_api_key",
+        "gemini_api_key",
         "token_encryption_key",
         "jwt_secret_key",
         "email",

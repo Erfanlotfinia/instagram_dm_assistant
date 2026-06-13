@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.domain.models import Product, ProductVariant, User
-from app.integrations.openai_client import LiveOpenAIEmbeddingClient, OpenAIEmbeddingClient
+from app.integrations.llm_client import build_embedding_client
+from app.integrations.openai_client import OpenAIEmbeddingClient
 from app.integrations.qdrant_client import LiveQdrantClient, QdrantClient
 from app.repositories.product_repository import ProductRepository
 from app.schemas.agent import SemanticSearchHit, SemanticSearchRequest, SemanticSearchResponse
@@ -36,7 +37,7 @@ class ProductSemanticSearchService:
         self.products = ProductRepository(db)
         self.shop_service = ShopService(db)
         self.qdrant = qdrant_client or LiveQdrantClient(self.settings)
-        self.embeddings = embedding_client or LiveOpenAIEmbeddingClient(self.settings)
+        self.embeddings = embedding_client or build_embedding_client(self.settings)
 
     def index_product(self, product: Product, variants: list[ProductVariant], caption: str | None = None) -> None:
         text = self._build_index_text(product, variants, caption)

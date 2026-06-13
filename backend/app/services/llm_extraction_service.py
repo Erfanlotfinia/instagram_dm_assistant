@@ -8,7 +8,8 @@ from typing import Any, Protocol
 from pydantic import ValidationError
 
 from app.core.config import Settings, get_settings
-from app.integrations.openai_client import LiveOpenAIChatClient, OpenAIChatClient
+from app.integrations.llm_client import build_chat_client
+from app.integrations.openai_client import OpenAIChatClient
 from app.schemas.agent import AgentExtractionInput, AgentExtractionResult, AgentIntent, ExtractionConfidence
 
 logger = logging.getLogger(__name__)
@@ -70,12 +71,12 @@ class LLMExtractionService:
         settings: Settings | None = None,
     ) -> None:
         self.settings = settings or get_settings()
-        self.chat_client = chat_client or LiveOpenAIChatClient(self.settings)
+        self.chat_client = chat_client or build_chat_client(self.settings)
         self.last_invalid_output: str | None = None
 
     @property
     def model_name(self) -> str:
-        return self.settings.openai_model
+        return self.settings.chat_model
 
     @property
     def prompt_version(self) -> str:

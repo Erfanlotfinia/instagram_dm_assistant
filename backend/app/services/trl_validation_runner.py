@@ -122,8 +122,11 @@ class TRLValidationRunner:
         if validation_mode == "live_llm_staging":
             if not settings.trl_live_llm_enabled:
                 raise ValueError("TRL live LLM staging requires TRL_LIVE_LLM_ENABLED=true")
-            if not settings.openai_api_key:
-                raise ValueError("TRL live LLM staging requires OPENAI_API_KEY")
+            if not settings.llm_api_key_configured:
+                raise ValueError(
+                    f"{'GEMINI_API_KEY' if settings.llm_provider == 'gemini' else 'OPENAI_API_KEY'} "
+                    "is required for TRL live LLM staging"
+                )
         if reset_demo_data:
             self.reset(shop_id)
             shop = self.db.get(Shop, shop_id)
@@ -202,7 +205,7 @@ class TRLValidationRunner:
                 "critical_security_tests_pass_rate": 1.0,
                 "validation_mode": validation_mode,
                 "proves_live_llm": validation_mode == "live_llm_staging",
-                "model_version": settings.openai_model if validation_mode == "live_llm_staging" else RuleBasedTRLExtractionService.model_name,
+                "model_version": settings.chat_model if validation_mode == "live_llm_staging" else RuleBasedTRLExtractionService.model_name,
                 "prompt_version": settings.default_prompt_version if validation_mode == "live_llm_staging" else RuleBasedTRLExtractionService.prompt_version,
                 "thresholds": thresholds,
             }

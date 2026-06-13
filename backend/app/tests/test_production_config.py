@@ -44,6 +44,21 @@ def test_development_allows_local_defaults(monkeypatch) -> None:
     assert settings.app_env == "development"
 
 
+def test_production_requires_gemini_key_when_live(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("JWT_SECRET_KEY", "production-jwt-secret-key-32-characters-long")
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", "production-token-encryption-key-32-chars!")
+    monkeypatch.setenv("INSTAGRAM_APP_SECRET", "prod-secret")
+    monkeypatch.setenv("INSTAGRAM_WEBHOOK_VERIFY_TOKEN", "prod-verify-token")
+    monkeypatch.setenv("CORS_ORIGINS", '["https://app.example.com"]')
+    monkeypatch.delenv("WEBHOOK_SIGNATURE_BYPASS", raising=False)
+    monkeypatch.setenv("LLM_MODE", "live")
+    monkeypatch.setenv("LLM_PROVIDER", "gemini")
+    monkeypatch.setenv("GEMINI_API_KEY", "")
+    with pytest.raises(ValueError, match="GEMINI_API_KEY"):
+        Settings()
+
+
 def test_webhook_signature_required_in_production(monkeypatch) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("JWT_SECRET_KEY", "production-jwt-secret-key-32-characters-long")

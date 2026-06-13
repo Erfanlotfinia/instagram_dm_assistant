@@ -45,8 +45,7 @@ class ReplyFacts:
 class ResponseGenerationService:
     def generate(self, facts: ReplyFacts) -> str:
         if facts.workflow_state == AgentWorkflowState.HUMAN_HANDOFF:
-            reason = facts.handoff_reason or "درخواست شما به پشتیبانی انسانی ارجاع شد."
-            return f"لطفاً چند لحظه صبر کنید. {reason} یکی از همکاران ما به زودی پاسخ می‌دهد."
+            return "لطفاً چند لحظه صبر کنید. یکی از همکاران ما به زودی پاسخ می‌دهد."
 
         if facts.workflow_state == AgentWorkflowState.CANCELLED:
             return "سفارش شما لغو شد. هر زمان خواستید دوباره پیام بدهید."

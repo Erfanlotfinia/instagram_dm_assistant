@@ -141,15 +141,16 @@ def _link_admin_to_trl_shop(db, admin) -> None:
 
 def _index_semantic_search_products(db) -> None:
     from app.core.config import get_settings
-    from app.integrations.openai_client import LiveOpenAIEmbeddingClient, MockOpenAIEmbeddingClient
+    from app.integrations.llm_client import build_embedding_client
+    from app.integrations.openai_client import MockOpenAIEmbeddingClient
     from app.repositories.product_repository import ProductRepository
     from app.repositories.variant_repository import VariantRepository
     from app.services.product_semantic_search_service import ProductSemanticSearchService
 
     settings = get_settings()
     embedding_client = (
-        LiveOpenAIEmbeddingClient(settings)
-        if settings.openai_api_key
+        build_embedding_client(settings)
+        if settings.llm_api_key_configured
         else MockOpenAIEmbeddingClient()
     )
     search = ProductSemanticSearchService(db, settings=settings, embedding_client=embedding_client)

@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.domain.models import MediaProductLink, User
-from app.integrations.openai_client import LiveOpenAIEmbeddingClient, OpenAIEmbeddingClient
+from app.integrations.llm_client import build_embedding_client
+from app.integrations.openai_client import OpenAIEmbeddingClient
 from app.integrations.qdrant_client import LiveQdrantClient, QdrantClient
 from app.repositories.catalog_repository import ProductAliasRepository, ProductNormalizedRepository
 from app.repositories.product_repository import ProductRepository
@@ -33,7 +34,7 @@ class CatalogProductSearchService:
         self.normalized_repo = ProductNormalizedRepository(db)
         self.alias_repo = ProductAliasRepository(db)
         self.qdrant = qdrant_client or LiveQdrantClient(self.settings)
-        self.embeddings = embedding_client or LiveOpenAIEmbeddingClient(self.settings)
+        self.embeddings = embedding_client or build_embedding_client(self.settings)
         self.confidence = ResolverConfidenceService(db, self.settings)
         self.trace_service = ResolverTraceService(db)
 

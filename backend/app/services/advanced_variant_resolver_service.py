@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.domain.models import ProductAlias, User
-from app.integrations.openai_client import LiveOpenAIEmbeddingClient, OpenAIEmbeddingClient
+from app.integrations.llm_client import build_embedding_client
+from app.integrations.openai_client import OpenAIEmbeddingClient
 from app.integrations.qdrant_client import LiveQdrantClient, QdrantClient
 from app.repositories.product_repository import ProductRepository
 from app.repositories.resolver_repository import VariantAliasRepository
@@ -45,7 +46,7 @@ class AdvancedVariantResolverService:
         self.color_normalizer = ColorNormalizer(db)
         self.size_normalizer = SizeNormalizer(db)
         self.qdrant = qdrant_client or LiveQdrantClient(self.settings)
-        self.embeddings = embedding_client or LiveOpenAIEmbeddingClient(self.settings)
+        self.embeddings = embedding_client or build_embedding_client(self.settings)
 
     def resolve_variant(self, payload: ResolveVariantRequest, user: User) -> ResolveVariantResponse:
         self.shop_service.get_shop(payload.shop_id, user)

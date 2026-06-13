@@ -31,14 +31,21 @@
 | `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` | Meta webhook verification token |
 | `ENABLE_REAL_INSTAGRAM_SEND` | `true` to call Graph API; `false` for local mock send |
 
-## Agent / OpenAI
+## Agent / LLM
 
 | Variable | Description |
 |----------|-------------|
-| `OPENAI_API_KEY` | OpenAI-compatible API key (AvalAI or OpenAI) |
+| `LLM_PROVIDER` | `openai` (default) or `gemini` |
+| `LLM_MODE` | `mock` for tests/local without API calls; `live` for real extraction |
+| `OPENAI_API_KEY` | OpenAI-compatible API key (AvalAI or OpenAI) when `LLM_PROVIDER=openai` |
 | `OPENAI_API_BASE_URL` | OpenAI-compatible API base URL (default: `https://api.avalai.ir/v1`) |
-| `OPENAI_MODEL` | Chat model for extraction |
-| `OPENAI_EMBEDDING_MODEL` | Embedding model for semantic search |
+| `OPENAI_MODEL` | Chat model when using OpenAI provider |
+| `OPENAI_EMBEDDING_MODEL` | Embedding model when using OpenAI provider |
+| `GEMINI_API_KEY` | Google Gemini API key when `LLM_PROVIDER=gemini` |
+| `GEMINI_MODEL` | Gemini chat model (default: `gemini-2.5-flash`) |
+| `GEMINI_EMBEDDING_MODEL` | Gemini embedding model (default: `gemini-embedding-001`, 3072-dim) |
+
+When switching `LLM_PROVIDER`, re-run catalog semantic reindex because embedding vector sizes may differ.
 
 ## Queue / workers
 

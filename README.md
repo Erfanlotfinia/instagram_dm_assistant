@@ -1,6 +1,6 @@
 # Multi-channel Catalog Commerce Assistant
 
-This repository contains the v1.0.0 release candidate for a multi-channel catalog commerce assistant for online shops. It includes a FastAPI backend, PostgreSQL schema and Alembic migrations, RabbitMQ/Redis/Qdrant integrations, an OpenAI-compatible conversation orchestrator, background workers, and a React TypeScript admin panel for shops, catalog management, conversations, orders, analytics, simulator, failed jobs, pilot controls, and system health.
+This repository contains the v1.0.0 release candidate for a multi-channel catalog commerce assistant for online shops. It includes a FastAPI backend, PostgreSQL schema and Alembic migrations, RabbitMQ/Redis/Qdrant integrations, a pluggable LLM conversation orchestrator (OpenAI-compatible or Google Gemini), background workers, and a React TypeScript admin panel for shops, catalog management, conversations, orders, analytics, simulator, failed jobs, pilot controls, and system health.
 
 ## Architecture
 
@@ -61,8 +61,13 @@ Required backend variables:
 - `REDIS_URL` — Redis connection string for locks, rate limits, and state support.
 - `RABBITMQ_URL` — RabbitMQ AMQP URL for inbound message jobs.
 - `QDRANT_URL` — Qdrant API URL for product semantic search.
-- `OPENAI_API_KEY` — API key for the LLM and embedding integrations (AvalAI or OpenAI).
+- `LLM_MODE` — `mock` (default; deterministic 0.50 confidence, good for tests/local) or `live` (real LLM calls with real confidence so genuine questions resolve instead of escalating to handoff).
+- `LLM_PROVIDER` — `openai` (default, OpenAI-compatible/AvalAI) or `gemini` (Google Gemini).
+- `OPENAI_API_KEY` — API key when `LLM_PROVIDER=openai`.
 - `OPENAI_API_BASE_URL` — OpenAI-compatible API base URL (default: `https://api.avalai.ir/v1`).
+- `GEMINI_API_KEY` — Google Gemini API key when `LLM_PROVIDER=gemini`.
+- `OPENAI_MODEL` / `GEMINI_MODEL` — chat model for the selected provider.
+- `OPENAI_EMBEDDING_MODEL` / `GEMINI_EMBEDDING_MODEL` — embedding model for semantic search.
 - `APP_ENV` / `LOG_LEVEL` — runtime environment and logging level.
 - `JWT_SECRET_KEY` — at least 32 random bytes recommended in production.
 - `TOKEN_ENCRYPTION_KEY` — secret used to derive the Fernet key for Instagram token encryption.

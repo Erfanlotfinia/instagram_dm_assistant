@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
     rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672/"
     qdrant_url: str = "http://qdrant:6333"
+    llm_provider: Literal["openai", "gemini"] = Field(
+        default="openai",
+        description="LLM provider for chat extraction (openai = OpenAI-compatible API, gemini = Google Gemini)",
+    )
     openai_api_key: str = ""
     openai_api_base_url: str = Field(
         default="https://api.avalai.ir/v1",
@@ -21,6 +25,9 @@ class Settings(BaseSettings):
     )
     openai_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_embedding_model: str = "gemini-embedding-001"
     qdrant_collection_name: str = "products"
     qdrant_variants_collection_name: str = "variants"
     catalog_import_batch_size: int = Field(default=25, ge=1)
@@ -130,8 +137,11 @@ class Settings(BaseSettings):
                 origin.startswith("http://") for origin in self.cors_origins
             ):
                 raise ValueError("CORS_ORIGINS must use HTTPS in production")
-            if self.llm_mode == "live" and not self.openai_api_key:
-                raise ValueError("OPENAI_API_KEY is required when LLM_MODE=live")
+            if self.llm_mode == "live":
+                if self.llm_provider == "gemini" and not self.gemini_api_key:
+                    raise ValueError("GEMINI_API_KEY is required when LLM_PROVIDER=gemini and LLM_MODE=live")
+                if self.llm_provider == "openai" and not self.openai_api_key:
+                    raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai and LLM_MODE=live")
             if self.webhook_signature_bypass:
                 raise ValueError("WEBHOOK_SIGNATURE_BYPASS is not allowed in staging/production")
         return self
@@ -140,6 +150,27 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def chat_model(self) -> str:
+        if self.llm_provider == "gemini":
+            return self.gemini_model
+        return self.openai_model
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def embedding_model(self) -> str:
+        if self.llm_provider == "gemini":
+            return self.gemini_embedding_model
+        return self.openai_embedding_model
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def llm_api_key_configured(self) -> bool:
+        if self.llm_provider == "gemini":
+            return bool(self.gemini_api_key)
+        return bool(self.openai_api_key)
 
     @computed_field  # type: ignore[misc]
     @property

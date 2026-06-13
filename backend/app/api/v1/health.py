@@ -70,9 +70,11 @@ def _check_qdrant() -> dict[str, Any]:
 
 def _check_openai_config() -> dict[str, Any]:
     settings = get_settings()
-    if settings.openai_api_key:
-        return {"status": "ok"}
-    return {"status": "error", "detail": "OPENAI_API_KEY is not configured"}
+    if settings.llm_api_key_configured:
+        return {"status": "ok", "provider": settings.llm_provider}
+    provider = settings.llm_provider
+    key_name = "GEMINI_API_KEY" if provider == "gemini" else "OPENAI_API_KEY"
+    return {"status": "error", "detail": f"{key_name} is not configured", "provider": provider}
 
 
 def build_readiness_payload() -> tuple[str, dict[str, CheckStatus], bool]:

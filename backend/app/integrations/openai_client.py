@@ -35,15 +35,18 @@ class LiveOpenAIChatClient:
             raise RuntimeError("OPENAI_API_KEY is not configured")
 
         client = build_openai_client(self.settings)
-        response = client.chat.completions.create(
-            model=self.settings.openai_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.1,
-        )
+        try:
+            response = client.chat.completions.create(
+                model=self.settings.openai_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1,
+            )
+        except Exception as exc:  # normalize provider/API errors for graceful fallback
+            raise RuntimeError(f"OpenAI chat request failed: {exc}") from exc
         content = response.choices[0].message.content
         if not content:
             raise RuntimeError("OpenAI returned empty content")
@@ -59,10 +62,13 @@ class LiveOpenAIEmbeddingClient:
             raise RuntimeError("OPENAI_API_KEY is not configured")
 
         client = build_openai_client(self.settings)
-        response = client.embeddings.create(
-            model=self.settings.openai_embedding_model,
-            input=text,
-        )
+        try:
+            response = client.embeddings.create(
+                model=self.settings.openai_embedding_model,
+                input=text,
+            )
+        except Exception as exc:  # normalize provider/API errors for graceful fallback
+            raise RuntimeError(f"OpenAI embedding request failed: {exc}") from exc
         return response.data[0].embedding
 
 

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
@@ -84,70 +84,209 @@ function SimulatorMessagePreview({
   );
 }
 
+function humanizeToken(value: string | null | undefined): string {
+  if (!value) {
+    return '—';
+  }
+  const cleaned = value.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!cleaned) {
+    return '—';
+  }
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+type PillTone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
+
+function SimulationStatusPill({ tone, children }: { tone: PillTone; children: ReactNode }) {
+  return <span className={`status-pill status-pill--${tone}`}>{children}</span>;
+}
+
+type HandoffReason = {
+  label: string;
+  metric: number | null;
+  threshold: number | null;
+  raw: string;
+};
+
+function parseHandoffReasons(reason: string): HandoffReason[] {
+  return reason
+    .split(';')
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .map((segment) => {
+      const match = segment.match(/^([^:]+):\s*([\d.]+)\s*<\s*([\d.]+)\s*$/);
+      if (match) {
+        const metric = Number.parseFloat(match[2]);
+        const threshold = Number.parseFloat(match[3]);
+        return {
+          label: humanizeToken(match[1]),
+          metric: Number.isFinite(metric) ? metric : null,
+          threshold: Number.isFinite(threshold) ? threshold : null,
+          raw: segment,
+        };
+      }
+      return { label: humanizeToken(segment), metric: null, threshold: null, raw: segment };
+    });
+}
+
+function HandoffReasonPanel({ reason }: { reason: string }) {
+  const reasons = parseHandoffReasons(reason);
+
+  return (
+    <section className="handoff-panel" aria-label="Handoff required">
+      <div className="handoff-panel__header">
+        <span className="status-pill status-pill--danger">Handoff required</span>
+        <p className="handoff-panel__intro">
+          Auto-send was blocked because one or more confidence checks fell below their threshold.
+        </p>
+      </div>
+
+      <ul className="handoff-panel__list">
+        {reasons.map((item) => {
+          const hasScores = item.metric !== null && item.threshold !== null;
+          const pct =
+            hasScores && item.threshold ? Math.min(100, (item.metric! / item.threshold) * 100) : 0;
+          return (
+            <li className="handoff-reason" key={item.raw}>
+              <div className="handoff-reason__top">
+                <span className="handoff-reason__label">{item.label}</span>
+                {hasScores ? (
+                  <span className="handoff-reason__scores">
+                    <span className="handoff-reason__value">{item.metric!.toFixed(2)}</span>
+                    <span className="handoff-reason__divider">/</span>
+                    <span className="handoff-reason__threshold">{item.threshold!.toFixed(2)}</span>
+                  </span>
+                ) : null}
+              </div>
+              {hasScores ? (
+                <div
+                  className="handoff-reason__meter"
+                  role="meter"
+                  aria-valuenow={item.metric!}
+                  aria-valuemin={0}
+                  aria-valuemax={item.threshold!}
+                  aria-label={`${item.label}: ${item.metric!.toFixed(2)} of required ${item.threshold!.toFixed(2)}`}
+                >
+                  <span className="handoff-reason__meter-fill" style={{ width: `${pct}%` }} />
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function SimulationIdRow({
+  label,
+  value,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  onCopy: (value: string, label: string) => void;
+}) {
+  return (
+    <div className="simulation-result__id">
+      <dt>{label}</dt>
+      <dd>
+        <code className="simulation-result__id-value">{value}</code>
+        <button
+          type="button"
+          className="simulation-result__id-copy"
+          onClick={() => onCopy(value, label)}
+          aria-label={`Copy ${label}`}
+        >
+          Copy
+        </button>
+      </dd>
+    </div>
+  );
+}
+
 function SimulationResultPanel({ result }: { result: DMSimulatorResponse }) {
+  const { showToast } = useToast();
   const autoSendAllowed = Boolean(result.auto_send_decision?.auto_send_allowed);
   const requiresPreview = Boolean(result.auto_send_decision?.requires_preview);
-  const requiresHandoff = Boolean(result.auto_send_decision?.requires_handoff);
+  const requiresHandoff = Boolean(result.auto_send_decision?.requires_handoff) || Boolean(result.handoff_reason);
+  const isSimulation = result.is_simulation !== false;
 
-  async function copyReply() {
-    if (!result.suggested_reply) {
+  async function copyToClipboard(value: string, label: string) {
+    if (!value) {
       return;
     }
-    await navigator.clipboard.writeText(result.suggested_reply);
+    try {
+      await navigator.clipboard.writeText(value);
+      showToast(`${label} copied to clipboard.`, 'success');
+    } catch {
+      showToast(`Could not copy ${label}.`, 'error');
+    }
   }
 
   return (
-    <section className="dashboard-card dashboard-card--wide">
+    <section className="dashboard-card dashboard-card--wide simulation-result">
       <div className="section-header">
-        <h2>Simulation result</h2>
-        <span className="priority-badge priority-badge--medium">Simulation</span>
+        <div>
+          <h2>Simulation result</h2>
+          <p className="dashboard-card__subtitle">
+            Outcome from the orchestrator. Nothing was sent to any provider.
+          </p>
+        </div>
+        {isSimulation ? (
+          <span className="status-pill status-pill--accent">Simulation</span>
+        ) : null}
+      </div>
+
+      <div className="simulation-result__pills" role="list" aria-label="Send decision summary">
+        <SimulationStatusPill tone={autoSendAllowed ? 'success' : 'neutral'}>
+          {autoSendAllowed ? 'Auto-send allowed' : 'Auto-send blocked'}
+        </SimulationStatusPill>
+        <SimulationStatusPill tone={requiresPreview ? 'warning' : 'neutral'}>
+          {requiresPreview ? 'Preview required' : 'No preview needed'}
+        </SimulationStatusPill>
+        <SimulationStatusPill tone={requiresHandoff ? 'danger' : 'neutral'}>
+          {requiresHandoff ? 'Handoff required' : 'No handoff'}
+        </SimulationStatusPill>
       </div>
 
       <div className="stats-grid">
         <article className="stat-card">
           <p className="stat-card__label">Intent</p>
-          <p className="stat-card__value">{result.intent ?? '—'}</p>
+          <p className="stat-card__value">{humanizeToken(result.intent)}</p>
+          {result.intent ? <code className="stat-card__token">{result.intent}</code> : null}
         </article>
-        <article className="stat-card">
+        <article className={`stat-card${requiresHandoff ? ' stat-card--warning' : ''}`}>
           <p className="stat-card__label">Next state</p>
-          <p className="stat-card__value">{result.next_state}</p>
+          <p className="stat-card__value">{humanizeToken(result.next_state)}</p>
+          {result.next_state ? <code className="stat-card__token">{result.next_state}</code> : null}
         </article>
-        <article className="stat-card">
-          <p className="stat-card__label">Preview</p>
-          <p className="stat-card__value">{requiresPreview ? 'Required' : 'No'}</p>
+        <article className={`stat-card${autoSendAllowed ? ' stat-card--success' : ''}`}>
+          <p className="stat-card__label">Auto-send</p>
+          <p className="stat-card__value">{autoSendAllowed ? 'Allowed' : 'Blocked'}</p>
         </article>
-        <article className="stat-card">
+        <article className={`stat-card${requiresHandoff ? ' stat-card--warning' : ''}`}>
           <p className="stat-card__label">Handoff</p>
-          <p className="stat-card__value">{requiresHandoff || result.handoff_reason ? 'Yes' : 'No'}</p>
+          <p className="stat-card__value">{requiresHandoff ? 'Required' : 'No'}</p>
         </article>
       </div>
 
-      <dl className="detail-grid">
-        <div>
-          <dt>Conversation ID</dt>
-          <dd>{result.conversation_id}</dd>
-        </div>
-        <div>
-          <dt>Message ID</dt>
-          <dd>{result.message_id}</dd>
-        </div>
-        <div>
-          <dt>Auto-send allowed</dt>
-          <dd>{autoSendAllowed ? 'Yes' : 'No'}</dd>
-        </div>
-        {result.handoff_reason ? (
-          <div>
-            <dt>Handoff reason</dt>
-            <dd>{result.handoff_reason}</dd>
-          </div>
-        ) : null}
+      {result.handoff_reason ? <HandoffReasonPanel reason={result.handoff_reason} /> : null}
+
+      <dl className="detail-grid simulation-result__id-grid">
+        <SimulationIdRow label="Conversation ID" value={result.conversation_id} onCopy={copyToClipboard} />
+        <SimulationIdRow label="Message ID" value={result.message_id} onCopy={copyToClipboard} />
       </dl>
 
       <div className="match-panel simulator-reply-panel">
         <div className="section-header">
           <h3>Suggested reply</h3>
           {result.suggested_reply ? (
-            <button className="button button--ghost-dark" type="button" onClick={() => void copyReply()}>
+            <button
+              className="button button--ghost-dark"
+              type="button"
+              onClick={() => void copyToClipboard(result.suggested_reply ?? '', 'Suggested reply')}
+            >
               Copy reply
             </button>
           ) : null}
@@ -178,24 +317,6 @@ function SimulationResultPanel({ result }: { result: DMSimulatorResponse }) {
           Open simulation conversation
         </Link>
       </div>
-
-      <details className="match-panel resolver-raw-details">
-        <summary>Decision trace & resolution details</summary>
-        <pre className="resolver-raw-json">
-          {JSON.stringify(
-            {
-              decision_trace: result.decision_trace,
-              slots: result.extracted_slots,
-              product: result.product_resolution,
-              variant: result.variant_resolution,
-              inventory: result.inventory_result,
-              auto_send_decision: result.auto_send_decision,
-            },
-            null,
-            2,
-          )}
-        </pre>
-      </details>
     </section>
   );
 }

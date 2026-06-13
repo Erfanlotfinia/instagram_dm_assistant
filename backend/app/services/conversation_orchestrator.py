@@ -20,7 +20,8 @@ from app.domain.enums import (
     TraceEventType,
 )
 from app.domain.models import AgentAction, AgentDecisionAudit, AgentDecisionTrace, AgentRun, Conversation, Message, Order, Product, ProductVariant, ShopAgentSettings
-from app.integrations.openai_client import LiveOpenAIChatClient, OpenAIChatClient
+from app.integrations.llm_client import build_chat_client, build_embedding_client
+from app.integrations.openai_client import OpenAIChatClient
 from app.integrations.qdrant_client import LiveQdrantClient, QdrantClient
 from app.repositories.agent_action_repository import AgentActionRepository
 from app.repositories.agent_run_repository import AgentRunRepository
@@ -97,12 +98,7 @@ class ConversationOrchestrator:
         self.allow_simulated_order_side_effects = allow_simulated_order_side_effects
 
         if chat_client is None:
-            if self.settings.llm_mode == "mock":
-                from app.integrations.openai_client import MockOpenAIChatClient
-
-                chat_client = MockOpenAIChatClient()
-            else:
-                chat_client = LiveOpenAIChatClient(self.settings)
+            chat_client = build_chat_client(self.settings)
         if qdrant_client is None:
             if self.settings.llm_mode == "mock":
                 from app.integrations.qdrant_client import MockQdrantClient
@@ -112,11 +108,12 @@ class ConversationOrchestrator:
                 qdrant_client = LiveQdrantClient(self.settings)
         self.llm_service = llm_service or LLMExtractionService(chat_client, self.settings)
         if semantic_search is None:
-            embedding_client = None
             if self.settings.llm_mode == "mock":
                 from app.integrations.openai_client import MockOpenAIEmbeddingClient
 
                 embedding_client = MockOpenAIEmbeddingClient()
+            else:
+                embedding_client = build_embedding_client(self.settings)
             self.semantic_search = ProductSemanticSearchService(
                 db,
                 qdrant_client=qdrant_client,
