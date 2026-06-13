@@ -23,6 +23,7 @@ class VariantAlternative(BaseModel):
     size: str | None = None
     normalized_color: str | None = None
     normalized_size: str | None = None
+    normalized_attributes: dict[str, str] = Field(default_factory=dict)
     available_stock: int
     reason: str
 
@@ -31,6 +32,7 @@ class VariantResolverRequest(BaseModel):
     product_id: UUID
     raw_color: str | None = None
     raw_size: str | None = None
+    raw_requested_attributes: dict[str, str | None] = Field(default_factory=dict)
     quantity: int = Field(default=1, ge=1)
 
 
@@ -40,6 +42,7 @@ class VariantResolverResult(BaseModel):
     sku: str | None = None
     normalized_color: str | None = None
     normalized_size: str | None = None
+    normalized_attributes: dict[str, str] = Field(default_factory=dict)
     color_confidence: float = 0.0
     size_confidence: float = 0.0
     confidence: float = 0.0

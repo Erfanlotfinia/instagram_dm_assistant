@@ -570,7 +570,7 @@ cd backend && pytest app/tests/test_trl_validation.py app/tests/test_pilot_readi
 - [Operator guide](docs/operator-guide.md)
 - [Troubleshooting](docs/troubleshooting.md)
 
-## Multi-channel Fashion Order OS
+## Multi-channel Catalog Commerce Assistant
 
 The application uses one channel-agnostic commerce/order engine with provider adapters for Instagram, WhatsApp Business Platform, Telegram Bot API, Bale Bot API, and Rubika Bot API. Provider adapters normalize inbound updates and send outbound messages; deterministic backend services own product resolution, inventory, payment, shipping, and order state transitions.
 
@@ -591,3 +591,11 @@ docker compose up -d
 ### Provider verification note
 
 WhatsApp, Telegram, Bale, and Rubika are implemented with mocked tests; real-provider sandbox verification still required before production. Do not configure production without encrypted credentials, webhook secrets where supported, and emergency-stop procedures.
+
+## Catalog Commerce Assistant positioning
+
+This repository is now positioned as a **Multi-channel Catalog Commerce Assistant** for online shops across Instagram, WhatsApp, Telegram, Bale, and Rubika. The assistant helps shops answer customer questions, identify products, resolve catalog attributes and variants/options, check stock, draft orders, collect customer details, support payment and shipping flows, hand off risky cases, and analyze conversations and sales.
+
+Fashion and clothing support is preserved as a category preset under the generic catalog intelligence system. Existing color/size flows continue to work through compatibility APIs, while new catalog attributes can model electronics, cosmetics, home goods, food, books/media, digital products, and general product shops.
+
+See the catalog documentation for the generic data model, category presets, attribute dictionary, product import, catalog quality checks, and generic resolver behavior.
