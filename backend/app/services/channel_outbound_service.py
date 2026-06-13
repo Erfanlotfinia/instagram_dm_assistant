@@ -16,6 +16,27 @@ class ChannelOutboundService:
         self.db = db
         self.policy = ChannelPolicyService()
 
+    @staticmethod
+    def _result_from_existing(
+        message: NormalizedOutboundMessage, existing: ChannelMessage
+    ) -> ProviderSendResult:
+        if existing.external_message_id:
+            return ProviderSendResult(
+                provider=message.provider,
+                success=True,
+                external_message_id=existing.external_message_id,
+                raw_response=existing.raw_payload_json,
+            )
+        return ProviderSendResult(
+            provider=message.provider,
+            success=False,
+            raw_response=existing.raw_payload_json,
+            error_code="outbound_send_in_flight",
+            error_message=(
+                "An outbound message with this idempotency key is already pending"
+            ),
+        )
+
     async def send(self, message: NormalizedOutboundMessage) -> ProviderSendResult:
         idempotency_key = message.metadata.get(
             "idempotency_key",
@@ -28,13 +49,8 @@ class ChannelOutboundService:
                 ChannelMessage.idempotency_key == idempotency_key,
             )
         )
-        if existing and existing.external_message_id:
-            return ProviderSendResult(
-                provider=message.provider,
-                success=True,
-                external_message_id=existing.external_message_id,
-                raw_response=existing.raw_payload_json,
-            )
+        if existing:
+            return self._result_from_existing(message, existing)
         conversation_window = None
         if message.metadata.get("conversation_id"):
             channel_conversation = self.db.scalar(
@@ -103,14 +119,12 @@ class ChannelOutboundService:
                         ChannelMessage.idempotency_key == idempotency_key,
                     )
                 )
+                if duplicate:
+                    return self._result_from_existing(message, duplicate)
                 return ProviderSendResult(
                     provider=message.provider,
-                    success=bool(duplicate and duplicate.external_message_id),
-                    external_message_id=(
-                        duplicate.external_message_id if duplicate else None
-                    ),
-                    raw_response=duplicate.raw_payload_json if duplicate else None,
-                    error_code=None if duplicate else "duplicate_outbound",
+                    success=False,
+                    error_code="duplicate_outbound",
                 )
         if channel_message.is_simulation:
             return ProviderSendResult(
