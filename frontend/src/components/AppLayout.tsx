@@ -40,6 +40,11 @@ const navGroups: NavGroup[] = [
     label: 'Automation',
     items: [
       { to: '/agent-studio', label: 'Agent Studio', icon: 'cpu' },
+      { to: '/scenario-coverage', label: 'Scenario Coverage', icon: 'clipboard' },
+      { to: '/automation-rules', label: 'Automation Rules', icon: 'sliders' },
+      { to: '/admin-ai-tasks', label: 'Admin AI Tasks', icon: 'sparkles' },
+      { to: '/operator-corrections', label: 'Operator Corrections', icon: 'message' },
+      { to: '/automation-suggestions', label: 'Automation Suggestions', icon: 'zap' },
       { to: '/triggers', label: 'Trigger Rules', icon: 'zap' },
       { to: '/recovery-rules', label: 'Recovery Rules', icon: 'refresh' },
       { to: '/upsell-rules', label: 'Upsell Rules', icon: 'trending-up' },
@@ -51,6 +56,7 @@ const navGroups: NavGroup[] = [
     defaultCollapsed: true,
     items: [
       { to: '/simulator', label: 'DM Simulator', icon: 'play' },
+      { to: '/scenario-simulator', label: 'Scenario Simulator', icon: 'play' },
       { to: '/onboarding', label: 'Onboarding', icon: 'rocket' },
       { to: '/pilot-control', label: 'Pilot Control', icon: 'compass' },
       { to: '/pilot-readiness', label: 'Pilot Readiness', icon: 'check-circle' },

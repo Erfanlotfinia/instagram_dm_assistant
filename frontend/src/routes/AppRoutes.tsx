@@ -39,6 +39,7 @@ import { TRLValidationPage } from '../pages/TRLValidationPage';
 import { UnavailableDemandPage } from '../pages/UnavailableDemandPage';
 import { VariantResolverPage } from '../pages/VariantResolverPage';
 import { ShopsPage } from '../pages/ShopsPage';
+import { AdminAITasksPage, AutomationRulesPage, AutomationSuggestionsPage, OperatorCorrectionsPage, ScenarioCoveragePage, ScenarioSimulatorPage } from '../pages/SocialAdminPages';
 
 function AuthenticatedShell({ children }: { children: ReactNode }) {
   return (
@@ -322,6 +323,13 @@ export function AppRoutes() {
           </AuthenticatedShell>
         }
       />
+
+      <Route path="/scenario-coverage" element={<AuthenticatedShell><ScenarioCoveragePage /></AuthenticatedShell>} />
+      <Route path="/automation-rules" element={<AuthenticatedShell><AutomationRulesPage /></AuthenticatedShell>} />
+      <Route path="/scenario-simulator" element={<AuthenticatedShell><ScenarioSimulatorPage /></AuthenticatedShell>} />
+      <Route path="/admin-ai-tasks" element={<AuthenticatedShell><AdminAITasksPage /></AuthenticatedShell>} />
+      <Route path="/operator-corrections" element={<AuthenticatedShell><OperatorCorrectionsPage /></AuthenticatedShell>} />
+      <Route path="/automation-suggestions" element={<AuthenticatedShell><AutomationSuggestionsPage /></AuthenticatedShell>} />
       <Route
         path="/settings"
         element={

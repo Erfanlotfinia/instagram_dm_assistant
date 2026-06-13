@@ -2089,3 +2089,78 @@ class IncidentEvent(Base):
 
     incident: Mapped[Incident] = relationship(back_populates="events")
     actor_user: Mapped[User | None] = relationship()
+
+class ConversationContextItem(Base):
+    __tablename__ = "conversation_context_items"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    conversation_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    channel_account_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    item_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source_message_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True)
+    external_reference_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    external_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    media_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    candidate_product_ids_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    selected_product_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
+    selected_variant_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("product_variants.id", ondelete="SET NULL"), nullable=True, index=True)
+    attributes_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    confidence: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False, default=1)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class ConversationReferenceLink(Base):
+    __tablename__ = "conversation_reference_links"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    conversation_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_message_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    to_context_item_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversation_context_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    relation_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    confidence: Mapped[float] = mapped_column(Numeric(5, 4), nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class AdminTask(Base, TimestampMixin):
+    __tablename__ = "admin_tasks"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    requested_by_user_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    task_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    input_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    output_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    requires_approval: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    approved_by_user_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+
+
+class OperatorCorrection(Base):
+    __tablename__ = "operator_corrections"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    conversation_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    message_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True)
+    correction_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    before_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    after_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    operator_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class AutomationRuleSuggestion(Base):
+    __tablename__ = "automation_rule_suggestions"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_correction_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("operator_corrections.id", ondelete="SET NULL"), nullable=True, index=True)
+    suggested_rule_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
