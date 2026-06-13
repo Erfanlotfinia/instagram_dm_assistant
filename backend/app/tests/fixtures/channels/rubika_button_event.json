@@ -1,0 +1,9 @@
+{
+  "receiveUpdate": {
+    "update_id": 3003,
+    "message_id": "rubika-button-1",
+    "chat_id": "rubika-chat-1",
+    "sender_id": "rubika-user-1",
+    "button": {"id": "buy:sku-1", "text": "خرید"}
+  }
+}

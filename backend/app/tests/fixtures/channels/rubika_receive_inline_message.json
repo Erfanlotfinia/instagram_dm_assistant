@@ -1,0 +1,9 @@
+{
+  "receiveInlineMessage": {
+    "update_id": 3002,
+    "message_id": "rubika-inline-1",
+    "chat_id": "rubika-chat-1",
+    "sender_id": "rubika-user-1",
+    "text": "انتخاب شد"
+  }
+}

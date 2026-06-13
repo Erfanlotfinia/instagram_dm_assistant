@@ -672,10 +672,37 @@ class BaleProviderAdapter(TelegramProviderAdapter):
     provider = ChannelProvider.BALE
     api_base = "https://tapi.bale.ai"
 
+    def __init__(
+        self,
+        bot_token: str | None = None,
+        webhook_secret: str | None = None,
+        local_base_url: str | None = None,
+    ) -> None:
+        super().__init__(
+            bot_token=bot_token,
+            webhook_secret=webhook_secret,
+            local_base_url=local_base_url,
+        )
+
 
 class RubikaProviderAdapter(TelegramProviderAdapter):
     provider = ChannelProvider.RUBIKA
-    api_base = "https://botapi.rubika.ir"
+    api_base = "https://botapi.rubika.ir/v3"
+
+    def __init__(
+        self,
+        bot_token: str | None = None,
+        webhook_secret: str | None = None,
+        local_base_url: str | None = None,
+    ) -> None:
+        super().__init__(
+            bot_token=bot_token,
+            webhook_secret=webhook_secret,
+            local_base_url=local_base_url,
+        )
+
+    def _method_url(self, method: str) -> str:
+        return f"{self.api_base}/{self.token}/{method}"
 
     def parse_inbound_update(
         self, payload: dict[str, Any], headers: dict[str, str] | None = None
@@ -686,8 +713,11 @@ class RubikaProviderAdapter(TelegramProviderAdapter):
             or payload.get("update")
             or payload
         )
-        if "message" in update or "update_id" in update:
+        if "message" in update or "callback_query" in update:
             return super().parse_inbound_update(update, headers)
+        button = update.get("button") or update.get("button_event") or {}
+        text = update.get("text") or button.get("text") or button.get("title")
+        button_id = button.get("id") or button.get("button_id") or update.get("button_id")
         chat_id = str(
             update.get("chat_id")
             or update.get("chat", {}).get("id")
@@ -709,11 +739,39 @@ class RubikaProviderAdapter(TelegramProviderAdapter):
                 external_chat_id=chat_id,
                 external_user_id=user_id,
                 message_type=(
-                    ChannelMessageType.TEXT
-                    if update.get("text")
+                    ChannelMessageType.BUTTON_CALLBACK
+                    if button_id
+                    else ChannelMessageType.TEXT
+                    if text
                     else ChannelMessageType.UNKNOWN
                 ),
-                text=update.get("text"),
+                text=text,
+                button_id=button_id,
+                button_text=button.get("text") or button.get("title"),
                 raw_payload=payload,
             )
         ]
+
+    async def send_message(
+        self, message: NormalizedOutboundMessage
+    ) -> ProviderSendResult:
+        payload: dict[str, Any] = {
+            "chat_id": message.external_chat_id,
+            "text": message.text or "",
+        }
+        if message.buttons:
+            payload["inline_keypad"] = {
+                "rows": [
+                    {
+                        "buttons": [
+                            {
+                                "id": button.id,
+                                "type": "Simple",
+                                "button_text": button.text,
+                            }
+                        ]
+                    }
+                    for button in message.buttons
+                ]
+            }
+        return await self._post_method("sendMessage", payload)

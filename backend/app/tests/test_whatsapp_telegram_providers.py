@@ -8,7 +8,12 @@ from uuid import UUID
 import httpx
 import pytest
 
-from app.channels.adapters import TelegramProviderAdapter, WhatsAppProviderAdapter
+from app.channels.adapters import (
+    BaleProviderAdapter,
+    RubikaProviderAdapter,
+    TelegramProviderAdapter,
+    WhatsAppProviderAdapter,
+)
 from app.domain.enums import ChannelMessageType, ChannelProvider
 from app.schemas.channels import MediaItem, NormalizedOutboundMessage
 from app.services.channel_policy_service import ChannelPolicyService
@@ -151,6 +156,40 @@ def test_telegram_callback_query_normalization() -> None:
     assert message.button_id == "buy:sku-1"
 
 
+def test_bale_text_and_callback_normalization() -> None:
+    text = BaleProviderAdapter().parse_inbound_update(load_fixture("bale_text.json"))[0]
+    callback = BaleProviderAdapter().parse_inbound_update(
+        load_fixture("bale_callback_query.json")
+    )[0]
+
+    assert text.provider == ChannelProvider.BALE
+    assert text.external_update_id == "2001"
+    assert text.external_message_id == "51"
+    assert text.text == "سلام"
+    assert callback.message_type == ChannelMessageType.BUTTON_CALLBACK
+    assert callback.external_message_id == "bale-cb-1"
+    assert callback.button_id == "buy:sku-1"
+
+
+def test_rubika_receive_update_inline_and_button_normalization() -> None:
+    text = RubikaProviderAdapter().parse_inbound_update(
+        load_fixture("rubika_receive_update_text.json")
+    )[0]
+    inline = RubikaProviderAdapter().parse_inbound_update(
+        load_fixture("rubika_receive_inline_message.json")
+    )[0]
+    button = RubikaProviderAdapter().parse_inbound_update(
+        load_fixture("rubika_button_event.json")
+    )[0]
+
+    assert text.provider == ChannelProvider.RUBIKA
+    assert text.external_update_id == "3001"
+    assert text.external_message_id == "rubika-msg-1"
+    assert inline.text == "انتخاب شد"
+    assert button.message_type == ChannelMessageType.BUTTON_CALLBACK
+    assert button.button_id == "buy:sku-1"
+
+
 @pytest.mark.anyio
 async def test_telegram_send_message_success_and_callback_answer(
     monkeypatch: pytest.MonkeyPatch,
@@ -198,6 +237,51 @@ async def test_telegram_send_message_success_and_callback_answer(
     assert callback.success is True
     assert any("sendMessage" in call for call in calls)
     assert any("answerCallbackQuery" in call for call in calls)
+
+
+@pytest.mark.anyio
+async def test_bale_and_rubika_endpoint_generation_and_rubika_keypad(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+    payloads = []
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, **kwargs):
+            calls.append(str(url))
+            payloads.append(kwargs.get("json"))
+            return httpx.Response(200, json={"ok": True, "result": {"message_id": 101}})
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+    await BaleProviderAdapter("bale-token").send_message(
+        NormalizedOutboundMessage(
+            provider=ChannelProvider.BALE,
+            channel_account_id="00000000-0000-0000-0000-000000000000",
+            external_chat_id="777",
+            text="Hi",
+        )
+    )
+    await RubikaProviderAdapter("rubika-token").send_message(
+        NormalizedOutboundMessage(
+            provider=ChannelProvider.RUBIKA,
+            channel_account_id="00000000-0000-0000-0000-000000000000",
+            external_chat_id="777",
+            text="Hi",
+            buttons=[{"id": "buy", "text": "Buy"}],
+        )
+    )
+    assert calls[0] == "https://tapi.bale.ai/botbale-token/sendMessage"
+    assert calls[1] == "https://botapi.rubika.ir/v3/rubika-token/sendMessage"
+    assert payloads[1]["inline_keypad"]["rows"][0]["buttons"][0]["id"] == "buy"
 
 
 def test_token_masking() -> None:

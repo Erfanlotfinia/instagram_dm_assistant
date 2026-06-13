@@ -1,0 +1,9 @@
+{
+  "receiveUpdate": {
+    "update_id": 3001,
+    "message_id": "rubika-msg-1",
+    "chat_id": "rubika-chat-1",
+    "sender_id": "rubika-user-1",
+    "text": "سلام"
+  }
+}

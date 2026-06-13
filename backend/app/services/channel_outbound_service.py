@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.enums import MessageDirection
-from app.domain.models import ChannelAccount, ChannelConversation, ChannelMessage
+from app.domain.enums import FailedJobStatus, MessageDirection
+from app.domain.models import ChannelAccount, ChannelConversation, ChannelMessage, FailedJob
 from app.schemas.channels import NormalizedOutboundMessage, ProviderSendResult
 from app.services.channel_account_service import adapter_for_provider
 from app.services.channel_policy_service import ChannelPolicyService
@@ -15,7 +16,41 @@ class ChannelOutboundService:
         self.db = db
         self.policy = ChannelPolicyService()
 
+    @staticmethod
+    def _result_from_existing(
+        message: NormalizedOutboundMessage, existing: ChannelMessage
+    ) -> ProviderSendResult:
+        if existing.external_message_id:
+            return ProviderSendResult(
+                provider=message.provider,
+                success=True,
+                external_message_id=existing.external_message_id,
+                raw_response=existing.raw_payload_json,
+            )
+        return ProviderSendResult(
+            provider=message.provider,
+            success=False,
+            raw_response=existing.raw_payload_json,
+            error_code="outbound_send_in_flight",
+            error_message=(
+                "An outbound message with this idempotency key is already pending"
+            ),
+        )
+
     async def send(self, message: NormalizedOutboundMessage) -> ProviderSendResult:
+        idempotency_key = message.metadata.get(
+            "idempotency_key",
+            f"outbound:{message.channel_account_id}:{message.external_chat_id}:{message.text}",
+        )
+        existing = self.db.scalar(
+            select(ChannelMessage).where(
+                ChannelMessage.channel_account_id == message.channel_account_id,
+                ChannelMessage.direction == MessageDirection.OUTBOUND,
+                ChannelMessage.idempotency_key == idempotency_key,
+            )
+        )
+        if existing:
+            return self._result_from_existing(message, existing)
         conversation_window = None
         if message.metadata.get("conversation_id"):
             channel_conversation = self.db.scalar(
@@ -47,7 +82,7 @@ class ChannelOutboundService:
                 error_code="channel_account_not_found",
                 error_message="Channel account not found",
             )
-        channel_message = ChannelMessage(
+        channel_message = existing or ChannelMessage(
             shop_id=account.shop_id,
             provider=message.provider,
             channel_account_id=account.id,
@@ -61,10 +96,7 @@ class ChannelOutboundService:
             interactive_json={"buttons": [b.model_dump() for b in message.buttons]},
             raw_payload_json={},
             normalized_payload_json=message.model_dump(mode="json"),
-            idempotency_key=message.metadata.get(
-                "idempotency_key",
-                f"outbound:{message.channel_account_id}:{message.external_chat_id}:{message.text}",
-            ),
+            idempotency_key=idempotency_key,
             is_simulation=bool(message.metadata.get("is_simulation", False)),
         )
         if not channel_message.conversation_id:
@@ -74,8 +106,26 @@ class ChannelOutboundService:
                 error_code="conversation_required",
                 error_message="conversation_id metadata is required",
             )
-        self.db.add(channel_message)
-        self.db.commit()
+        if existing is None:
+            self.db.add(channel_message)
+            try:
+                self.db.commit()
+            except IntegrityError:
+                self.db.rollback()
+                duplicate = self.db.scalar(
+                    select(ChannelMessage).where(
+                        ChannelMessage.channel_account_id == message.channel_account_id,
+                        ChannelMessage.direction == MessageDirection.OUTBOUND,
+                        ChannelMessage.idempotency_key == idempotency_key,
+                    )
+                )
+                if duplicate:
+                    return self._result_from_existing(message, duplicate)
+                return ProviderSendResult(
+                    provider=message.provider,
+                    success=False,
+                    error_code="duplicate_outbound",
+                )
         if channel_message.is_simulation:
             return ProviderSendResult(
                 provider=message.provider,
@@ -87,5 +137,22 @@ class ChannelOutboundService:
         )
         channel_message.external_message_id = result.external_message_id
         channel_message.raw_payload_json = result.raw_response or {}
+        if not result.success:
+            self.db.add(
+                FailedJob(
+                    shop_id=account.shop_id,
+                    queue_name="channel_outbound",
+                    job_type=f"{message.provider.value}.send_message",
+                    payload={
+                        "channel_message_id": str(channel_message.id),
+                        "channel_account_id": str(account.id),
+                        "provider": message.provider.value,
+                        "external_chat_id": message.external_chat_id,
+                        "idempotency_key": idempotency_key,
+                    },
+                    error_message=result.error_message or result.error_code,
+                    status=FailedJobStatus.FAILED,
+                )
+            )
         self.db.commit()
         return result
