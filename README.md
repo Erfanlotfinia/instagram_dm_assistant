@@ -569,3 +569,25 @@ cd backend && pytest app/tests/test_trl_validation.py app/tests/test_pilot_readi
 - [Meta webhook setup](docs/meta-webhook-setup.md)
 - [Operator guide](docs/operator-guide.md)
 - [Troubleshooting](docs/troubleshooting.md)
+
+## Multi-channel Fashion Order OS
+
+The application uses one channel-agnostic commerce/order engine with provider adapters for Instagram, WhatsApp Business Platform, Telegram Bot API, Bale Bot API, and Rubika Bot API. Provider adapters normalize inbound updates and send outbound messages; deterministic backend services own product resolution, inventory, payment, shipping, and order state transitions.
+
+### Multi-channel verification commands
+
+```bash
+cd backend && pytest -q
+cd backend && alembic upgrade head
+cd frontend && npm run typecheck
+cd frontend && npm run lint
+cd frontend && npm run test
+cd frontend && npm run build
+docker compose config
+docker compose build
+docker compose up -d
+```
+
+### Provider verification note
+
+WhatsApp, Telegram, Bale, and Rubika are implemented with mocked tests; real-provider sandbox verification still required before production. Do not configure production without encrypted credentials, webhook secrets where supported, and emergency-stop procedures.

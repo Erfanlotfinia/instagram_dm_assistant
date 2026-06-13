@@ -1,0 +1,10 @@
+{
+  "update_id": 2001,
+  "message": {
+    "message_id": 51,
+    "date": 1710000000,
+    "chat": {"id": 8001, "type": "private"},
+    "from": {"id": 8001, "first_name": "Bale User", "username": "bale_user"},
+    "text": "سلام"
+  }
+}

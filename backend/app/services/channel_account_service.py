@@ -50,8 +50,24 @@ def adapter_for_provider(
                 else None
             ),
         ),
-        ChannelProvider.BALE: BaleProviderAdapter(),
-        ChannelProvider.RUBIKA: RubikaProviderAdapter(),
+        ChannelProvider.BALE: BaleProviderAdapter(
+            bot_token=bot_token,
+            webhook_secret=account.webhook_secret if account else None,
+            local_base_url=(
+                (account.settings_json or {}).get("local_bot_api_base_url")
+                if account
+                else None
+            ),
+        ),
+        ChannelProvider.RUBIKA: RubikaProviderAdapter(
+            bot_token=bot_token,
+            webhook_secret=account.webhook_secret if account else None,
+            local_base_url=(
+                (account.settings_json or {}).get("local_bot_api_base_url")
+                if account
+                else None
+            ),
+        ),
     }[provider]
 
 
