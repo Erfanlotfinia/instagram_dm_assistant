@@ -220,11 +220,26 @@ class ConversationOrchestrator:
             inventory_available = check_inventory(variant, slots.quantity)
 
         live_agent_settings = resolve_live_agent_settings(conversation.shop)
+        # Missing or unavailable variants are recoverable: the agent should ask the
+        # customer for the missing detail or offer alternatives (WAITING_FOR_VARIANT),
+        # not escalate to a human. Only flag a true mismatch when the customer supplied
+        # both color and size yet the requested combination is genuinely unresolvable.
+        real_variant_mismatch = bool(
+            variant_result
+            and slots.color
+            and slots.size
+            and [
+                reason
+                for reason in variant_result.mismatch_reasons
+                if not reason.startswith("missing_")
+            ]
+            and not variant_result.available_alternatives
+        )
         handoff = evaluate_handoff(
             extraction,
             failure_count=conversation.agent_failure_count,
             settings=self.settings,
-            variant_mismatch=bool(variant_result and variant_result.mismatch_reasons),
+            variant_mismatch=real_variant_mismatch,
             order_total=None,
             shop_settings=live_agent_settings,
         )
@@ -783,8 +798,25 @@ class ConversationOrchestrator:
 
     @staticmethod
     def _is_payment_related(text: str | None) -> bool:
+        """Detect payment *problems/disputes*, which warrant escalation.
+
+        A bare mention of payment (e.g. "send the payment link" while confirming an
+        order) is a normal request to proceed, not a dispute, so it must not trigger a
+        payment-dispute handoff.
+        """
         lowered = (text or "").lower()
-        return any(term in lowered for term in ("payment", "charged", "refund", "پرداخت", "پول"))
+        dispute_terms = (
+            "payment failed", "charged twice", "charged", "refund", "chargeback",
+            "پول کم شد", "پرداخت نشد", "پرداخت کردم", "مغایرت",
+        )
+        if any(term in lowered for term in dispute_terms):
+            return True
+        has_payment = any(term in lowered for term in ("payment", "پرداخت", "پول"))
+        has_problem = any(
+            term in lowered
+            for term in ("fail", "problem", "issue", "wrong", "مشکل", "خطا", "اشتباه", "کم شد", "نشد")
+        )
+        return has_payment and has_problem
 
     @staticmethod
     def _is_complaint(text: str | None) -> bool:

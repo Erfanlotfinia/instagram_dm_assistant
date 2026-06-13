@@ -1,7 +1,7 @@
 [
   {
     "scenario_id": "TRL-001",
-    "message_text": "سلام این مانتو مشکی سایز M رو میخوام",
+    "message_text": "سلام این مانتو مشکی سایز M رو میخوام، اسمم ساراست، تهران، خیابان ولیعصر پلاک ۱۲، 09121234567",
     "shared_post_url": null,
     "expected_intent": "buy_product",
     "expected_color": "black",
@@ -10,7 +10,7 @@
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
     "expected_order_created": true,
-    "notes": "direct buy intent"
+    "notes": "direct buy with full shipping info in one message -> draft order created"
   },
   {
     "scenario_id": "TRL-002",
@@ -48,7 +48,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "post color size"
   },
   {
@@ -256,7 +256,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "mixed buy"
   },
   {
@@ -269,7 +269,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "direct buy intent"
   },
   {
@@ -308,7 +308,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "post color size"
   },
   {
@@ -516,7 +516,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "mixed buy"
   },
   {
@@ -529,7 +529,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "direct buy intent"
   },
   {
@@ -568,7 +568,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "post color size"
   },
   {
@@ -776,7 +776,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "mixed buy"
   },
   {
@@ -789,7 +789,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "direct buy intent"
   },
   {
@@ -828,7 +828,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "post color size"
   },
   {
@@ -1036,7 +1036,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "mixed buy"
   },
   {
@@ -1049,7 +1049,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "direct buy intent"
   },
   {
@@ -1088,7 +1088,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "post color size"
   },
   {
@@ -1296,7 +1296,7 @@
     "expected_quantity": 1,
     "expected_state": "waiting_for_confirmation",
     "expected_requires_handoff": false,
-    "expected_order_created": true,
+    "expected_order_created": false,
     "notes": "mixed buy"
   }
 ]

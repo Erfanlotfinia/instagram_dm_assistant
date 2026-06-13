@@ -317,12 +317,9 @@ class PilotService:
         inventory_verified = self.db.scalar(select(InventoryMovement.id).join(ProductVariant).join(Product).where(Product.shop_id == shop_id, InventoryMovement.created_at >= _now() - timedelta(hours=24)).limit(1)) is not None
         payment_mode = bool(agent_settings and (agent_settings.risk_policy_json or agent_settings.discount_policy_json is not None))
         audit_logging = self.db.scalar(select(AdminAuditLog.id).where(AdminAuditLog.shop_id == shop_id).limit(1)) is not None
-        latest_metrics = (latest.metrics_json or {}) if latest else {}
-        thresholds_passed = latest_metrics.get("thresholds_passed") or {}
-        latest_ok = bool(latest and latest.status == "passed" and thresholds_passed)
-        thresholds_ok = latest_ok and all(bool(v) for v in thresholds_passed.values())
+        thresholds_ok = self._validation_passed(latest)
         return [
-            PilotReadinessCriterion(key="latest_trl_validation", label="Latest TRL validation run passed thresholds", passed=thresholds_ok, detail=latest.status if latest else "No run"),
+            PilotReadinessCriterion(key="latest_trl_validation", label="Latest TRL validation run passed thresholds", passed=thresholds_ok, detail=self._validation_detail(latest)),
             PilotReadinessCriterion(key="no_critical_failed_jobs", label="No critical failed jobs", passed=failed_critical == 0, detail=f"{failed_critical} critical failed jobs"),
             PilotReadinessCriterion(key="ready_endpoint", label="/ready is ok", passed=all_ready and readiness_status == "ok", detail=readiness_status),
             PilotReadinessCriterion(key="operator_assigned", label="Operator assigned", passed=operator_assigned),
@@ -339,17 +336,21 @@ class PilotService:
         active_products = int(self.db.scalar(select(func.count(Product.id)).where(Product.shop_id == shop_id, Product.status == ProductStatus.ACTIVE)) or 0)
         active_variants = int(self.db.scalar(select(func.count(ProductVariant.id)).join(Product).where(Product.shop_id == shop_id, ProductVariant.is_active.is_(True))) or 0)
         agent_settings = self.db.get(ShopAgentSettings, shop_id)
+        inventory_verified = self.db.scalar(select(InventoryMovement.id).join(ProductVariant).join(Product).where(Product.shop_id == shop_id, InventoryMovement.created_at >= _now() - timedelta(hours=24)).limit(1)) is not None
+        payment_mode = bool(agent_settings and (agent_settings.risk_policy_json or agent_settings.discount_policy_json is not None))
+        operator_assigned = self.db.scalar(select(ShopMember.id).where(ShopMember.shop_id == shop_id, ShopMember.role.in_([UserRole.OWNER, UserRole.ADMIN, UserRole.OPERATOR])).limit(1)) is not None
+        emergency_tested = self.db.scalar(select(PilotEvent.id).where(PilotEvent.shop_id == shop_id, PilotEvent.event_type == "emergency_stop").limit(1)) is not None
         return [
             PilotChecklistItem(key="instagram_webhook_connected", label="Instagram webhook connected", passed=account_connected),
-            PilotChecklistItem(key="latest_trl_validation_passed", label="Latest TRL validation passed", passed=bool(latest and latest.status == "passed")),
+            PilotChecklistItem(key="latest_trl_validation_passed", label="Latest TRL validation passed", passed=self._validation_passed(latest)),
             PilotChecklistItem(key="demo_data_removed_or_isolated", label="Demo data removed or isolated", passed=True, detail="Simulation rows are marked with is_simulation."),
             PilotChecklistItem(key="real_products_configured", label="Real products configured", passed=active_products > 0, detail=f"{active_products} active products"),
             PilotChecklistItem(key="real_variants_configured", label="Real variants configured", passed=active_variants > 0, detail=f"{active_variants} active variants"),
-            PilotChecklistItem(key="inventory_verified", label="Inventory verified", passed=self._criteria(shop_id, latest, "", False, 0)[7].passed),
-            PilotChecklistItem(key="payment_mode_configured", label="Payment mode configured", passed=bool(agent_settings)),
-            PilotChecklistItem(key="operator_assigned", label="Operator assigned", passed=self.db.scalar(select(ShopMember.id).where(ShopMember.shop_id == shop_id).limit(1)) is not None),
+            PilotChecklistItem(key="inventory_verified", label="Inventory verified", passed=inventory_verified),
+            PilotChecklistItem(key="payment_mode_configured", label="Payment mode configured", passed=payment_mode),
+            PilotChecklistItem(key="operator_assigned", label="Operator assigned", passed=operator_assigned),
             PilotChecklistItem(key="handoff_policy_configured", label="Handoff policy configured", passed=bool(agent_settings and agent_settings.handoff_policy_json)),
-            PilotChecklistItem(key="emergency_stop_tested", label="Emergency stop tested", passed=self.db.scalar(select(PilotEvent.id).where(PilotEvent.shop_id == shop_id, PilotEvent.event_type == "emergency_stop").limit(1)) is not None),
+            PilotChecklistItem(key="emergency_stop_tested", label="Emergency stop tested", passed=emergency_tested),
             PilotChecklistItem(key="support_contact_configured", label="Support contact configured", passed=bool(agent_settings and (agent_settings.risk_policy_json or {}).get("support_contact"))),
         ]
 
@@ -363,7 +364,31 @@ class PilotService:
     def _trl_summary(self, run: TRLValidationRun | None) -> dict | None:
         if run is None:
             return None
-        return {"id": str(run.id), "status": run.status, "total_scenarios": run.total_scenarios, "passed_scenarios": run.passed_scenarios, "failed_scenarios": run.failed_scenarios, "started_at": run.started_at.isoformat(), "completed_at": run.completed_at.isoformat() if run.completed_at else None, "metrics_json": run.metrics_json}
+        return {"id": str(run.id), "status": run.status, "thresholds_met": self._validation_passed(run), "total_scenarios": run.total_scenarios, "passed_scenarios": run.passed_scenarios, "failed_scenarios": run.failed_scenarios, "started_at": run.started_at.isoformat(), "completed_at": run.completed_at.isoformat() if run.completed_at else None, "metrics_json": run.metrics_json}
+
+    @staticmethod
+    def _validation_detail(run: TRLValidationRun | None) -> str:
+        if run is None:
+            return "No run"
+        if PilotService._validation_passed(run):
+            return "Passed all thresholds"
+        if run.status == "running":
+            return "In progress"
+        if run.status == "failed":
+            return "Run failed"
+        return "Thresholds not met"
+
+    @staticmethod
+    def _validation_passed(run: TRLValidationRun | None) -> bool:
+        """A TRL run counts as passing only when it completed and every acceptance threshold held.
+
+        The runner records terminal runs as ``"completed"``/``"failed"`` (never ``"passed"``), so
+        gating on a ``"passed"`` status left this criterion perpetually failing even after a clean run.
+        """
+        if run is None or run.status != "completed":
+            return False
+        thresholds = (run.metrics_json or {}).get("thresholds_passed") or {}
+        return bool(thresholds) and all(bool(value) for value in thresholds.values())
 
     @staticmethod
     def to_settings_read(settings: PilotSettings) -> PilotSettingsRead:

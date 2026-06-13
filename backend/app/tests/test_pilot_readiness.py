@@ -140,7 +140,7 @@ def test_pilot_readiness_evaluator(client, auth_headers, db_session, demo_shop, 
     db_session.add(ShopAgentSettings(shop_id=demo_shop.id, mode=AgentMode.CONTROLLED_AUTOPILOT, selling_style=SellingStyle.FRIENDLY, handoff_policy_json={"handoff": True}, risk_policy_json={"support_contact": "ops@example.com"}))
     db_session.add(AdminAuditLog(shop_id=demo_shop.id, action="pilot_test", entity_type="pilot", details={}))
     db_session.add(PilotEvent(shop_id=demo_shop.id, event_type="emergency_stop", severity=PilotEventSeverity.CRITICAL, title="Tested"))
-    db_session.add(TRLValidationRun(shop_id=demo_shop.id, status="passed", total_scenarios=1, passed_scenarios=1, metrics_json={"thresholds_passed": {"overall": True}}))
+    db_session.add(TRLValidationRun(shop_id=demo_shop.id, status="completed", total_scenarios=1, passed_scenarios=1, failed_scenarios=0, metrics_json={"thresholds_passed": {"overall": True}}))
     db_session.commit()
 
     response = client.get(f"/api/v1/shops/{demo_shop.id}/pilot-readiness", headers=auth_headers)
@@ -148,6 +148,31 @@ def test_pilot_readiness_evaluator(client, auth_headers, db_session, demo_shop, 
     body = response.json()
     assert body["ready_for_trl6_pilot"] is True
     assert any(item["key"] == "product_mapping_coverage" and item["passed"] for item in body["criteria"])
+
+
+def test_validation_passed_uses_completed_status_with_thresholds(db_session, demo_shop):
+    service = PilotService(db_session)
+    run = TRLValidationRun(
+        shop_id=demo_shop.id,
+        status="completed",
+        total_scenarios=100,
+        passed_scenarios=100,
+        failed_scenarios=0,
+        metrics_json={"thresholds_passed": {"intent_accuracy": True, "slot_accuracy": True}},
+    )
+    assert service._validation_passed(run) is True
+    assert service._validation_detail(run) == "Passed all thresholds"
+
+    incomplete = TRLValidationRun(
+        shop_id=demo_shop.id,
+        status="completed",
+        total_scenarios=100,
+        passed_scenarios=90,
+        failed_scenarios=10,
+        metrics_json={"thresholds_passed": {"intent_accuracy": True, "slot_accuracy": False}},
+    )
+    assert service._validation_passed(incomplete) is False
+    assert service._validation_detail(incomplete) == "Thresholds not met"
 
 
 def test_role_permissions_for_pilot_settings(client, db_session, demo_shop):

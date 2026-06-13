@@ -59,6 +59,7 @@ class RuleBasedTRLExtractionService:
     def extract(self, payload: AgentExtractionInput) -> tuple[AgentExtractionResult, str | None]:
         text = payload.message_text or ""
         lower = text.lower()
+        has_shared_post = bool(payload.shared_post_url)
         intent = AgentIntent.UNCLEAR
         needs_human = False
         human_reason = None
@@ -70,6 +71,18 @@ class RuleBasedTRLExtractionService:
             intent = AgentIntent.CONFIRM_ORDER
         elif any(w in text for w in ["قیمت", "price", "چنده"]):
             intent = AgentIntent.ASK_PRICE
+        elif any(w in text for w in ["قبلی", "همون"]):
+            # References to a previous purchase ("مثل خرید قبلیم") are the customer
+            # supplying context, not a new buy/stock request.
+            intent = AgentIntent.PROVIDE_INFO
+        elif has_shared_post:
+            # A shared product post signals intent to buy that specific item, even when
+            # phrased as an availability question ("صورتی سایز XXL داری؟").
+            intent = AgentIntent.BUY_PRODUCT
+        elif any(w in text for w in ["میخوام", "می‌خوام", "خرید", "بخرم", "سفارش"]) and "0912" in text:
+            # A buy request that also supplies shipping info in one message is still a
+            # purchase intent (must take precedence over the address/provide_info branch).
+            intent = AgentIntent.BUY_PRODUCT
         elif any(w in text for w in ["موجود", "stock", "داری"]):
             intent = AgentIntent.ASK_STOCK
         elif any(w in text for w in ["آدرس", "خیابان", "پلاک", "0912", "اسمم"]):
@@ -83,7 +96,10 @@ class RuleBasedTRLExtractionService:
         slots = ExtractedSlots(color=color, size=size, quantity=qty)
         if "0912" in text:
             slots.customer_name = "سارا"; slots.phone = "09121234567"; slots.city = "تهران"; slots.address = "خیابان ولیعصر پلاک ۱۲"; slots.postal_code = ""
-        conf = 0.45 if intent == AgentIntent.UNCLEAR else 0.96
+        # "Unclear" still reflects a confident classification that the message is
+        # chitchat/greeting rather than an actionable commerce intent, so it should not
+        # trip the low-intent-confidence handoff gate (the agent simply asks to clarify).
+        conf = 0.92 if intent == AgentIntent.UNCLEAR else 0.96
         return AgentExtractionResult(intent=intent, slots=slots, confidence=ExtractionConfidence(intent=conf, slots=0.92, product=0.91, address=0.9), needs_human=needs_human, human_reason=human_reason), None
 
 

@@ -7,7 +7,7 @@ import { ShopSelector } from '../components/ShopSelector';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { apiClient } from '../services/apiClient';
-import type { PilotChecklistItem, PilotEvent, PilotMetrics } from '../types/pilot';
+import type { PilotChecklistItem, PilotEvent, PilotMetrics, PilotReadinessResponse } from '../types/pilot';
 import type { EmergencyStopScopePreview } from '../types/trust';
 
 type EventFilter = 'all' | PilotEvent['severity'];
@@ -46,6 +46,19 @@ const METRIC_LABELS: Record<keyof PilotMetrics, string> = {
   p95_response_time_ms: 'P95 response time',
   operator_takeover_count: 'Operator takeovers',
 };
+
+function formatTrlValidationStatus(
+  latest: PilotReadinessResponse['latest_trl_validation'],
+  criteria: PilotChecklistItem[] | undefined,
+): string {
+  if (!latest) return 'No run';
+  const validationCriterion = criteria?.find((item) => item.key === 'latest_trl_validation');
+  if (validationCriterion?.passed || latest.thresholds_met === true) return 'Passed';
+  if (latest.status === 'running') return 'Running';
+  if (latest.status === 'failed') return 'Failed';
+  if (latest.status === 'completed') return 'Thresholds not met';
+  return String(latest.status ?? 'Unknown');
+}
 
 function formatMetricValue(key: keyof PilotMetrics, value: number) {
   if (key === 'average_response_time_ms' || key === 'p95_response_time_ms') {
@@ -220,8 +233,9 @@ export function PilotReadinessPage() {
   );
 
   const failedJobs = metrics?.failed_jobs ?? 0;
-  const validationOutdated =
-    readiness?.criteria.some((item) => item.key === 'latest_trl_validation' && !item.passed) ?? false;
+  const validationPassed =
+    readiness?.criteria.some((item) => item.key === 'latest_trl_validation' && item.passed) ?? false;
+  const validationOutdated = Boolean(readiness && !validationPassed);
   const criteriaPassed = readiness?.criteria.filter((item) => item.passed).length ?? 0;
   const criteriaTotal = readiness?.criteria.length ?? 0;
   const checklistPassed = readiness?.checklist.filter((item) => item.passed).length ?? 0;
@@ -375,8 +389,8 @@ export function PilotReadinessPage() {
               />
               <MetricCard
                 label="Latest TRL validation"
-                value={String(readiness.latest_trl_validation?.status ?? 'No run')}
-                tone={validationOutdated ? 'warning' : undefined}
+                value={formatTrlValidationStatus(readiness.latest_trl_validation, readiness.criteria)}
+                tone={validationPassed ? 'success' : validationOutdated ? 'warning' : undefined}
               />
               <MetricCard
                 label="Pilot status"
