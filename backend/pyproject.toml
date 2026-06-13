@@ -1,7 +1,7 @@
 [project]
 name = "instagram-dm-assistant-backend"
-version = "0.1.0"
-description = "FastAPI backend foundation for an Instagram DM ordering assistant."
+version = "1.0.0"
+description = "FastAPI backend for a multi-channel catalog commerce assistant."
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.13.0",

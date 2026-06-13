@@ -21,8 +21,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="Instagram DM Assistant API",
-        version="0.1.0",
+        title="Multi-channel Catalog Commerce Assistant API",
+        version="1.0.0",
         lifespan=lifespan,
         docs_url=None if settings.is_production else "/docs",
         redoc_url=None if settings.is_production else "/redoc",

@@ -1,6 +1,6 @@
-# Instagram DM Assistant
+# Multi-channel Catalog Commerce Assistant
 
-This repository is an advanced MVP for an Instagram DM ordering agent. It includes a FastAPI backend, PostgreSQL schema and Alembic migrations, RabbitMQ/Redis/Qdrant integrations, an OpenAI-powered conversation orchestrator, background workers, and a React TypeScript admin panel for shops, products, conversations, and orders.
+This repository contains the v1.0.0 release candidate for a multi-channel catalog commerce assistant for online shops. It includes a FastAPI backend, PostgreSQL schema and Alembic migrations, RabbitMQ/Redis/Qdrant integrations, an OpenAI-compatible conversation orchestrator, background workers, and a React TypeScript admin panel for shops, catalog management, conversations, orders, analytics, simulator, failed jobs, pilot controls, and system health.
 
 ## Architecture
 
@@ -66,7 +66,8 @@ Required backend variables:
 - `APP_ENV` / `LOG_LEVEL` — runtime environment and logging level.
 - `JWT_SECRET_KEY` — at least 32 random bytes recommended in production.
 - `TOKEN_ENCRYPTION_KEY` — secret used to derive the Fernet key for Instagram token encryption.
-- `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` / `INSTAGRAM_APP_SECRET` — Meta webhook verification and optional signature validation.
+- Provider webhook secrets and tokens — Meta/Instagram, WhatsApp, Telegram, Bale, and Rubika credentials. Tokens are encrypted at rest and must never be returned raw by APIs.
+- `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` / `INSTAGRAM_APP_SECRET` — Meta webhook verification and signature validation.
 
 Frontend uses `VITE_API_BASE_URL` to target the backend from the browser.
 
@@ -215,7 +216,7 @@ powershell -File scripts/docker_smoke_test.ps1   # Windows
 
 Latest remediation verification: [docs/verification_report.md](docs/verification_report.md).
 
-Operational docs: [docs/security_configuration.md](docs/security_configuration.md), [docs/production_incident_response.md](docs/production_incident_response.md), [docs/migration_guide.md](docs/migration_guide.md), [docs/failed-jobs-runbook.md](docs/failed-jobs-runbook.md), [docs/analytics-guide.md](docs/analytics-guide.md).
+Operational docs: [docs/security_configuration.md](docs/security_configuration.md), [docs/production_incident_response.md](docs/production_incident_response.md), [docs/migration_guide.md](docs/migration_guide.md), [docs/failed-jobs-runbook.md](docs/failed-jobs-runbook.md), [docs/analytics-guide.md](docs/analytics-guide.md). Release notes: [docs/release/v1.0.0.md](docs/release/v1.0.0.md).
 
 ## Implementation notes
 
