@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock, patch
+import sys
 
 import pytest
 
@@ -21,7 +22,7 @@ def test_settings_chat_model_follows_provider(monkeypatch) -> None:
     monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-flash")
     settings = Settings()
     assert settings.chat_model == "gemini-2.5-flash"
-    assert settings.embedding_model == "text-embedding-004"
+    assert settings.embedding_model == "gemini-embedding-001"
 
 
 def test_settings_llm_api_key_configured_for_gemini(monkeypatch) -> None:
@@ -65,6 +66,23 @@ def test_build_embedding_client_uses_gemini_when_configured(monkeypatch) -> None
     assert isinstance(client, LiveGeminiEmbeddingClient)
 
 
+def _patch_google_genai(mock_client: MagicMock):
+    mock_genai = MagicMock()
+    mock_genai.Client = MagicMock(return_value=mock_client)
+    mock_types = MagicMock()
+    mock_genai.types = mock_types
+    mock_google = MagicMock()
+    mock_google.genai = mock_genai
+    return patch.dict(
+        sys.modules,
+        {
+            "google": mock_google,
+            "google.genai": mock_genai,
+            "google.genai.types": mock_types,
+        },
+    )
+
+
 def test_gemini_chat_client_complete_json(monkeypatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "gemini")
     monkeypatch.setenv("GEMINI_API_KEY", "gemini-test-key")
@@ -75,7 +93,7 @@ def test_gemini_chat_client_complete_json(monkeypatch) -> None:
     mock_client = MagicMock()
     mock_client.models.generate_content.return_value = mock_response
 
-    with patch("google.genai.Client", return_value=mock_client):
+    with _patch_google_genai(mock_client):
         result = LiveGeminiChatClient(settings).complete_json("system", "user")
 
     assert result == '{"intent":"unclear"}'
@@ -94,7 +112,7 @@ def test_gemini_embedding_client_embed_text(monkeypatch) -> None:
     mock_client = MagicMock()
     mock_client.models.embed_content.return_value = mock_response
 
-    with patch("google.genai.Client", return_value=mock_client):
+    with _patch_google_genai(mock_client):
         vector = LiveGeminiEmbeddingClient(settings).embed_text("hello")
 
     assert vector == [0.1, 0.2, 0.3]
@@ -108,7 +126,7 @@ def test_gemini_chat_client_wraps_api_errors_as_runtime_error(monkeypatch) -> No
     mock_client = MagicMock()
     mock_client.models.generate_content.side_effect = Exception("429 RESOURCE_EXHAUSTED")
 
-    with patch("google.genai.Client", return_value=mock_client):
+    with _patch_google_genai(mock_client):
         with pytest.raises(RuntimeError, match="Gemini chat request failed"):
             LiveGeminiChatClient(settings).complete_json("system", "user")
 

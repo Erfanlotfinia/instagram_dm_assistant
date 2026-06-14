@@ -540,8 +540,13 @@ a {
 .button-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.75rem;
   margin: 1rem 0;
+}
+
+.button-row > .button {
+  align-self: center;
 }
 
 .button--ghost-dark {
@@ -5605,5 +5610,447 @@ a {
 @media (max-width: 640px) {
   .job-card__actions .button {
     flex: 1;
+  }
+}
+
+/* ── Social admin automation pages ── */
+
+.sa-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem 2rem;
+  flex-wrap: wrap;
+}
+
+.sa-hero__intro {
+  max-width: 62ch;
+}
+
+.sa-hero__description {
+  margin: 0.5rem 0 0;
+}
+
+.sa-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.sa-hero__actions .form-field {
+  min-width: 15rem;
+}
+
+.sa-prompt-card {
+  display: grid;
+  gap: 1rem;
+  max-width: none;
+}
+
+/* Section heading helpers reused across social-admin pages */
+
+.sa-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin: 1rem 0 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px dashed #e3e7ef;
+  border-radius: 0.7rem;
+  background: #fafbfd;
+  color: #6d7690;
+  font-size: 0.8rem;
+}
+
+.sa-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Capability pills (Deterministic / LLM / Human / Tests / Frontend) */
+
+.sa-caps {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.sa-cap {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  padding: 0 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-cap--on {
+  background: #ecfdf3;
+  color: #027a48;
+  border-color: #bbf7d0;
+}
+
+.sa-cap--off {
+  background: #f3f4f6;
+  color: #b0b7c3;
+  border-color: #e4e7ec;
+}
+
+/* Scenario row title (code + name) */
+
+.sa-scenario {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.sa-scenario__name {
+  font-weight: 600;
+  color: #172033;
+}
+
+.sa-scenario__code {
+  color: #98a2b3;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+}
+
+.sa-group-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 0.76rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Handler priority ladder */
+
+.sa-ladder {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sa-ladder__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid #e8ebf2;
+  border-radius: 0.85rem;
+  background: #fafbfd;
+}
+
+.sa-ladder__num {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: #172033;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-ladder__body {
+  min-width: 0;
+}
+
+.sa-ladder__label {
+  margin: 0;
+  color: #172033;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.sa-ladder__detail {
+  margin: 0.2rem 0 0;
+  color: #6d7690;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+/* Tier tags + processing pipeline */
+
+.sa-tier {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sa-tier--deterministic {
+  background: #eef4ff;
+  color: #175cd3;
+}
+
+.sa-tier--llm {
+  background: #f4f3ff;
+  color: #5925dc;
+}
+
+.sa-tier--human {
+  background: #fffaeb;
+  color: #b54708;
+}
+
+.sa-pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1.25rem 0 0;
+}
+
+.sa-pipeline__step {
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.sa-pipeline__arrow {
+  color: #98a2b3;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+/* Info card grid (suggestions, capture fields, task catalog) */
+
+.sa-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.sa-info-card {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  padding: 1.15rem 1.2rem;
+  border: 1px solid #e8ebf2;
+  border-radius: 0.9rem;
+  background: #fff;
+}
+
+.sa-info-card__icon {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.65rem;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.sa-info-card__title {
+  margin: 0;
+  color: #172033;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.sa-info-card__body {
+  margin: 0;
+  color: #6d7690;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.sa-info-card__example {
+  margin: 0.1rem 0 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.6rem;
+  background: #f6f8fc;
+  color: #475467;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+/* Approval / info callout */
+
+.sa-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin-top: 1.25rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid #c7d7ff;
+  border-radius: 0.85rem;
+  background: linear-gradient(135deg, #f5f8ff 0%, #eef4ff 100%);
+}
+
+.sa-callout__icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: #2f5bff;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.sa-callout__title {
+  margin: 0 0 0.2rem;
+  color: #172033;
+  font-weight: 700;
+}
+
+.sa-callout__text {
+  margin: 0;
+  color: #4d5872;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+/* AI task composer */
+
+.sa-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  justify-items: stretch;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.sa-composer__field {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.sa-composer__field-label {
+  margin: 0;
+  color: #475467;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sa-composer__submit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.85rem;
+}
+
+.sa-composer__generate {
+  align-self: flex-start;
+  min-width: 11rem;
+  height: auto;
+}
+
+.sa-composer__hint {
+  color: #6d7690;
+  font-size: 0.85rem;
+}
+
+.sa-composer__preview {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid #c7d7ff;
+  border-radius: 0.9rem;
+  background: linear-gradient(180deg, #f8faff 0%, #fff 60%);
+}
+
+.sa-composer__preview-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+
+.sa-composer__preview-label {
+  margin: 0;
+  color: #175cd3;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.sa-composer__preview-scroll {
+  max-height: 22rem;
+  overflow-y: auto;
+  min-width: 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid #e3ebfb;
+  border-radius: 0.7rem;
+  background: #fff;
+}
+
+.sa-composer__preview-body {
+  margin: 0;
+  color: #172033;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.sa-composer__preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+
+.sa-composer__preview-actions .button-row {
+  margin: 0;
+}
+
+.sa-composer__copy {
+  margin-right: auto;
+}
+
+.sa-safety-banner {
+  margin-top: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .sa-ladder__item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .sa-ladder__item .sa-tier {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .sa-hero__actions {
+    width: 100%;
   }
 }

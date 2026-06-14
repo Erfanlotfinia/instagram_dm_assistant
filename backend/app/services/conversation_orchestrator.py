@@ -56,6 +56,7 @@ from app.services.suggested_reply_service import SuggestedReplyService
 from app.services.upsell_service import UpsellService
 from app.services.variant_resolver import VariantResolver
 from app.services.slot_merge_service import compute_missing_fields, merge_extracted_slots, slots_to_dict
+from app.services.social_admin.orchestrator import SocialAdminOrchestrator
 from app.services.state_machine_service import (
     check_inventory,
     decide_next_state,
@@ -158,6 +159,18 @@ class ConversationOrchestrator:
 
         slots = self.slots_repo.get_or_create(conversation_id)
         shared_post_url, media_id = self._extract_post_reference(message)
+        skip_social_admin = bool(
+            shared_post_url
+            or media_id
+            or slots.instagram_post_url
+            or conversation.workflow_state != AgentWorkflowState.IDLE
+        )
+        if not skip_social_admin and self._try_social_admin_automation(
+            conversation, message, conversation_id, message_id, trace_id
+        ):
+            ConversationPriorityService(self.db).refresh(conversation_id)
+            self.db.commit()
+            return True
 
         product, resolve_source = self._resolve_product(
             conversation,
@@ -1132,6 +1145,104 @@ class ConversationOrchestrator:
             confidence=extraction.confidence.intent,
             decision_reason=reason,
         ))
+
+    def _try_social_admin_automation(
+        self,
+        conversation: Conversation,
+        message: Message,
+        conversation_id: UUID,
+        message_id: UUID,
+        trace_id: UUID,
+    ) -> bool:
+        """Automation-first social admin layer; returns True if legacy LLM path should be skipped."""
+        pilot_service = PilotService(self.db)
+        if pilot_service.is_emergency_stop_active(conversation.shop_id) and not conversation.is_simulation:
+            return False
+
+        result = SocialAdminOrchestrator(self.db, settings=self.settings).try_handle(
+            conversation_id,
+            message_id,
+            trace_id=trace_id,
+        )
+        if result.status == "fallback_legacy":
+            return False
+
+        reply = result.response_text or ""
+        if result.status == "needs_human":
+            conversation.handoff_required = True
+            conversation.handoff_reason = result.handoff_reason or "social_admin_handoff"
+            conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
+            conversation.state = ConversationState.PENDING_HANDOFF
+            HANDOFF_COUNT.inc()
+            if reply:
+                SuggestedReplyService(self.db).create_agent_suggestion(
+                    shop_id=conversation.shop_id,
+                    conversation_id=conversation.id,
+                    message_id=message.id,
+                    text=reply,
+                    reason=result.handoff_reason,
+                    is_simulation=conversation.is_simulation,
+                )
+            self._log_action(
+                conversation_id,
+                "social_admin_handoff",
+                {"message": message.text},
+                {"reason": result.handoff_reason, "handler": result.decision.handler if result.decision else None},
+                confidence=result.decision.confidence if result.decision else None,
+            )
+            return True
+
+        if result.status in {"handled", "needs_clarification"} and reply:
+            pilot_send_allowed, _ = pilot_service.enforce_auto_send_allowed(
+                conversation.shop_id, conversation.instagram_account_id
+            )
+            can_auto_send = (
+                pilot_send_allowed
+                and not conversation.is_simulation
+                and not pilot_service.is_emergency_stop_active(conversation.shop_id)
+            )
+            if can_auto_send:
+                outbound = self.send_service.send_text_message(
+                    conversation_id, reply, commit=False, is_simulation=False
+                )
+                AuditService(self.db).log(
+                    action="message_auto_sent",
+                    entity_type="conversation",
+                    shop_id=conversation.shop_id,
+                    entity_id=str(conversation.id),
+                    metadata={"message_id": str(outbound.id), "source": "social_admin"},
+                )
+                self._log_action(
+                    conversation_id,
+                    "social_admin_send_outbound",
+                    {"reply": reply},
+                    {"message_id": str(outbound.id)},
+                    confidence=result.decision.confidence if result.decision else None,
+                )
+            else:
+                conversation.suggested_outbound = reply
+                SuggestedReplyService(self.db).create_agent_suggestion(
+                    shop_id=conversation.shop_id,
+                    conversation_id=conversation.id,
+                    message_id=message.id,
+                    text=reply,
+                    reason="social_admin_automation",
+                    is_simulation=conversation.is_simulation,
+                )
+            self._log_action(
+                conversation_id,
+                "social_admin_handled",
+                {"message": message.text},
+                {
+                    "handler": result.decision.handler if result.decision else None,
+                    "scenario": result.decision.scenario_code if result.decision else None,
+                    "status": result.status,
+                },
+                confidence=result.decision.confidence if result.decision else None,
+            )
+            return True
+
+        return False
 
     def _log_action(
         self,

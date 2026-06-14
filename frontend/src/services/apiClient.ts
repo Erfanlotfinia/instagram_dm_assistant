@@ -31,6 +31,15 @@ import type { ResolveProductResponse, ResolveVariantResponse, ResolverFeedback, 
 import type { TRLRiskMetrics, TRLValidationRun, TRLValidationScenarioResult } from '../types/trlValidation';
 import type { PilotActionResponse, PilotEventLog, PilotMetrics, PilotReadinessResponse, PilotSettings } from '../types/pilot';
 import type {
+  AdminTask,
+  AutomationRuleStep,
+  AutomationSuggestion,
+  OperatorCorrection,
+  OperatorCorrectionInput,
+  ScenarioCoverageRow,
+  ScenarioRegressionMetrics,
+} from '../types/socialAdmin';
+import type {
   AssembledDecisionTrace,
   EmergencyStopResponse,
   Incident,
@@ -306,6 +315,47 @@ export const apiClient = {
       body: JSON.stringify(payload),
     }),
   listScenarioPacks: (shopId: string) => request<ScenarioPack[]>(`/api/v1/shops/${shopId}/scenarios`),
+  getScenarioCoverage: (shopId: string) =>
+    request<ScenarioCoverageRow[]>(`/api/v1/shops/${shopId}/scenario-coverage`),
+  runScenarioRegression: (shopId: string) =>
+    request<ScenarioRegressionMetrics>(`/api/v1/shops/${shopId}/scenario-regression/run`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  listAutomationRules: (shopId: string) =>
+    request<AutomationRuleStep[]>(`/api/v1/shops/${shopId}/automation-rules`),
+  listAdminTasks: (shopId: string) =>
+    request<AdminTask[]>(`/api/v1/shops/${shopId}/admin-tasks`),
+  createAdminTask: (shopId: string, payload: { task_type: string; context: string; conversation_id?: string }) =>
+    request<AdminTask>(`/api/v1/shops/${shopId}/admin-tasks`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  approveAdminTask: (shopId: string, taskId: string) =>
+    request<AdminTask>(`/api/v1/shops/${shopId}/admin-tasks/${taskId}/approve`, { method: 'POST' }),
+  rejectAdminTask: (shopId: string, taskId: string) =>
+    request<AdminTask>(`/api/v1/shops/${shopId}/admin-tasks/${taskId}/reject`, { method: 'POST' }),
+  listOperatorCorrections: (shopId: string) =>
+    request<OperatorCorrection[]>(`/api/v1/shops/${shopId}/operator-corrections`),
+  createOperatorCorrection: (shopId: string, payload: OperatorCorrectionInput) =>
+    request<OperatorCorrection[]>(`/api/v1/shops/${shopId}/operator-corrections`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  listAutomationSuggestions: (shopId: string, status?: string) =>
+    request<AutomationSuggestion[]>(
+      `/api/v1/shops/${shopId}/automation-suggestions${buildQuery({ status })}`,
+    ),
+  approveAutomationSuggestion: (shopId: string, suggestionId: string) =>
+    request<AutomationSuggestion>(
+      `/api/v1/shops/${shopId}/automation-suggestions/${suggestionId}/approve`,
+      { method: 'POST' },
+    ),
+  rejectAutomationSuggestion: (shopId: string, suggestionId: string) =>
+    request<AutomationSuggestion>(
+      `/api/v1/shops/${shopId}/automation-suggestions/${suggestionId}/reject`,
+      { method: 'POST' },
+    ),
   listIncidents: (shopId: string) => request<Incident[]>(`/api/v1/shops/${shopId}/incidents`),
   getIncident: (shopId: string, incidentId: string) =>
     request<Incident>(`/api/v1/shops/${shopId}/incidents/${incidentId}`),

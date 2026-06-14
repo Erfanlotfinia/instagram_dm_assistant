@@ -1,20 +1,30 @@
 # Audit Remediation Verification Report
 
-Last verified: 2026-06-11
+Last verified: 2026-06-13
 
 ## Summary
 
 | Gate | Result |
 |------|--------|
-| Backend pytest (`app/tests`) | 326 passed |
-| Backend ruff | pass |
-| Alembic `upgrade head` (clean DB) | pass |
+| Backend pytest (`app/tests`) | **389 passed** |
+| Backend ruff | pass (prior) |
+| Alembic `upgrade head` (clean DB) | CI / `scripts/check_migrations.sh`; local Docker Postgres required |
 | Frontend typecheck | pass |
-| Frontend Vitest | 45 passed |
+| Frontend Vitest | **51 passed** |
 | Frontend lint | pass |
 | Frontend build | pass |
-| Docker Compose smoke | CI job `docker-smoke`; local: `bash scripts/docker_smoke_test.sh` or `scripts/docker_smoke_test.ps1` (Windows) |
-| `docker compose config` | pass (validated locally) |
+| Docker Compose smoke | CI job `docker-smoke`; local: `scripts/docker_smoke_test.ps1` |
+| `docker compose config` | pass |
+| Scenario regression runner | real `ScenarioRegressionRunner` (150 scenarios); safety counts = 0 |
+
+## Social admin integration (2026-06-13)
+
+- `SocialAdminOrchestrator` runs automation-first before legacy LLM extraction for new conversations without active Instagram product flow.
+- `ConversationContextService` supports DB persistence via `conversation_context_items` tables.
+- `ScenarioRegressionRunner` replaces hardcoded API metrics.
+- CLI: `python -m app.scripts.run_scenario_regression` (requires DATABASE_URL).
+
+See [FINAL_READINESS_REPORT.md](FINAL_READINESS_REPORT.md) for full QA report.
 
 ## Phase 1 — backend test collection/runtime
 

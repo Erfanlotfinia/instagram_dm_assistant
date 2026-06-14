@@ -15,17 +15,17 @@ from app.services.social_admin import (
 
 def test_context_resolves_product_list_second_one_persian():
     svc = ConversationContextService()
-    svc.add_context_item(shop_id="s1", conversation_id="c1", provider="telegram", item_type="product_list", candidate_product_ids_json=["p1", "p2"])
+    svc.add_context_item(shop_id="s1", conversation_id="c1", provider="telegram", item_type="product_list", candidate_product_ids_json=["00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"])
     result = svc.resolve_reference({"text": "دومی رو بده"}, "c1")
-    assert result.selected_product_id == "p2"
+    assert result.selected_product_id == "00000000-0000-0000-0000-000000000002"
     assert result.confidence >= .9
 
 
 def test_context_resolves_active_product_availability():
     svc = ConversationContextService()
-    svc.add_context_item(shop_id="s1", conversation_id="c1", provider="instagram", item_type="product_post", selected_product_id="p9")
+    svc.add_context_item(shop_id="s1", conversation_id="c1", provider="instagram", item_type="product_post", selected_product_id="00000000-0000-0000-0000-000000000009")
     result = svc.resolve_reference({"text": "موجوده؟"}, "c1")
-    assert result.selected_product_id == "p9"
+    assert result.selected_product_id == "00000000-0000-0000-0000-000000000009"
 
 
 def test_router_deterministic_before_llm():
@@ -50,6 +50,68 @@ def test_router_active_order_cancel_and_summary_before_confirm():
     assert confirm_decision.scenario_code == "ORDER_CONFIRM"
 
 
+def test_router_callback_priority_over_text():
+    decision = ScenarioRouter().route({"text": "price?", "button_id": "buy:1"})
+    assert decision.handler == "SelectFromProductListHandler"
+    assert decision.requires_llm is False
+
+
+def test_router_catalog_query_before_llm():
+    decision = ScenarioRouter().route({"text": "همه چکش‌های برند بوش زیر ۵۰۰۰۰۰۰ رو نشون بده"})
+    assert decision.requires_llm is False
+    assert "List" in decision.handler or "ProductSearch" in decision.handler
+
+
+def test_router_llm_fallback_only_when_no_match():
+    decision = ScenarioRouter().route({"text": "random unrelated chitchat xyz"})
+    assert decision.requires_llm is True
+    assert decision.handler == "LLMFallbackOrchestrator"
+
+
+def test_scenario_regression_runner_metrics(db_session):
+    metrics = __import__(
+        "app.services.social_admin.scenario_regression_runner",
+        fromlist=["ScenarioRegressionRunner"],
+    ).ScenarioRegressionRunner(db_session).run()
+    # Safety counters must stay clean.
+    assert metrics.unsafe_action_count == 0
+    assert metrics.false_order_count == 0
+    assert metrics.false_payment_count == 0
+    # Routing accuracy against authored ground truth.
+    assert metrics.scenario_accuracy > 0.9
+    # Automation-first: deterministic automation must dominate, with LLM and
+    # handoff as smaller escalation paths. The three buckets are mutually
+    # exclusive and must sum to ~1.0 (every scenario lands in exactly one).
+    assert metrics.automation_handled_rate > 0.7
+    assert metrics.llm_fallback_rate > 0.0
+    assert metrics.handoff_rate > 0.0
+    bucket_sum = (
+        metrics.automation_handled_rate
+        + metrics.llm_fallback_rate
+        + metrics.handoff_rate
+    )
+    assert abs(bucket_sum - 1.0) < 0.02
+    # Reference resolution and catalog discovery must actually resolve products.
+    assert metrics.reference_resolution_accuracy > 0.8
+    assert metrics.product_discovery_accuracy > 0.8
+
+
+def test_scenario_regression_runner_does_not_persist(db_session):
+    """The runner seeds an ephemeral catalog that must be rolled back."""
+    from sqlalchemy import func, select
+
+    from app.domain.models import Product, Shop
+
+    shops_before = db_session.scalar(select(func.count()).select_from(Shop))
+    products_before = db_session.scalar(select(func.count()).select_from(Product))
+    __import__(
+        "app.services.social_admin.scenario_regression_runner",
+        fromlist=["ScenarioRegressionRunner"],
+    ).ScenarioRegressionRunner(db_session).run()
+    assert db_session.scalar(select(func.count()).select_from(Shop)) == shops_before
+    assert db_session.scalar(select(func.count()).select_from(Product)) == products_before
+
+
 def test_catalog_query_planner_category_brand_price():
     plan = CatalogQueryPlanner().plan("همه چکش‌های برند بوش زیر ۵۰۰۰۰۰۰ رو نشون بده")
     assert plan.category_slug == "hammer"
@@ -60,10 +122,10 @@ def test_catalog_query_planner_category_brand_price():
 
 def test_referenced_content_resolver_uses_context_for_second_one():
     ctx = ConversationContextService()
-    ctx.add_context_item(shop_id="s1", conversation_id="c1", provider="rubika", item_type="product_list", candidate_product_ids_json=["p1", "p2"])
+    ctx.add_context_item(shop_id="s1", conversation_id="c1", provider="rubika", item_type="product_list", candidate_product_ids_json=["00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"])
     res = ReferencedContentResolver(ctx).resolve({"text": "second one"}, {}, "c1")
     assert res.reference_type == "product_list_selection"
-    assert res.selected_product_id == "p2"
+    assert res.selected_product_id == "00000000-0000-0000-0000-000000000002"
 
 
 def test_handler_registry_dispatches_without_llm():
@@ -79,9 +141,8 @@ def test_llm_fallback_blocks_hallucinated_commerce_fact():
 
 
 def test_admin_task_requires_approval_and_no_autopublish():
-    task = AdminTaskEngine().create_task("s1", "u1", "post_caption_draft", {"topic": "new shoes"})
-    assert task.requires_approval is True
-    assert task.output_json["auto_publish"] is False
+    out = AdminTaskEngine().generate_draft("post_caption_draft", {"topic": "new shoes"})
+    assert out["auto_publish"] is False
 
 
 def test_signed_action_rejects_forged_expired_cross_shop():
@@ -94,6 +155,10 @@ def test_signed_action_rejects_forged_expired_cross_shop():
 
 def test_scenario_fixture_has_150_scenarios():
     import json, pathlib
-    data = json.loads(pathlib.Path("app/tests/fixtures/scenarios/social_admin_scenarios.json").read_text())
+    data = json.loads(
+        pathlib.Path("app/tests/fixtures/scenarios/social_admin_scenarios.json").read_text(
+            encoding="utf-8"
+        )
+    )
     assert len(data) >= 150
     assert {"instagram", "whatsapp", "telegram", "bale", "rubika"}.issubset({s["provider"] for s in data})

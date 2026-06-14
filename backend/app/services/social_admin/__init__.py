@@ -1,8 +1,16 @@
+from __future__ import annotations
+
 from .context_graph import ConversationContextService, ContextItem, ReferenceLink, ReferenceResolution
 from .scenario_router import ScenarioRouter, ScenarioDecision
-from .handlers import AutomationHandlerRegistry, HandlerResult, HandlerDecision
+from .handlers import AutomationHandlerRegistry, HandlerResult, HandlerDecision, HandlerContext
 from .catalog_query_planner import CatalogQueryPlanner, CatalogQueryPlan
 from .referenced_content_resolver import ReferencedContentResolver, ReferencedContentResolution
 from .llm_fallback_orchestrator import LLMFallbackOrchestrator, LLMFallbackOutput
-from .admin_task_engine import AdminTaskEngine, AdminTask
+from .admin_task_engine import AdminTaskEngine
+from .admin_task_service import AdminTaskService
+from .automation_rules_service import AutomationRulesService
+from .operator_correction_service import AutomationSuggestionService, OperatorCorrectionService
+from .scenario_coverage_service import ScenarioCoverageService
 from .security import SignedActionService
+from .orchestrator import SocialAdminOrchestrator, SocialAdminResult
+from .scenario_regression_runner import ScenarioRegressionRunner

@@ -1,24 +1,52 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from uuid import uuid4
-from datetime import datetime, timezone
+
 from typing import Any
 
-@dataclass
-class AdminTask:
-    shop_id: str; requested_by_user_id: str | None; task_type: str; input_json: dict[str, Any]
-    id: str = field(default_factory=lambda: str(uuid4())); output_json: dict[str, Any] = field(default_factory=dict); status: str = "pending"; requires_approval: bool = True; approved_by_user_id: str | None = None; created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc)); updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+TASK_LABELS = {
+    "reply_suggestion": "Suggest reply",
+    "conversation_summary": "Summarize conversation",
+    "faq_mining": "FAQ mining",
+    "post_caption_draft": "Draft post caption",
+    "story_text_draft": "Draft story text",
+    "campaign_message_draft": "Draft campaign message",
+    "product_announcement": "Product announcement",
+    "recovery_message": "Recovery message",
+    "comparison_response": "Comparison response",
+}
+
 
 class AdminTaskEngine:
-    allowed = {"reply_suggestion","conversation_summary","faq_mining","post_caption_draft","story_text_draft","campaign_message_draft","product_announcement","recovery_message","comparison_response"}
-    def create_task(self, shop_id: str, requested_by_user_id: str | None, task_type: str, input_json: dict[str, Any]) -> AdminTask:
-        if task_type not in self.allowed: raise ValueError("unsupported admin task")
-        task = AdminTask(shop_id, requested_by_user_id, task_type, input_json)
-        topic = input_json.get("topic") or input_json.get("product") or "selected catalog context"
-        task.output_json = {"draft": f"Draft {task_type.replace('_',' ')} grounded in {topic}.", "auto_publish": False, "schema_version": "admin-task-v1"}
-        task.status = "completed"; task.updated_at = datetime.now(timezone.utc)
-        return task
-    def approve(self, task: AdminTask, user_id: str) -> AdminTask:
-        task.status="approved"; task.approved_by_user_id=user_id; task.updated_at=datetime.now(timezone.utc); return task
-    def reject(self, task: AdminTask) -> AdminTask:
-        task.status="rejected"; task.updated_at=datetime.now(timezone.utc); return task
+    allowed = {
+        "reply_suggestion",
+        "conversation_summary",
+        "faq_mining",
+        "post_caption_draft",
+        "story_text_draft",
+        "campaign_message_draft",
+        "product_announcement",
+        "recovery_message",
+        "comparison_response",
+    }
+
+    def generate_draft(self, task_type: str, input_json: dict[str, Any]) -> dict[str, Any]:
+        if task_type not in self.allowed:
+            raise ValueError("unsupported admin task")
+        context = (
+            input_json.get("context")
+            or input_json.get("topic")
+            or input_json.get("product")
+            or "selected catalog context"
+        )
+        label = TASK_LABELS.get(task_type, task_type.replace("_", " "))
+        draft_body = (
+            f"{label} draft\n\n"
+            f"Context: {context}\n\n"
+            f"This draft is grounded in shop context and held for operator approval. "
+            f"Nothing will be published automatically."
+        )
+        return {
+            "draft": draft_body,
+            "auto_publish": False,
+            "schema_version": "admin-task-v1",
+            "task_type": task_type,
+        }

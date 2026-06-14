@@ -23,7 +23,7 @@ FIXTURES = Path(__file__).parent / "fixtures" / "channels"
 
 
 def load_fixture(name: str) -> dict:
-    return json.loads((FIXTURES / name).read_text())
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
 def test_whatsapp_text_payload_normalization() -> None:
