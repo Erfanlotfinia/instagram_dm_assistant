@@ -40,3 +40,31 @@ HTTP_REQUEST_DURATION = Histogram(
 
 def metrics_response() -> tuple[bytes, str]:
     return generate_latest(), CONTENT_TYPE_LATEST
+
+EVENT_LATENCY = Histogram(
+    "soc_event_latency_seconds",
+    "End-to-end domain event latency by event type and consumer group",
+    ["event_type", "consumer_group"],
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+)
+SCENARIO_ROUTING_TIME = Histogram(
+    "soc_scenario_routing_seconds",
+    "Scenario routing decision duration",
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5),
+)
+LLM_LATENCY = Histogram(
+    "soc_llm_latency_seconds",
+    "LLM fallback latency by tenant-safe model label",
+    ["model"],
+    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
+)
+AUTOMATION_SUCCESS = Counter(
+    "soc_automation_success_total",
+    "Successful automation executions",
+    ["tenant_id", "automation"],
+)
+CHANNEL_FAILURES = Counter(
+    "soc_channel_failures_total",
+    "Failures by inbound/outbound channel",
+    ["channel", "failure_type"],
+)
