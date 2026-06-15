@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_shop_membership
 from app.db.session import get_db_session
 from app.domain.models import ShopAgentSettings, ShopMember, User
+from app.services.agent_risk_settings_service import AgentRiskSettingsService
 from app.schemas.risk import AgentRiskSettingsRead, AgentRiskSettingsUpdate
 
 router = APIRouter(prefix="/shops/{shop_id}/agent-risk-settings", tags=["agent-risk-settings"])
@@ -20,12 +21,7 @@ DEFAULT_POLICY = {
 
 
 def _get_or_create(db: Session, shop_id: UUID) -> ShopAgentSettings:
-    settings = db.get(ShopAgentSettings, shop_id)
-    if settings is None:
-        settings = ShopAgentSettings(shop_id=shop_id)
-        db.add(settings)
-        db.flush()
-    return settings
+    return AgentRiskSettingsService(db).get_or_create(shop_id)
 
 
 def _read(settings: ShopAgentSettings) -> AgentRiskSettingsRead:

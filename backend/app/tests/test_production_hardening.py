@@ -84,3 +84,70 @@ def test_idempotency_keys_are_stable_and_scoped():
 
     assert key1 == key2
     assert key1.startswith("order_create:")
+
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from fastapi import HTTPException
+
+from app.domain.enums import InventoryReservationStatus, PaymentRecordStatus
+from app.services.db_write_firewall import find_direct_db_write_violations
+from app.services.event_store_service import EventStoreService
+from app.services.observability_service import ObservabilityService
+from app.services.state_transition_service import (
+    INVENTORY_RESERVATION_STATE_MACHINE,
+    PAYMENT_STATE_MACHINE,
+)
+
+
+def test_event_store_dry_run_append_does_not_persist():
+    trace_id = uuid4()
+    shop_id = uuid4()
+    store = EventStoreService(SimpleNamespace())
+
+    dry = store.append(
+        trace_id=trace_id,
+        shop_id=shop_id,
+        conversation_id=None,
+        event_type="llm_called",
+        payload={"scenario": "ask_price"},
+        event_version=2,
+        dry_run=True,
+    )
+
+    assert dry.payload["dry_run"] is True
+    assert dry.payload["event_version"] == 2
+
+
+def test_payment_and_inventory_state_machines_reject_invalid_transitions():
+    payment = SimpleNamespace(status=PaymentRecordStatus.CREATED)
+    PAYMENT_STATE_MACHINE.transition(payment, PaymentRecordStatus.PENDING)
+    PAYMENT_STATE_MACHINE.transition(payment, PaymentRecordStatus.PAID)
+
+    with pytest.raises(HTTPException):
+        PAYMENT_STATE_MACHINE.transition(payment, PaymentRecordStatus.FAILED)
+
+    reservation = SimpleNamespace(status=InventoryReservationStatus.ACTIVE)
+    INVENTORY_RESERVATION_STATE_MACHINE.transition(reservation, InventoryReservationStatus.CONFIRMED)
+    INVENTORY_RESERVATION_STATE_MACHINE.transition(reservation, InventoryReservationStatus.RELEASED)
+
+    with pytest.raises(HTTPException):
+        INVENTORY_RESERVATION_STATE_MACHINE.transition(reservation, InventoryReservationStatus.CONFIRMED)
+
+
+def test_static_architecture_db_write_firewall_has_no_direct_writes_outside_services():
+    violations = find_direct_db_write_violations(Path("backend/app"))
+    assert violations == []
+
+
+def test_observability_records_metrics_traces_and_alerts():
+    obs = ObservabilityService()
+    obs.increment("automation_success")
+    obs.alert("policy_violation", reason="test")
+    with obs.trace("message.process", channel="instagram") as trace_id:
+        assert trace_id
+
+    assert obs.counters["automation_success"] == 1
+    assert obs.counters["alerts.policy_violation"] == 1
+    assert obs.spans[0]["name"] == "message.process"
