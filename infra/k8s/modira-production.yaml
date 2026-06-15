@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: modira-prod
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modira-api
+  namespace: modira-prod
+spec:
+  replicas: 4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector: {matchLabels: {app: modira-api}}
+  template:
+    metadata:
+      labels: {app: modira-api}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: api
+          image: ghcr.io/modira/soc-os-api:latest
+          ports: [{containerPort: 8000}]
+          envFrom: [{secretRef: {name: modira-secrets}}, {configMapRef: {name: modira-config}}]
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {cpu: "2", memory: 2Gi}
+          readinessProbe: {httpGet: {path: /health/ready, port: 8000}, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /health, port: 8000}, periodSeconds: 20}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: modira-api
+  namespace: modira-prod
+spec:
+  selector: {app: modira-api}
+  ports: [{port: 80, targetPort: 8000}]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: modira-api
+  namespace: modira-prod
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: modira-api}
+  minReplicas: 4
+  maxReplicas: 40
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 65}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modira-worker
+  namespace: modira-prod
+spec:
+  replicas: 6
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 2}
+  selector: {matchLabels: {app: modira-worker}}
+  template:
+    metadata:
+      labels: {app: modira-worker}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9102"
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: ghcr.io/modira/soc-os-worker:latest
+          args: ["python", "-m", "app.workers.kafka_worker", "--worker-type=$(WORKER_TYPE)"]
+          env:
+            - {name: WORKER_TYPE, value: automation}
+          envFrom: [{secretRef: {name: modira-secrets}}, {configMapRef: {name: modira-config}}]
+          resources:
+            requests: {cpu: 750m, memory: 1Gi}
+            limits: {cpu: "2", memory: 3Gi}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: modira-worker
+  namespace: modira-prod
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: modira-worker}
+  minReplicas: 6
+  maxReplicas: 160
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+    - type: Pods
+      pods:
+        metric: {name: kafka_consumer_lag}
+        target: {type: AverageValue, averageValue: "1000"}
