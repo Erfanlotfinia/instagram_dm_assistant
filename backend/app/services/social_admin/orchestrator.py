@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from sqlalchemy.orm import Session
 
@@ -12,7 +12,9 @@ from app.domain.models import Order
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.order_repository import OrderRepository
+from app.schemas.channels import NormalizedMessage
 from app.services.decision_trace_service import DecisionTraceService
+from app.services.social_admin.automation_engine import AutomationEngine
 from app.services.social_admin.context_graph import ConversationContextService
 from app.services.social_admin.handlers import (
     AutomationHandlerRegistry,
@@ -22,6 +24,14 @@ from app.services.social_admin.handlers import (
 from app.services.social_admin.human_handoff_service import HumanHandoffService
 from app.services.social_admin.llm_fallback_orchestrator import LLMFallbackOrchestrator
 from app.services.social_admin.scenario_router import ScenarioDecision, ScenarioRouter
+
+
+def _stable_context_uuid(value: str, *, namespace: str) -> UUID:
+    """Return real UUIDs unchanged and derive deterministic UUIDs for external ids."""
+    try:
+        return UUID(str(value))
+    except ValueError:
+        return uuid5(NAMESPACE_URL, f"modira:{namespace}:{value}")
 
 
 @dataclass
@@ -51,6 +61,7 @@ class SocialAdminOrchestrator:
         self.context_service = context_service or ConversationContextService(db)
         self.router = ScenarioRouter(self.context_service)
         self.handlers = AutomationHandlerRegistry(db, self.context_service, settings=self.settings)
+        self.automation_engine = AutomationEngine(self.handlers)
         self.llm_fallback = LLMFallbackOrchestrator()
         self.handoff_service = HumanHandoffService(db)
 
@@ -111,7 +122,28 @@ class SocialAdminOrchestrator:
             )
 
         if decision.requires_llm:
-            return SocialAdminResult(status="fallback_legacy", decision=decision)
+            llm_output = self.llm_fallback.safe_fallback({})
+            if llm_output.needs_human:
+                reason = llm_output.human_reason or "llm_fallback_needs_human"
+                self.handoff_service.trigger(conversation_id, reason)
+                return SocialAdminResult(
+                    status="needs_human",
+                    handoff_reason=reason,
+                    decision=decision,
+                    trace_metadata={"trace_id": str(trace_id), "route": "llm_fallback"},
+                )
+            if llm_output.needs_clarification:
+                return SocialAdminResult(
+                    status="needs_clarification",
+                    response_text=llm_output.clarification_question,
+                    decision=decision,
+                    trace_metadata={"trace_id": str(trace_id), "route": "llm_fallback"},
+                )
+            return SocialAdminResult(
+                status="fallback_legacy",
+                decision=decision,
+                trace_metadata={"trace_id": str(trace_id), "route": "llm_fallback"},
+            )
 
         handler_ctx = HandlerContext(
             shop_id=conversation.shop_id,
@@ -125,7 +157,17 @@ class SocialAdminOrchestrator:
             active_order=active_order,
             is_simulation=conversation.is_simulation,
         )
-        handler_result = self.handlers.dispatch(decision.handler, handler_ctx)
+        automation_result = self.automation_engine.execute(decision, handler_ctx)
+        handler_result = automation_result.handler_result
+        if handler_result is None:
+            return SocialAdminResult(
+                status="fallback_legacy",
+                decision=decision,
+                trace_metadata={
+                    "trace_id": str(trace_id),
+                    "automation_skip": automation_result.skipped_reason,
+                },
+            )
 
         self.trace_service.record(
             trace_id=trace_id,
@@ -190,14 +232,42 @@ class SocialAdminOrchestrator:
         )
         if decision.requires_llm or decision.requires_handoff:
             return decision, None
+        provider_key = provider or "unknown"
         handler_ctx = HandlerContext(
-            shop_id=UUID(shop_id),
-            conversation_id=UUID(conversation_id),
+            shop_id=_stable_context_uuid(shop_id, namespace="shop"),
+            conversation_id=_stable_context_uuid(
+                conversation_id, namespace=f"conversation:{provider_key}"
+            ),
             message_text=message.get("text", ""),
-            provider=provider,
-            raw_provider_payload=raw_provider_payload or {},
+            provider=provider_key,
+            raw_provider_payload={
+                **(raw_provider_payload or {}),
+                "external_conversation_id": conversation_id,
+            },
             active_order=active_order if isinstance(active_order, Order) else None,
             is_simulation=True,
         )
-        handler_result = self.handlers.dispatch(decision.handler, handler_ctx)
-        return decision, handler_result
+        automation_result = self.automation_engine.execute(decision, handler_ctx)
+        return decision, automation_result.handler_result
+
+    def route_normalized_message(
+        self,
+        message: NormalizedMessage,
+        *,
+        shop_id: str,
+        active_order: Any = None,
+    ) -> tuple[ScenarioDecision, HandlerResult | None]:
+        """Route the mandatory Modira NormalizedMessage envelope through core engine."""
+        payload = {
+            "text": message.content or "",
+            "button_id": message.metadata.get("button_id"),
+            "attachments": [item.model_dump(mode="json") for item in message.attachments],
+        }
+        return self.route_message(
+            payload,
+            shop_id=shop_id,
+            conversation_id=message.conversation_id,
+            provider=message.channel.value,
+            active_order=active_order,
+            raw_provider_payload=message.metadata.get("raw_payload") or {},
+        )

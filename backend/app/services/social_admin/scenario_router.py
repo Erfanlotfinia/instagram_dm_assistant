@@ -43,6 +43,7 @@ class ScenarioRouter:
     ) -> ScenarioDecision:
         text = (
             getattr(message, "text", None)
+            or getattr(message, "content", None)
             or (message.get("text") if isinstance(message, dict) else "")
             or ""
         )
@@ -112,7 +113,11 @@ class ScenarioRouter:
             if isinstance(conversation_context, dict)
             else getattr(conversation_context, "conversation_id", None)
         )
-        if self.referenced_resolver and conv_id and self._has_reference_signal(low, raw_provider_payload):
+        if (
+            self.referenced_resolver
+            and conv_id
+            and self._has_reference_signal(low, raw_provider_payload)
+        ):
             ref = self.referenced_resolver.resolve(
                 message, raw_provider_payload, str(conv_id)
             )
