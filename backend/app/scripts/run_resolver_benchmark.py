@@ -4,12 +4,8 @@
 from __future__ import annotations
 
 import json
-import sys
 from decimal import Decimal
 from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
 
 from sqlalchemy import select
 
@@ -19,15 +15,17 @@ from app.domain.models import Product, ProductVariant, Shop, User
 from app.integrations.openai_client import MockOpenAIEmbeddingClient
 from app.integrations.qdrant_client import MockQdrantClient
 from app.schemas.resolve import ResolveVariantRequest
+from app.scripts._db_bootstrap import ensure_database_schema
 from app.services.advanced_variant_resolver_service import AdvancedVariantResolverService
 from app.services.catalog_normalization_service import CatalogNormalizationService
 from app.services.catalog_reindex_service import CatalogReindexService
 
-
+ROOT = Path(__file__).resolve().parents[2]
 GOLDEN_PATH = ROOT / "app" / "tests" / "fixtures" / "golden_resolver_dataset.json"
 
 
 def run_benchmark() -> dict:
+    ensure_database_schema()
     scenarios = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
     db = SessionLocal()
     try:
@@ -60,13 +58,17 @@ def run_benchmark() -> dict:
             db.add(variant)
             db.commit()
             normalized = CatalogNormalizationService(db).normalize_product(product, [variant])
-            CatalogReindexService(db, qdrant, embeddings)._index_product(product, normalized, [variant])
+            CatalogReindexService(db, qdrant, embeddings)._index_product(
+                product, normalized, [variant]
+            )
 
         resolver = AdvancedVariantResolverService(db, qdrant, embeddings)
         top1 = top3 = 0
         for scenario in scenarios:
             result = resolver.resolve_variant(
-                ResolveVariantRequest(shop_id=shop.id, message_text=scenario["message_text"], limit=3),
+                ResolveVariantRequest(
+                    shop_id=shop.id, message_text=scenario["message_text"], limit=3
+                ),
                 user,
             )
             if result.candidates:

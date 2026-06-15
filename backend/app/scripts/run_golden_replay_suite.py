@@ -9,23 +9,27 @@ from pathlib import Path
 from uuid import uuid4
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 import app.domain  # noqa: F401
 from app.core.config import get_settings
 from app.core.security import encrypt_secret
 from app.domain.enums import InstagramAccountStatus, UserRole
-from app.domain.models import InstagramAccount, Shop, ShopMember, User
+from app.domain.models import InstagramAccount, Shop, ShopMember
 from app.repositories.policy_version_repository import PolicyVersionRepository
 from app.schemas.replay import ReplayRunRequest, ReplayScenarioInput
+from app.scripts._db_bootstrap import ensure_database_schema
 from app.services.auth_service import AuthService
 from app.services.policy_engine import DEFAULT_POLICY_CONFIG
 from app.services.replay_engine import ReplayEngine
 
-FIXTURE = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "golden_replay_scenarios.json"
+FIXTURE = (
+    Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "golden_replay_scenarios.json"
+)
 
 
 def main() -> int:
+    ensure_database_schema()
     database_url = get_settings().database_url
     engine = create_engine(database_url, pool_pre_ping=True)
     SessionLocal = sessionmaker(bind=engine)
