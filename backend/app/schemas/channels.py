@@ -69,6 +69,41 @@ class NormalizedInboundMessage(BaseModel):
     received_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class NormalizedMessage(BaseModel):
+    """Modira core message envelope shared by all channel adapters.
+
+    Adapters for Instagram, WhatsApp, Telegram, Bale, and Rubika normalize
+    provider-specific webhook payloads into this shape before invoking the
+    channel-agnostic social admin engine.
+    """
+
+    channel: ChannelProvider
+    user_id: str
+    conversation_id: str
+    message_type: ChannelMessageType = ChannelMessageType.UNKNOWN
+    content: str | None = None
+    attachments: list[MediaItem] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @classmethod
+    def from_inbound(cls, message: NormalizedInboundMessage) -> NormalizedMessage:
+        return cls(
+            channel=message.provider,
+            user_id=message.external_user_id,
+            conversation_id=message.external_chat_id,
+            message_type=message.message_type,
+            content=message.text or message.caption,
+            attachments=message.media_items,
+            metadata={
+                "external_update_id": message.external_update_id,
+                "external_message_id": message.external_message_id,
+                "shared_post_url": message.shared_post_url,
+                "button_id": message.button_id,
+                "raw_payload": message.raw_payload,
+            },
+        )
+
+
 class OutboundButton(BaseModel):
     id: str
     text: str

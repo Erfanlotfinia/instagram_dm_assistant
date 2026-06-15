@@ -1,182 +1,74 @@
-# Multi-channel Catalog Commerce Assistant
+# Modira — AI Social Media Admin OS
 
-This repository contains the v1.0.0 release candidate for a multi-channel catalog commerce assistant for online shops. It includes a FastAPI backend, PostgreSQL schema and Alembic migrations, RabbitMQ/Redis/Qdrant integrations, a pluggable LLM conversation orchestrator (OpenAI-compatible or Google Gemini), background workers, and a React TypeScript admin panel for shops, catalog management, conversations, orders, analytics, simulator, failed jobs, pilot controls, and system health.
+Modira is an AI Social Media Admin OS that automates sales, support, and customer communication across all social channels. It is built for online shops that need one automation-first operating layer for Instagram, WhatsApp, Telegram, Bale, and Rubika.
+
+## Product philosophy
+
+```text
+Automation First → LLM Fallback → Human Handoff
+```
+
+Deterministic rules and business services own prices, stock, order state, payments, shipping, and policy enforcement. LLM fallback is isolated to ambiguity resolution and safe drafting; it must not set prices, set stock, finalize orders, or bypass business rules.
 
 ## Architecture
 
 ```text
-.
-├── backend/                 # FastAPI service and Python project metadata
-│   ├── app/
-│   │   ├── api/v1/          # Versioned API routers only
-│   │   ├── core/            # Settings, logging, errors, security, pagination
-│   │   ├── db/              # SQLAlchemy session, base metadata, Alembic migrations
-│   │   ├── domain/          # SQLAlchemy models and domain enums
-│   │   ├── services/        # Application services and orchestration logic
-│   │   ├── integrations/    # External service adapters
-│   │   ├── workers/         # Background consumers/producers
-│   │   ├── schemas/         # Pydantic request/response schemas
-│   │   ├── repositories/    # Persistence adapters
-│   │   └── tests/           # Pytest suite
-│   ├── alembic.ini
-│   └── pyproject.toml
-├── frontend/                # Vite React TypeScript admin app
-│   ├── src/app/             # App shell, global styles, test setup
-│   ├── src/components/      # Reusable UI components
-│   ├── src/pages/           # Page-level components
-│   ├── src/services/        # API client setup
-│   ├── src/types/           # Shared frontend types
-│   ├── src/hooks/           # React hooks
-│   └── src/routes/          # Route definitions
-├── docker-compose.yml       # Local multi-service stack
-└── .env.example             # Required environment variable template
+InstagramAdapter ┐
+WhatsAppAdapter  ├──> NormalizedMessage
+TelegramAdapter  ┤        channel, user_id, conversation_id,
+BaleAdapter      ┤        message_type, content, attachments, metadata
+RubikaAdapter    ┘
+                       │
+                       ▼
+Unified Inbox / Message Event System
+                       │
+                       ▼
+Core Engine
+  ├─ ConversationContextGraph / ConversationContextService
+  ├─ AutomationEngine + AutomationHandlerRegistry
+  ├─ CatalogQueryPlanner + ProductDiscoveryService + CatalogService
+  ├─ ScenarioRouter
+  ├─ OrderService / PaymentService / ShippingService
+  ├─ LLMFallbackOrchestrator
+  └─ HumanHandoffService
+                       │
+                       ▼
+Admin dashboard, analytics, scenario simulator, and operator controls
 ```
 
-## Services
+## Generic product model
 
-Docker Compose starts the following services:
+Modira treats catalog items generically so shops can sell electronics, tools, cosmetics, furniture, services, digital products, or any other product category:
 
-- `backend`: FastAPI API server on <http://localhost:8800> (container port 8000; runs Alembic migrations before startup)
-- `worker`: RabbitMQ consumer for inbound message processing
-- `scheduler`: periodic background jobs (outbox publisher, retention, etc.)
-- `frontend`: Vite admin app on <http://localhost:5173>
-- `postgres`: PostgreSQL database on `localhost:5432`
-- `redis`: Redis cache/broker support on `localhost:6379`
-- `rabbitmq`: RabbitMQ on `localhost:5672`, management UI on <http://localhost:15672>
-- `qdrant`: Qdrant vector database on <http://localhost:6333>
+- `product_id`
+- `title`
+- `description`
+- `category`
+- `attributes` (key-value)
+- `variants`
+- `price`
+- `stock`
+- `media`
+- `availability_rules`
 
-Postgres, Redis, RabbitMQ, and Qdrant include container health checks so dependent services wait for infrastructure readiness.
+Legacy catalog fields are adapted into this generic model by `ProductDiscoveryService` while preserving existing order and payment infrastructure.
 
-## Environment variables
-
-Copy the example file before starting the stack:
-
-```bash
-cp .env.example .env
-```
-
-Required backend variables:
-
-- `DATABASE_URL` — PostgreSQL connection string.
-- `REDIS_URL` — Redis connection string for locks, rate limits, and state support.
-- `RABBITMQ_URL` — RabbitMQ AMQP URL for inbound message jobs.
-- `QDRANT_URL` — Qdrant API URL for product semantic search.
-- `LLM_MODE` — `mock` (default; deterministic 0.50 confidence, good for tests/local) or `live` (real LLM calls with real confidence so genuine questions resolve instead of escalating to handoff).
-- `LLM_PROVIDER` — `openai` (default, OpenAI-compatible/AvalAI) or `gemini` (Google Gemini).
-- `OPENAI_API_KEY` — API key when `LLM_PROVIDER=openai`.
-- `OPENAI_API_BASE_URL` — OpenAI-compatible API base URL (default: `https://api.avalai.ir/v1`).
-- `GEMINI_API_KEY` — Google Gemini API key when `LLM_PROVIDER=gemini`.
-- `OPENAI_MODEL` / `GEMINI_MODEL` — chat model for the selected provider.
-- `OPENAI_EMBEDDING_MODEL` / `GEMINI_EMBEDDING_MODEL` — embedding model for semantic search.
-- `APP_ENV` / `LOG_LEVEL` — runtime environment and logging level.
-- `JWT_SECRET_KEY` — at least 32 random bytes recommended in production.
-- `TOKEN_ENCRYPTION_KEY` — secret used to derive the Fernet key for Instagram token encryption.
-- Provider webhook secrets and tokens — Meta/Instagram, WhatsApp, Telegram, Bale, and Rubika credentials. Tokens are encrypted at rest and must never be returned raw by APIs.
-- `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` / `INSTAGRAM_APP_SECRET` — Meta webhook verification and signature validation.
-
-Frontend uses `VITE_API_BASE_URL` to target the backend from the browser.
-
-## Local setup with Docker Compose
+## Local development
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Useful commands:
-
-```bash
-docker compose ps
-docker compose logs -f backend
-docker compose logs -f worker
-docker compose exec backend python -m app.scripts.seed
-docker compose exec backend python -m app.scripts.seed_demo_data
-docker compose down
-docker compose down -v
-```
-
-Health endpoints:
-
-```bash
-curl http://localhost:8800/health
-curl http://localhost:8800/ready
-curl http://localhost:8800/api/v1/health
-curl http://localhost:8800/api/v1/ready
-```
-
-## Backend development
-
-From the `backend/` directory:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-dev.txt
-alembic upgrade head
-python -m app.scripts.seed
-python -m app.scripts.seed_demo_data
-uvicorn app.main:app --reload
-```
-
-### Demo credentials (local development only)
-
-After seeding:
-
-- Email: `admin@example.com`
-- Password: `changeme123`
-- Demo shop slug: `demo-shop`
-
-Use **Onboarding** and **DM Simulator** in the admin panel to verify setup before enabling auto-replies.
-
-Run backend tests:
+Backend checks:
 
 ```bash
 cd backend
 pytest
-```
-
-Run backend linting:
-
-```bash
-cd backend
 ruff check .
 ```
 
-## Database migrations
-
-Alembic is configured under `backend/app/db/migrations` and uses `DATABASE_URL` from the environment.
-
-Apply migrations inside the backend container:
-
-```bash
-docker compose exec backend alembic upgrade head
-docker compose exec backend alembic downgrade -1  # only when safe for your local data
-docker compose exec backend alembic upgrade head
-```
-
-Create a future migration after adding SQLAlchemy models:
-
-```bash
-docker compose exec backend alembic revision --autogenerate -m "describe change"
-```
-
-For local development outside Docker:
-
-```bash
-cd backend
-alembic upgrade head
-```
-
-## Frontend development
-
-From the `frontend/` directory:
-
-```bash
-npm install
-npm run dev
-```
-
-Run frontend checks:
+Frontend checks:
 
 ```bash
 cd frontend
@@ -186,436 +78,10 @@ npm test
 npm run build
 ```
 
-## CI and verification
-
-GitHub Actions (`.github/workflows/ci.yml`) runs:
-
-- **backend** — `ruff check`, clean-db `alembic upgrade head`, `pytest app/tests`, resolver benchmark, golden replay suite
-- **frontend** — `typecheck`, `lint`, `vitest`, `build`
-- **docker-smoke** — `docker compose config`, build, `/health`, `/api/v1/ready`, frontend HTTP checks
-
-One-shot local gate (Postgres on `localhost:5432`, Redis on `6379`):
-
-```bash
-# Linux / macOS / Git Bash
-bash scripts/verify_local.sh
-
-# Windows PowerShell
-powershell -File scripts/verify_local.ps1
-```
-
-Individual steps:
-
-```bash
-# Backend
-cd backend && ruff check . && pytest app/tests -q
-bash scripts/check_migrations.sh    # from repo root
-
-# Frontend
-cd frontend && npm run typecheck && npm run lint && npm test && npm run build
-
-# Full stack smoke (requires Docker)
-bash scripts/docker_smoke_test.sh          # Linux / macOS / Git Bash
-powershell -File scripts/docker_smoke_test.ps1   # Windows
-```
-
-Latest remediation verification: [docs/verification_report.md](docs/verification_report.md).
-
-Operational docs: [docs/security_configuration.md](docs/security_configuration.md), [docs/production_incident_response.md](docs/production_incident_response.md), [docs/migration_guide.md](docs/migration_guide.md), [docs/failed-jobs-runbook.md](docs/failed-jobs-runbook.md), [docs/analytics-guide.md](docs/analytics-guide.md). Release notes: [docs/release/v1.0.0.md](docs/release/v1.0.0.md).
-
-## Implementation notes
-
-- API routers remain thin and expose only HTTP boundaries.
-- Cross-cutting concerns live in `backend/app/core`.
-- Structured JSON logging is configured at application startup for container-friendly log ingestion.
-- Global exception handlers normalize API error responses.
-- CORS allows the local Vite frontend origin by default.
-- Instagram webhook ingestion stores raw payloads and uses message IDs for idempotency.
-- RabbitMQ workers serialize conversation processing with Redis locks.
-- The LLM only extracts structured intent/slots; services validate products, variants, prices, inventory, payments, and state transitions.
-- Orders require explicit customer confirmation before payment and cannot be marked paid by the LLM.
-
-## Order correctness foundation
-
-Deterministic order lifecycle with durable reservations, action-policy gating, webhook idempotency, and full audit trails.
-
-Key API routes:
-
-- `POST /api/v1/orders/draft` — create draft + `order_items_draft`
-- `POST /api/v1/orders/{id}/clarify|confirm|reserve|payment-link|complete|cancel`
-- `GET /api/v1/orders/{id}` and `GET /api/v1/orders/{id}/timeline`
-- `POST /api/v1/webhooks/meta` — Meta webhook alias with Redis + DB idempotency
-
-Shop-scoped routes under `/api/v1/shops/{shop_id}/orders/*` remain as aliases.
-
-See [docs/order-correctness-architecture.md](docs/order-correctness-architecture.md).
-
-## Meta Instagram webhook setup
-
-Configure these backend environment variables:
-
-- `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` — shared secret used during Meta webhook verification
-- `ENABLE_REAL_INSTAGRAM_SEND` — keep `false` locally unless you are ready to call the real Graph API
-- `CONVERSATION_LOCK_TTL_SECONDS` — Redis lock TTL for per-conversation worker serialization
-
-Webhook endpoints exposed by the API:
-
-- `GET /api/v1/webhooks/instagram` — Meta challenge verification
-- `POST /api/v1/webhooks/instagram` — inbound Instagram messaging events
-- `POST /api/v1/webhooks/meta` — alias with idempotent ingestion
-
-### Local development with ngrok
-
-1. Start the stack: `docker compose up --build`
-2. Expose the backend: `ngrok http 8800`
-3. In the Meta developer dashboard, create a webhook subscription for your Instagram app:
-   - Callback URL: `https://<your-ngrok-host>/api/v1/webhooks/instagram`
-   - Verify token: same value as `INSTAGRAM_WEBHOOK_VERIFY_TOKEN`
-4. Subscribe to `messages` (and related messaging fields you need).
-5. Connect an Instagram business account in the admin UI and ensure its `ig_user_id` matches the webhook `recipient.id`.
-
-### Processing pipeline
-
-1. Webhook stores the full raw payload in `webhook_events`.
-2. Matching `instagram_accounts` are resolved by recipient Instagram user ID.
-3. Customers, conversations, and inbound messages are created or updated.
-4. A job is published to RabbitMQ queue `instagram.message.received`.
-5. The `worker` service consumes jobs, acquires a Redis lock per conversation, runs orchestration, logs agent decisions/actions, stores outbound messages, and marks the webhook event processed.
-
-Run the worker locally:
-
-```bash
-docker compose up worker
-```
-
-Run the scheduler locally:
-
-```bash
-docker compose up scheduler
-```
-
-Or outside Docker:
-
-```bash
-cd backend
-python -m app.workers.main
-```
-
-## Sprint 6 manual QA checklist
-
-Use this checklist after `docker compose up --build` and seeding a demo shop.
-
-### Authentication & shell
-
-- [ ] Sign in with email/password; invalid input shows field-level validation errors
-- [ ] JWT persists across page refresh; sign out clears session
-- [ ] Sidebar shows selected shop name; shop selection persists across pages
-
-### Dashboard
-
-- [ ] Metrics load for selected shop: today orders, paid, waiting for payment, handoffs
-- [ ] Conversion funnel shows inbound → product resolved → draft → paid counts
-- [ ] Low-stock variants list links to product detail
-
-### Conversations
-
-- [ ] List filters by state, handoff, date, and customer search
-- [ ] Detail shows message timeline, slots, linked product/order, agent actions
-- [ ] Take over → send manual message → release to agent workflow works
-- [ ] Mark resolved closes conversation; customer details can be edited
-- [ ] Create order from conversation when slots are complete
-
-### Products & mapping
-
-- [ ] Product list supports search and pagination; low-stock products are flagged
-- [ ] Product detail shows variant stock with low-stock warnings
-- [ ] Instagram mapping: paste URL, select product, save manual map
-- [ ] Test resolve shows match; confirm semantic match creates mapping
-
-### Orders
-
-- [ ] Order list filters and pagination work
-- [ ] Order detail: confirm, mark paid, ship (with tracking), cancel use confirmation dialogs
-- [ ] Toast notifications appear for success and error actions
-
-### Settings
-
-- [ ] Shop profile can be updated (name, currency)
-- [ ] Instagram account and webhook status display correctly
-- [ ] Agent settings save: auto reply, confidence thresholds, handoff mode, Persian default language
-
-### RTL & responsive
-
-- [ ] Layout remains usable on mobile viewport (< 900px)
-- [ ] Setting `dir="rtl"` on `<html>` mirrors message bubbles and table alignment
-
-## Sprint 7: Security, observability, and production readiness
-
-### Security
-
-- Redis rate limiting on login, webhook, and outbound message endpoints
-- Request ID middleware (`X-Request-ID`) and secure response headers
-- Audit logging for login, product CRUD, inventory changes, order status, manual payment, handoff take/release
-- Instagram access tokens encrypted at rest (Fernet)
-- Sensitive data masked in structured JSON logs
-- Shop membership checks on shop-scoped API routes
-- Optional Meta webhook signature verification (`INSTAGRAM_APP_SECRET`)
-- Production CORS configuration via `CORS_ORIGINS`
-
-### Observability
-
-- Structured JSON logs with `request_id` correlation
-- Prometheus metrics at `GET /api/v1/metrics`
-- Readiness probe at `GET /api/v1/ready` (postgres, redis, rabbitmq, qdrant). Returns HTTP 200 for `ok` and `degraded`; HTTP 503 only when Postgres is unavailable (`failed`).
-
-### Reliability
-
-- RabbitMQ retry queue + DLQ with configurable max retries
-- Idempotency: webhook message ID, payment callback reference, order confirmation
-- Background scheduler: expire unpaid orders, refresh product embeddings
-- Graceful worker shutdown on SIGINT/SIGTERM
-
-### Documentation
-
-See the `docs/` folder:
-
-- [Production deployment](docs/production-deployment.md)
-- [Environment variables](docs/environment-variables.md)
-- [Meta webhook setup](docs/meta-webhook-setup.md)
-- [Operator guide](docs/operator-guide.md)
-- [Admin guide](docs/admin-guide.md)
-- [Troubleshooting](docs/troubleshooting.md)
-- [API reference](docs/api.md)
-- [Demo scenario](docs/demo-scenario.md)
-
-### Run tests
-
-```bash
-cd backend && pytest
-cd frontend && npm test
-```
-
-### Health and metrics
-
-```bash
-curl http://localhost:8800/health
-curl http://localhost:8800/api/v1/ready
-curl http://localhost:8800/api/v1/metrics
-```
-
-
-## Competitive positioning
-
-This product is not a generic social-media chatbot. It is a specialized Instagram Fashion Order Agent for online fashion shops. The differentiation is deterministic backend control around Instagram post-to-product mapping, Persian/English color normalization, size normalization, SKU/variant resolution, inventory validation, explicit order confirmation, payment callback safety, human handoff, operator preview, decision audit trails, and conversion analytics.
-
-### Demo: Persian fashion DM order
-
-Customer sends: `این کارو مشکی سایز L می‌خوام`
-
-Expected flow:
-
-1. Instagram post maps to product, or a multi-product post asks the customer which item they mean.
-2. Color `مشکی` normalizes to `black`; size `L` normalizes to `L`.
-3. Backend `VariantResolver` resolves SKU and stock; the LLM only extracts raw slots.
-4. Missing customer information is requested, then a draft order is created.
-5. Customer explicitly confirms; only then is payment initiated.
-6. Idempotent payment callback marks the order paid once and inventory is not reduced/reserved twice.
-7. Admin sees current state, slots, selected product/variant, alternatives, confidence, suggested reply, and full audit trail.
-
-### Local development
-
-```bash
-docker compose up -d postgres redis rabbitmq qdrant
-cd backend && alembic upgrade head && uvicorn app.main:create_app --factory --reload
-cd frontend && npm install && npm run dev
-```
-
-Key admin pages: `/onboarding`, `/simulator`, `/analytics`, `/system-health`, `/instagram-mapping`, `/conversations`, `/orders`.
-
-## Sprint F: Pilot readiness
-
-See [Sprint F pilot readiness guide](docs/sprint-f-pilot-readiness.md) for analytics APIs, system health, failed jobs, idempotency, security audit coverage, and the production readiness checklist.
-
-
-## Competitor-informed positioning
-
-This is not a generic chatbot. It is an Instagram-first fashion order agent that turns social interactions into accurate, payable, shippable orders. The architecture now keeps Instagram parsing inside integrations while the order core consumes channel-independent messages, making WhatsApp, Telegram, and Web Chat future-ready.
-
-Key differentiators versus Meta Business Agent, Manychat, Chatfuel, Gorgias, SleekFlow, Inrō, Respond.io, and Tidio:
-
-- Instagram post-to-product/SKU mapping, including multi-product posts.
-- Deterministic color and size normalization for fashion variants.
-- Inventory validation and unavailable-demand tracking before order/payment actions.
-- Comment/story/reel/ad trigger rules that continue into the normal order flow.
-- Agent Studio controls for auto-send, previews, brand voice, selling style, discount policy, and handoff.
-- Safe agent decision traces and a DM Simulator for test conversations.
-- Fashion/order analytics for funnel, post conversion, unavailable demand, handoff, and response time.
-
-See `docs/competitor-research-mvp.md` for the detailed demo scenario and operator guide.
-
-## TRL validation and pilot readiness
-
-Formal TRL evidence documentation lives in [`docs/trl/`](docs/trl/). See the [TRL Assessment Report](docs/trl/trl_assessment_report.md) for the current TRL estimate and gaps.
-
-### Run TRL validation
-
-1. Start the stack and apply migrations:
-
-```bash
-docker compose up --build
-docker compose exec backend alembic upgrade head
-```
-
-2. Seed the TRL demo shop (20 products, 500+ variants, post mappings, Persian aliases):
-
-```bash
-docker compose exec backend python -m app.scripts.seed_trl_demo_data
-```
-
-3. Sign in to the admin panel as `trl-admin@example.com` / `Password123!` and select shop **TRL Fashion Demo Shop** (`trl-fashion-demo`).
-
-4. Run validation via API or UI:
-
-```bash
-# API (replace shop_id and token)
-curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
-  -d '{"reset_demo_data": false}' \
-  http://localhost:8800/api/v1/shops/<shop_id>/trl-validation/run
-```
-
-Or open **TRL Validation** in the sidebar (`/trl-validation`) and click **Run validation**. The runner executes 100 labeled scenarios from `backend/app/tests/fixtures/trl_scenarios.json` using a rule-based LLM substitute and records metrics in `trl_validation_runs`.
-
-5. Export a markdown summary:
-
-```bash
-docker compose exec backend python -m app.scripts.generate_trl_report
-docker compose exec backend python -m app.scripts.generate_trl_report --output /tmp/trl_report.md
-```
-
-Archive exports under `docs/trl/runs/` for TRL 5 evidence (not committed by default).
-
-### Seed TRL demo data
-
-```bash
-docker compose exec backend python -m app.scripts.seed_trl_demo_data
-# Reset and re-seed:
-docker compose exec backend python -c "from app.scripts.seed_trl_demo_data import seed_trl_demo_data; print(seed_trl_demo_data(reset=True))"
-```
-
-Credentials: `trl-admin@example.com` / `trl-operator@example.com`, password `Password123!`.
-
-### Open TRL validation dashboard
-
-- URL: <http://localhost:5173/trl-validation>
-- Requires shop membership on `trl-fashion-demo` (or any shop with TRL runs)
-- Shows run history, threshold pass/fail, scenario results, risk metrics, failed-scenario drill-down
-
-### Check pilot readiness
-
-```bash
-curl -H "Authorization: Bearer <token>" \
-  http://localhost:8800/api/v1/shops/<shop_id>/pilot-readiness
-```
-
-Admin UI: <http://localhost:5173/pilot-readiness> — criteria, checklist, metrics, and event log. The shop is considered TRL 6 pilot-ready only when `ready_for_trl6_pilot` is `true`.
-
-See [Pilot Plan](docs/trl/pilot_plan.md) and [Operational Readiness Checklist](docs/trl/operational_readiness_checklist.md).
-
-### Emergency stop
-
-Immediately blocks auto-send and auto-order progression when pilot mode is enabled:
-
-```bash
-curl -X POST -H "Authorization: Bearer <token>" \
-  http://localhost:8800/api/v1/shops/<shop_id>/pilot/emergency-stop
-
-curl -X POST -H "Authorization: Bearer <token>" \
-  http://localhost:8800/api/v1/shops/<shop_id>/pilot/resume
-```
-
-Or use **Emergency stop** / **Resume** on the Pilot Readiness page. Test before admitting real customer traffic; readiness requires at least one `emergency_stop` pilot event.
-
-### Interpret TRL metrics
-
-| Metric | Meaning |
-|--------|---------|
-| `intent_accuracy` | Fraction of scenarios where detected intent matches expected |
-| `slot_extraction_accuracy` | Color/size/quantity extraction accuracy |
-| `product_resolution_accuracy` | Product linked when scenario expects resolution |
-| `variant_resolution_accuracy` | SKU/variant resolved when expected |
-| `false_order_creation_count` | Orders created when scenario expected none |
-| `handoff_precision` / `handoff_recall` | Human handoff detection quality |
-| `thresholds_passed` | Per-metric pass against `THRESHOLDS` in `trl_validation_runner.py` |
-
-**Caveats:** Some thresholds (`invalid_llm_json_handled_rate`, `duplicate_webhook_idempotency_rate`, `critical_security_tests_pass_rate`, payment/inventory counts) are stubbed in the runner until independently measured. TRL 5 sign-off requires a full 100-scenario run with exported report — see [validation run template](docs/trl/validation_run_template.md).
-
-Threshold definitions:
-
-```text
-intent_accuracy ≥ 90%
-slot_extraction_accuracy ≥ 85%
-product_resolution_accuracy ≥ 90%
-variant_resolution_accuracy ≥ 85%
-false_order_creation_count ≤ 0
-```
-
-Run backend TRL tests:
-
-```bash
-cd backend && pytest app/tests/test_trl_validation.py app/tests/test_pilot_readiness.py -v
-```
-
-## Additional guides
-
-- [Migration guide](docs/migration-guide.md)
-- [Failed jobs runbook](docs/failed-jobs-runbook.md)
-- [DM simulator guide](docs/simulator-guide.md)
-- [Analytics guide](docs/analytics-guide.md)
-- [Retention and deletion notes](docs/retention-deletion.md)
-- [Meta webhook setup](docs/meta-webhook-setup.md)
-- [Operator guide](docs/operator-guide.md)
-- [Troubleshooting](docs/troubleshooting.md)
-
-## Multi-channel Catalog Commerce Assistant
-
-The application uses one channel-agnostic commerce/order engine with provider adapters for Instagram, WhatsApp Business Platform, Telegram Bot API, Bale Bot API, and Rubika Bot API. Provider adapters normalize inbound updates and send outbound messages; deterministic backend services own product resolution, inventory, payment, shipping, and order state transitions.
-
-### Multi-channel verification commands
-
-```bash
-cd backend && pytest -q
-cd backend && alembic upgrade head
-cd frontend && npm run typecheck
-cd frontend && npm run lint
-cd frontend && npm run test
-cd frontend && npm run build
-docker compose config
-docker compose build
-docker compose up -d
-```
-
-### Provider verification note
-
-WhatsApp, Telegram, Bale, and Rubika are implemented with mocked tests; real-provider sandbox verification still required before production. Do not configure production without encrypted credentials, webhook secrets where supported, and emergency-stop procedures.
-
-## Catalog Commerce Assistant positioning
-
-This repository is now positioned as a **Multi-channel Catalog Commerce Assistant** for online shops across Instagram, WhatsApp, Telegram, Bale, and Rubika. The assistant helps shops answer customer questions, identify products, resolve catalog attributes and variants/options, check stock, draft orders, collect customer details, support payment and shipping flows, hand off risky cases, and analyze conversations and sales.
-
-Fashion and clothing support is preserved as a category preset under the generic catalog intelligence system. Existing color/size flows continue to work through compatibility APIs, while new catalog attributes can model electronics, cosmetics, home goods, food, books/media, digital products, and general product shops.
-
-See the catalog documentation for the generic data model, category presets, attribute dictionary, product import, catalog quality checks, and generic resolver behavior.
-
-## AI social media admin replacement roadmap
-
-The architecture is now explicitly automation-first and LLM-second for social commerce administration across Instagram, WhatsApp, Telegram, Bale, and Rubika. Provider adapters normalize inbound/outbound channel details; the central social admin automation layer handles scenarios, context references, catalog discovery, handler routing, safe structured LLM fallback, human handoff packets, operator corrections, and approval-gated admin content tasks.
-
-Safety guarantees:
-
-- Deterministic handlers run before LLM fallback.
-- LLM outputs are structured and validated, and cannot set final product variants, prices, stock, discounts, payment status, shipping status, or final order state.
-- Commerce state changes continue to go through existing order, payment, shipping, inventory, and policy services.
-- Admin content generation produces drafts only and requires approval before use.
-- Signed callback actions reject forged, expired, or cross-shop payloads.
-
-See `docs/scenarios/social_admin_automation.md` for the scenario coverage matrix and module documentation.
+## Key directories
+
+- `backend/app/channels/` — channel adapter layer for supported social providers.
+- `backend/app/schemas/channels.py` — normalized inbound/outbound schemas and the Modira `NormalizedMessage` envelope.
+- `backend/app/services/social_admin/` — channel-agnostic core engine modules.
+- `backend/app/services/order_service.py`, `payment_service.py`, `shipping_service.py` — business-rule-owned commerce state transitions.
+- `frontend/src/` — Modira admin dashboard, analytics, simulator, and controls.

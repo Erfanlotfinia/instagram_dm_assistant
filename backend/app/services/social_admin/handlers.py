@@ -25,7 +25,7 @@ class HandlerContext:
     conversation_id: UUID
     message_id: UUID | None = None
     message_text: str = ""
-    provider: str = "instagram"
+    provider: str = "unknown"
     raw_provider_payload: dict[str, Any] = field(default_factory=dict)
     active_order: Order | None = None
     referenced_product_id: UUID | None = None
