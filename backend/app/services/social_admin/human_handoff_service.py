@@ -24,10 +24,30 @@ class HumanHandoffService:
     def trigger(
         self, conversation_id: UUID | str | None, reason: str = "human_handoff_required"
     ) -> HumanHandoffResult:
-        if self.db is not None and conversation_id is not None:
-            conv = self.db.get(Conversation, UUID(str(conversation_id)))
+        conversation_id_str = str(conversation_id) if conversation_id is not None else None
+        internal_conversation_id = self._try_parse_internal_conversation_id(conversation_id)
+        if self.db is not None and internal_conversation_id is not None:
+            conv = self.db.get(Conversation, internal_conversation_id)
             if conv is not None:
                 conv.handoff_required = True
                 conv.handoff_reason = reason
                 self.db.add(conv)
-        return HumanHandoffResult(True, reason, str(conversation_id) if conversation_id else None)
+        return HumanHandoffResult(True, reason, conversation_id_str)
+
+    @staticmethod
+    def _try_parse_internal_conversation_id(conversation_id: UUID | str | None) -> UUID | None:
+        """Return an internal conversation UUID, or None for external channel ids.
+
+        Modira normalized messages carry channel-agnostic string conversation ids
+        such as Telegram chat ids or provider conversation keys. Persisting handoff
+        state requires the internal database UUID, so external ids must not crash
+        the safety path.
+        """
+        if conversation_id is None:
+            return None
+        if isinstance(conversation_id, UUID):
+            return conversation_id
+        try:
+            return UUID(str(conversation_id))
+        except ValueError:
+            return None

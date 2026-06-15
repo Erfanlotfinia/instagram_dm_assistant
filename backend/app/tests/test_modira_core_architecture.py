@@ -73,3 +73,21 @@ def test_human_handoff_service_is_final_safety_layer_without_db():
     assert result.required is True
     assert result.reason == "customer_requested_operator"
     assert result.conversation_id == "conv-1"
+
+
+class _ExplodingDb:
+    def get(self, *_args, **_kwargs):
+        raise AssertionError("external conversation ids must not be cast or looked up")
+
+    def add(self, *_args, **_kwargs):
+        raise AssertionError("external conversation ids must not be persisted directly")
+
+
+def test_handoff_service_skips_db_lookup_for_external_conversation_id():
+    result = HumanHandoffService(_ExplodingDb()).trigger(
+        "telegram-chat-1", "external_channel_conversation"
+    )
+
+    assert result.required is True
+    assert result.reason == "external_channel_conversation"
+    assert result.conversation_id == "telegram-chat-1"
