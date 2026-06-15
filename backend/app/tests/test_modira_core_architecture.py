@@ -6,6 +6,7 @@ from app.services.social_admin.automation_engine import AutomationEngine
 from app.services.social_admin.context_graph import ConversationContextGraph
 from app.services.social_admin.human_handoff_service import HumanHandoffService
 from app.services.social_admin.llm_fallback_orchestrator import LLMFallbackOrchestrator
+from app.services.social_admin.orchestrator import SocialAdminOrchestrator
 from app.services.social_admin.scenario_router import ScenarioRouter
 
 
@@ -118,3 +119,23 @@ def test_router_accepts_normalized_message_content_for_multichannel_flow():
 
     assert decision.scenario_code == "MANUAL_PAYMENT"
     assert decision.requires_llm is False
+
+
+def test_normalized_message_entrypoint_handles_external_chat_ids_for_automation():
+    inbound = NormalizedInboundMessage(
+        provider=ChannelProvider.WHATSAPP,
+        external_message_id="wamid-1",
+        external_chat_id="whatsapp-chat-2",
+        external_user_id="wa-user-2",
+        text="I paid by bank transfer",
+    )
+    normalized = NormalizedMessage.from_inbound(inbound)
+
+    decision, result = SocialAdminOrchestrator(None).route_normalized_message(
+        normalized, shop_id="00000000-0000-0000-0000-000000000001"
+    )
+
+    assert decision.scenario_code == "MANUAL_PAYMENT"
+    assert result is not None
+    assert result.status == "handled"
+    assert result.audit_metadata["handler"] == "ManualPaymentReceiptHandler"

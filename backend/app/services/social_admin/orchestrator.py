@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from sqlalchemy.orm import Session
 
@@ -24,6 +24,14 @@ from app.services.social_admin.handlers import (
 from app.services.social_admin.human_handoff_service import HumanHandoffService
 from app.services.social_admin.llm_fallback_orchestrator import LLMFallbackOrchestrator
 from app.services.social_admin.scenario_router import ScenarioDecision, ScenarioRouter
+
+
+def _stable_context_uuid(value: str, *, namespace: str) -> UUID:
+    """Return real UUIDs unchanged and derive deterministic UUIDs for external ids."""
+    try:
+        return UUID(str(value))
+    except ValueError:
+        return uuid5(NAMESPACE_URL, f"modira:{namespace}:{value}")
 
 
 @dataclass
@@ -224,12 +232,18 @@ class SocialAdminOrchestrator:
         )
         if decision.requires_llm or decision.requires_handoff:
             return decision, None
+        provider_key = provider or "unknown"
         handler_ctx = HandlerContext(
-            shop_id=UUID(shop_id),
-            conversation_id=UUID(conversation_id),
+            shop_id=_stable_context_uuid(shop_id, namespace="shop"),
+            conversation_id=_stable_context_uuid(
+                conversation_id, namespace=f"conversation:{provider_key}"
+            ),
             message_text=message.get("text", ""),
-            provider=provider,
-            raw_provider_payload=raw_provider_payload or {},
+            provider=provider_key,
+            raw_provider_payload={
+                **(raw_provider_payload or {}),
+                "external_conversation_id": conversation_id,
+            },
             active_order=active_order if isinstance(active_order, Order) else None,
             is_simulation=True,
         )
