@@ -325,3 +325,7 @@ class ConversationContextService:
 
     def explain_context_resolution(self, resolution: ReferenceResolution) -> dict[str, Any]:
         return resolution.__dict__
+
+
+# Product terminology alias used by the Modira architecture docs.
+ConversationContextGraph = ConversationContextService

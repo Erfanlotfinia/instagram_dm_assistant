@@ -14,9 +14,14 @@ from app.repositories.message_repository import MessageRepository
 from app.repositories.order_repository import OrderRepository
 from app.services.decision_trace_service import DecisionTraceService
 from app.services.social_admin.context_graph import ConversationContextService
-from app.services.social_admin.handlers import AutomationHandlerRegistry, HandlerContext, HandlerResult
+from app.services.social_admin.handlers import (
+    AutomationHandlerRegistry,
+    HandlerContext,
+    HandlerResult,
+)
+from app.services.social_admin.human_handoff_service import HumanHandoffService
 from app.services.social_admin.llm_fallback_orchestrator import LLMFallbackOrchestrator
-from app.services.social_admin.scenario_router import ScenarioRouter, ScenarioDecision
+from app.services.social_admin.scenario_router import ScenarioDecision, ScenarioRouter
 
 
 @dataclass
@@ -45,10 +50,9 @@ class SocialAdminOrchestrator:
         self.trace_service = DecisionTraceService(db)
         self.context_service = context_service or ConversationContextService(db)
         self.router = ScenarioRouter(self.context_service)
-        self.handlers = AutomationHandlerRegistry(
-            db, self.context_service, settings=self.settings
-        )
+        self.handlers = AutomationHandlerRegistry(db, self.context_service, settings=self.settings)
         self.llm_fallback = LLMFallbackOrchestrator()
+        self.handoff_service = HumanHandoffService(db)
 
     def try_handle(
         self,
@@ -97,9 +101,11 @@ class SocialAdminOrchestrator:
         )
 
         if decision.requires_handoff:
+            reason = decision.reasons[0] if decision.reasons else "handoff_required"
+            self.handoff_service.trigger(conversation_id, reason)
             return SocialAdminResult(
                 status="needs_human",
-                handoff_reason=decision.reasons[0] if decision.reasons else "handoff_required",
+                handoff_reason=reason,
                 decision=decision,
                 trace_metadata={"trace_id": str(trace_id), "route": "scenario_router"},
             )
@@ -112,7 +118,9 @@ class SocialAdminOrchestrator:
             conversation_id=conversation_id,
             message_id=message_id,
             message_text=message.text or "",
-            provider=str(message.channel.value if hasattr(message.channel, "value") else message.channel),
+            provider=str(
+                message.channel.value if hasattr(message.channel, "value") else message.channel
+            ),
             raw_provider_payload=raw_payload or {},
             active_order=active_order,
             is_simulation=conversation.is_simulation,
@@ -133,6 +141,9 @@ class SocialAdminOrchestrator:
         )
 
         if handler_result.status == "needs_human":
+            self.handoff_service.trigger(
+                conversation_id, handler_result.handoff_reason or "handler_requested_handoff"
+            )
             return SocialAdminResult(
                 status="needs_human",
                 handoff_reason=handler_result.handoff_reason,
@@ -165,7 +176,7 @@ class SocialAdminOrchestrator:
         *,
         shop_id: str,
         conversation_id: str,
-        provider: str = "instagram",
+        provider: str = "unknown",
         active_order: Any = None,
         raw_provider_payload: dict[str, Any] | None = None,
     ) -> tuple[ScenarioDecision, HandlerResult | None]:
