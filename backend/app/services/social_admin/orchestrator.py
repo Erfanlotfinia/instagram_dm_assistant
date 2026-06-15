@@ -14,7 +14,10 @@ from app.repositories.message_repository import MessageRepository
 from app.repositories.order_repository import OrderRepository
 from app.schemas.channels import NormalizedMessage
 from app.services.decision_trace_service import DecisionTraceService
+from app.services.event_store_service import EventStoreService
+from app.services.idempotency_key_manager import IdempotencyKeyManager, IdempotencyScope
 from app.services.social_admin.automation_engine import AutomationEngine
+from app.services.social_admin.execution_policy_gate import ExecutionPolicyGate
 from app.services.social_admin.context_graph import ConversationContextService
 from app.services.social_admin.handlers import (
     AutomationHandlerRegistry,
@@ -58,9 +61,14 @@ class SocialAdminOrchestrator:
         self.messages = MessageRepository(db)
         self.orders = OrderRepository(db)
         self.trace_service = DecisionTraceService(db)
+        self.event_store = EventStoreService(db)
+        self.idempotency = IdempotencyKeyManager(db)
         self.context_service = context_service or ConversationContextService(db)
         self.router = ScenarioRouter(self.context_service)
-        self.handlers = AutomationHandlerRegistry(db, self.context_service, settings=self.settings)
+        self.policy_gate = ExecutionPolicyGate()
+        self.handlers = AutomationHandlerRegistry(
+            db, self.context_service, settings=self.settings
+        )
         self.automation_engine = AutomationEngine(self.handlers)
         self.llm_fallback = LLMFallbackOrchestrator()
         self.handoff_service = HumanHandoffService(db)
@@ -85,6 +93,10 @@ class SocialAdminOrchestrator:
         }
         raw_payload = message.raw_payload if hasattr(message, "raw_payload") else {}
 
+        idempotency_key = IdempotencyKeyManager.build_key(
+            IdempotencyScope.LLM_FALLBACK, conversation_id, message_id
+        )
+
         decision = self.router.route(
             message_payload,
             conversation_context={"conversation_id": str(conversation_id)},
@@ -95,6 +107,24 @@ class SocialAdminOrchestrator:
         )
 
         trace_id = trace_id or self.trace_service.new_trace_id()
+        self.event_store.append(
+            trace_id=trace_id,
+            shop_id=conversation.shop_id,
+            conversation_id=conversation_id,
+            event_type="message_received",
+            payload={"message_id": str(message_id), "idempotency_key": idempotency_key},
+        )
+        self.event_store.append(
+            trace_id=trace_id,
+            shop_id=conversation.shop_id,
+            conversation_id=conversation_id,
+            event_type="scenario_detected",
+            payload={
+                "scenario_code": decision.scenario_code,
+                "confidence": decision.confidence,
+            },
+        )
+
         self.trace_service.record(
             trace_id=trace_id,
             shop_id=conversation.shop_id,
@@ -111,8 +141,48 @@ class SocialAdminOrchestrator:
             },
         )
 
+        requested_execution = (
+            "handoff"
+            if decision.requires_handoff
+            else "llm" if decision.requires_llm else "automation"
+        )
+        automation_attempted = True  # router exhausted deterministic automation candidates before LLM fallback
+        policy = self.policy_gate.evaluate(
+            decision,
+            requested_execution=requested_execution,
+            automation_attempted=automation_attempted,
+            execution_trace_id=trace_id,
+        )
+        self.trace_service.record_policy_checks(
+            trace_id=trace_id,
+            shop_id=conversation.shop_id,
+            conversation_id=conversation_id,
+            checks=policy.checks,
+        )
+        if policy.decision == "block":
+            self.event_store.append(
+                trace_id=trace_id,
+                shop_id=conversation.shop_id,
+                conversation_id=conversation_id,
+                event_type="policy_blocked",
+                payload={"reason": policy.reason},
+            )
+            return SocialAdminResult(
+                status="needs_human",
+                handoff_reason=policy.reason,
+                decision=decision,
+                trace_metadata={"trace_id": str(trace_id), "policy": "blocked"},
+            )
+
         if decision.requires_handoff:
             reason = decision.reasons[0] if decision.reasons else "handoff_required"
+            self.event_store.append(
+                trace_id=trace_id,
+                shop_id=conversation.shop_id,
+                conversation_id=conversation_id,
+                event_type="handoff_triggered",
+                payload={"reason": reason},
+            )
             self.handoff_service.trigger(conversation_id, reason)
             return SocialAdminResult(
                 status="needs_human",
@@ -122,6 +192,16 @@ class SocialAdminOrchestrator:
             )
 
         if decision.requires_llm:
+            self.idempotency.assert_side_effect_key(
+                IdempotencyScope.LLM_FALLBACK, idempotency_key
+            )
+            self.event_store.append(
+                trace_id=trace_id,
+                shop_id=conversation.shop_id,
+                conversation_id=conversation_id,
+                event_type="llm_called",
+                payload={"schema_version": self.llm_fallback.schema_version},
+            )
             llm_output = self.llm_fallback.safe_fallback({})
             if llm_output.needs_human:
                 reason = llm_output.human_reason or "llm_fallback_needs_human"
@@ -151,13 +231,26 @@ class SocialAdminOrchestrator:
             message_id=message_id,
             message_text=message.text or "",
             provider=str(
-                message.channel.value if hasattr(message.channel, "value") else message.channel
+                message.channel.value
+                if hasattr(message.channel, "value")
+                else message.channel
             ),
             raw_provider_payload=raw_payload or {},
             active_order=active_order,
             is_simulation=conversation.is_simulation,
         )
         automation_result = self.automation_engine.execute(decision, handler_ctx)
+        self.event_store.append(
+            trace_id=trace_id,
+            shop_id=conversation.shop_id,
+            conversation_id=conversation_id,
+            event_type="automation_executed",
+            payload={
+                "handler": decision.handler,
+                "executed": automation_result.executed,
+                "skipped_reason": automation_result.skipped_reason,
+            },
+        )
         handler_result = automation_result.handler_result
         if handler_result is None:
             return SocialAdminResult(
@@ -184,7 +277,8 @@ class SocialAdminOrchestrator:
 
         if handler_result.status == "needs_human":
             self.handoff_service.trigger(
-                conversation_id, handler_result.handoff_reason or "handler_requested_handoff"
+                conversation_id,
+                handler_result.handoff_reason or "handler_requested_handoff",
             )
             return SocialAdminResult(
                 status="needs_human",
@@ -261,7 +355,9 @@ class SocialAdminOrchestrator:
         payload = {
             "text": message.content or "",
             "button_id": message.metadata.get("button_id"),
-            "attachments": [item.model_dump(mode="json") for item in message.attachments],
+            "attachments": [
+                item.model_dump(mode="json") for item in message.attachments
+            ],
         }
         return self.route_message(
             payload,

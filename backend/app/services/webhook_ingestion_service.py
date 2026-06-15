@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -24,7 +23,10 @@ from app.domain.enums import (
 )
 from app.domain.models import Conversation, Customer, Message, OutboxEvent, WebhookEvent
 from app.repositories.outbox_event_repository import OutboxEventRepository
-from app.integrations.instagram_webhook import ParsedInstagramMessage, parse_instagram_webhook_payload
+from app.integrations.instagram_webhook import (
+    ParsedInstagramMessage,
+    parse_instagram_webhook_payload,
+)
 from app.integrations.rabbitmq import MessagePublisher, RabbitMQPublisher
 from app.integrations.redis_cache import RedisCacheService
 from app.repositories.conversation_repository import ConversationRepository
@@ -32,6 +34,7 @@ from app.repositories.customer_repository import CustomerRepository
 from app.repositories.instagram_account_repository import InstagramAccountRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.webhook_event_repository import WebhookEventRepository
+from app.services.idempotency_key_manager import IdempotencyKeyManager
 from app.schemas.queue_events import MessageReceivedJob
 from app.schemas.webhook import WebhookAckResponse, WebhookIgnoredResponse
 
@@ -51,7 +54,9 @@ def compute_webhook_idempotency_key(payload: dict[str, Any]) -> str:
         if entry_id:
             entry_ids.append(str(entry_id))
         for item in entry.get("messaging", []) + entry.get("changes", []):
-            mid = item.get("message", {}).get("mid") or item.get("value", {}).get("message", {}).get("mid")
+            mid = item.get("message", {}).get("mid") or item.get("value", {}).get(
+                "message", {}
+            ).get("mid")
             if mid:
                 entry_ids.append(str(mid))
     if entry_ids:
@@ -73,6 +78,7 @@ class WebhookIngestionService:
         self.publisher = publisher or RabbitMQPublisher(self.settings)
         self.cache = cache or RedisCacheService(self.settings)
         self.webhook_events = WebhookEventRepository(db)
+        self.idempotency = IdempotencyKeyManager(db, self.cache)
         self.accounts = InstagramAccountRepository(db)
         self.customers = CustomerRepository(db)
         self.conversations = ConversationRepository(db)
@@ -89,33 +95,26 @@ class WebhookIngestionService:
         idempotency_key = compute_webhook_idempotency_key(payload)
         trace_id = get_request_id()
 
-        if not self.cache.try_acquire_idempotency(idempotency_key):
-            logger.info("Duplicate webhook (redis) key=%s trace_id=%s", idempotency_key, trace_id)
-            return WebhookAckResponse(dedupe_outcome=WebhookDedupeOutcome.DUPLICATE.value)
-
-        existing_event = self.webhook_events.get_by_idempotency_key(
-            WebhookProvider.INSTAGRAM, idempotency_key
-        )
-        if existing_event is not None:
-            logger.info("Duplicate webhook (db) key=%s trace_id=%s", idempotency_key, trace_id)
-            return WebhookAckResponse(dedupe_outcome=WebhookDedupeOutcome.DUPLICATE.value)
-
-        webhook_event = WebhookEvent(
+        reservation = self.idempotency.reserve_webhook(
             provider=WebhookProvider.INSTAGRAM,
+            idempotency_key=idempotency_key,
             event_type="instagram.messaging",
             raw_payload=payload,
-            processing_status=WebhookProcessingStatus.RECEIVED,
-            idempotency_key=idempotency_key,
             trace_id=trace_id,
-            dedupe_outcome=WebhookDedupeOutcome.PROCESSED,
         )
-        try:
-            self.webhook_events.create(webhook_event)
-            self.db.flush()
-        except IntegrityError:
-            self.db.rollback()
-            logger.info("Duplicate webhook (integrity) key=%s", idempotency_key)
-            return WebhookAckResponse(dedupe_outcome=WebhookDedupeOutcome.DUPLICATE.value)
+        if not reservation.allowed or reservation.existing_event_id is None:
+            logger.info(
+                "Duplicate webhook key=%s trace_id=%s reason=%s",
+                idempotency_key,
+                trace_id,
+                reservation.reason,
+            )
+            return WebhookAckResponse(
+                dedupe_outcome=WebhookDedupeOutcome.DUPLICATE.value
+            )
+        webhook_event = self.webhook_events.get_by_id(reservation.existing_event_id)
+        if webhook_event is None:
+            raise RuntimeError("reserved webhook event was not persisted")
 
         jobs: list[MessageReceivedJob] = []
         errors: list[str] = []
@@ -126,12 +125,16 @@ class WebhookIngestionService:
                 if job is not None:
                     jobs.append(job)
             except Exception as exc:  # noqa: BLE001
-                logger.exception("Failed to process Instagram message %s", parsed.message_id)
+                logger.exception(
+                    "Failed to process Instagram message %s", parsed.message_id
+                )
                 errors.append(str(exc))
 
         queued_count = len(jobs)
         if queued_count > 0:
-            self.webhook_events.update_status(webhook_event, WebhookProcessingStatus.QUEUED)
+            self.webhook_events.update_status(
+                webhook_event, WebhookProcessingStatus.QUEUED
+            )
             for job in jobs:
                 self.outbox.create(
                     OutboxEvent(
@@ -158,7 +161,9 @@ class WebhookIngestionService:
         self.db.commit()
         return WebhookAckResponse(dedupe_outcome=webhook_event.dedupe_outcome.value)
 
-    def _process_message(self, webhook_event_id: UUID, parsed: ParsedInstagramMessage) -> MessageReceivedJob | None:
+    def _process_message(
+        self, webhook_event_id: UUID, parsed: ParsedInstagramMessage
+    ) -> MessageReceivedJob | None:
         existing = self.messages.get_by_instagram_message_id(parsed.message_id)
         if existing is not None:
             logger.info("Duplicate Instagram message id %s ignored", parsed.message_id)
@@ -169,7 +174,9 @@ class WebhookIngestionService:
             logger.warning("No Instagram account for recipient %s", parsed.recipient_id)
             return None
 
-        customer = self.customers.get_by_instagram_user_id(account.shop_id, parsed.sender_id)
+        customer = self.customers.get_by_instagram_user_id(
+            account.shop_id, parsed.sender_id
+        )
         if customer is None:
             customer = self.customers.create(
                 Customer(
