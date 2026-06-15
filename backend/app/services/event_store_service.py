@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from contextlib import contextmanager
+from dataclasses import dataclass
+from types import MethodType
 from typing import Any
 from uuid import UUID
 
@@ -44,12 +45,31 @@ class EventStoreService:
 
     @contextmanager
     def replay_isolation(self):
-        """Run replay in dry-run mode by rolling back all writes in this context."""
-        nested = self.db.begin_nested()
+        """Run replay in rollback-only mode even if called services call commit().
+
+        SQLAlchemy nested transactions are not sufficient for dry-runs because a
+        service-level ``Session.commit()`` closes the savepoint and can persist the
+        outer transaction. During replay we temporarily replace ``commit`` with a
+        flush-only operation, then roll back the transaction that this context owns.
+        Callers should pass a dedicated replay session so this rollback never
+        affects request/workflow state outside replay.
+        """
+        owns_transaction = not self.db.in_transaction()
+        transaction = self.db.begin() if owns_transaction else self.db.begin_nested()
+        original_commit = self.db.commit
+
+        def _dry_run_commit(session: Session) -> None:
+            session.flush()
+
+        self.db.commit = MethodType(_dry_run_commit, self.db)  # type: ignore[method-assign]
         try:
             yield
         finally:
-            nested.rollback()
+            self.db.commit = original_commit  # type: ignore[method-assign]
+            if transaction.is_active:
+                transaction.rollback()
+            else:
+                self.db.rollback()
 
     def append(
         self,

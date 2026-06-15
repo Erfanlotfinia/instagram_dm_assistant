@@ -151,3 +151,70 @@ def test_observability_records_metrics_traces_and_alerts():
     assert obs.counters["automation_success"] == 1
     assert obs.counters["alerts.policy_violation"] == 1
     assert obs.spans[0]["name"] == "message.process"
+
+
+def test_replay_isolation_intercepts_service_commits_and_rolls_back():
+    class FakeTransaction:
+        is_active = True
+
+        def __init__(self, session):
+            self.session = session
+
+        def rollback(self):
+            self.session.rolled_back = True
+            self.is_active = False
+
+    class FakeSession:
+        def __init__(self):
+            self.committed = False
+            self.flushed = False
+            self.rolled_back = False
+
+        def in_transaction(self):
+            return False
+
+        def begin(self):
+            return FakeTransaction(self)
+
+        def begin_nested(self):
+            return FakeTransaction(self)
+
+        def commit(self):
+            self.committed = True
+
+        def flush(self):
+            self.flushed = True
+
+        def rollback(self):
+            self.rolled_back = True
+
+    session = FakeSession()
+    store = EventStoreService(session)
+
+    with store.replay_isolation():
+        session.commit()
+
+    assert session.committed is False
+    assert session.flushed is True
+    assert session.rolled_back is True
+
+
+def test_static_architecture_firewall_detects_commit_flush_and_mutating_execute(tmp_path):
+    app_dir = tmp_path / "app"
+    api_dir = app_dir / "api"
+    api_dir.mkdir(parents=True)
+    (api_dir / "unsafe.py").write_text(
+        "def f(db):\n"
+        "    obj.name = 'changed'\n"
+        "    db.flush()\n"
+        "    db.execute('UPDATE users SET name=1')\n"
+        "    db.commit()\n"
+    )
+    (api_dir / "health.py").write_text("from sqlalchemy import text\ndef f(session):\n    session.execute(text('SELECT 1'))\n")
+
+    violations = find_direct_db_write_violations(app_dir)
+
+    assert any("db.flush" in v for v in violations)
+    assert any("db.execute" in v for v in violations)
+    assert any("db.commit" in v for v in violations)
+    assert not any("health.py" in v for v in violations)

@@ -42,3 +42,6 @@ class AuditService:
             user_agent=resolved_ua,
         )
         return self.repo.create(entry)
+
+    def commit(self) -> None:
+        self.db.commit()
