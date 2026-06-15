@@ -1,0 +1,399 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: modira-prod
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modira-api
+  namespace: modira-prod
+spec:
+  replicas: 4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector: {matchLabels: {app: modira-api}}
+  template:
+    metadata:
+      labels: {app: modira-api}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: api
+          image: ghcr.io/modira/soc-os-api:latest
+          ports: [{containerPort: 8000}]
+          envFrom: [{secretRef: {name: modira-secrets}}, {configMapRef: {name: modira-config}}]
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {cpu: "2", memory: 2Gi}
+          readinessProbe: {httpGet: {path: /ready, port: 8000}, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /health, port: 8000}, periodSeconds: 20}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: modira-api
+  namespace: modira-prod
+spec:
+  selector: {app: modira-api}
+  ports: [{port: 80, targetPort: 8000}]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: modira-api
+  namespace: modira-prod
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: modira-api}
+  minReplicas: 4
+  maxReplicas: 40
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 65}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modira-scenario-router-worker
+  namespace: modira-prod
+spec:
+  replicas: 4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 2}
+  selector: {matchLabels: {app: modira-scenario-router-worker}}
+  template:
+    metadata:
+      labels: {app: modira-scenario-router-worker}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9102"
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: ghcr.io/modira/soc-os-worker:latest
+          command: ["python", "-m", "app.workers.main"]
+          env:
+            - {name: WORKER_TYPE, value: scenario-router}
+            - {name: KAFKA_CONSUMER_GROUP, value: scenario-router-workers}
+            - {name: KAFKA_TOPICS, value: soc.message.received.v1}
+          envFrom: [{secretRef: {name: modira-secrets}}, {configMapRef: {name: modira-config}}]
+          resources:
+            requests: {cpu: 750m, memory: 1Gi}
+            limits: {cpu: "2", memory: 3Gi}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: modira-scenario-router-worker
+  namespace: modira-prod
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: modira-scenario-router-worker}
+  minReplicas: 4
+  maxReplicas: 80
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+    - type: Pods
+      pods:
+        metric: {name: kafka_consumer_lag}
+        target: {type: AverageValue, averageValue: "1000"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modira-automation-worker
+  namespace: modira-prod
+spec:
+  replicas: 6
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 2}
+  selector: {matchLabels: {app: modira-automation-worker}}
+  template:
+    metadata:
+      labels: {app: modira-automation-worker}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9102"
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: ghcr.io/modira/soc-os-worker:latest
+          command: ["python", "-m", "app.workers.main"]
+          env:
+            - {name: WORKER_TYPE, value: automation}
+            - {name: KAFKA_CONSUMER_GROUP, value: automation-workers}
+            - {name: KAFKA_TOPICS, value: soc.scenario.routed.v1}
+          envFrom: [{secretRef: {name: modira-secrets}}, {configMapRef: {name: modira-config}}]
+          resources:
+            requests: {cpu: 750m, memory: 1Gi}
+            limits: {cpu: "2", memory: 3Gi}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: modira-automation-worker
+  namespace: modira-prod
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: modira-automation-worker}
+  minReplicas: 6
+  maxReplicas: 160
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+    - type: Pods
+      pods:
+        metric: {name: kafka_consumer_lag}
+        target: {type: AverageValue, averageValue: "1000"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modira-llm-worker
+  namespace: modira-prod
+spec:
+  replicas: 4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 2}
+  selector: {matchLabels: {app: modira-llm-worker}}
+  template:
+    metadata:
+      labels: {app: modira-llm-worker}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9102"
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: ghcr.io/modira/soc-os-worker:latest
+          command: ["python", "-m", "app.workers.main"]
+          env:
+            - {name: WORKER_TYPE, value: llm}
+            - {name: KAFKA_CONSUMER_GROUP, value: llm-workers}
+            - {name: KAFKA_TOPICS, value: soc.scenario.routed.v1}
+          envFrom: [{secretRef: {name: modira-secrets}}, {configMapRef: {name: modira-config}}]
+          resources:
+            requests: {cpu: 750m, memory: 1Gi}
+            limits: {cpu: "2", memory: 3Gi}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: modira-llm-worker
+  namespace: modira-prod
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: modira-llm-worker}
+  minReplicas: 4
+  maxReplicas: 120
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+    - type: Pods
+      pods:
+        metric: {name: kafka_consumer_lag}
+        target: {type: AverageValue, averageValue: "1000"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modira-order-worker
+  namespace: modira-prod
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 2}
+  selector: {matchLabels: {app: modira-order-worker}}
+  template:
+    metadata:
+      labels: {app: modira-order-worker}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9102"
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: ghcr.io/modira/soc-os-worker:latest
+          command: ["python", "-m", "app.workers.order_consumer_main"]
+          env:
+            - {name: WORKER_TYPE, value: order}
+            - {name: KAFKA_CONSUMER_GROUP, value: order-workers}
+            - {name: KAFKA_TOPICS, value: soc.commerce.commands.v1}
+          envFrom: [{secretRef: {name: modira-secrets}}, {configMapRef: {name: modira-config}}]
+          resources:
+            requests: {cpu: 750m, memory: 1Gi}
+            limits: {cpu: "2", memory: 3Gi}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: modira-order-worker
+  namespace: modira-prod
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: modira-order-worker}
+  minReplicas: 3
+  maxReplicas: 60
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+    - type: Pods
+      pods:
+        metric: {name: kafka_consumer_lag}
+        target: {type: AverageValue, averageValue: "1000"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modira-payment-worker
+  namespace: modira-prod
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 2}
+  selector: {matchLabels: {app: modira-payment-worker}}
+  template:
+    metadata:
+      labels: {app: modira-payment-worker}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9102"
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: ghcr.io/modira/soc-os-worker:latest
+          command: ["python", "-m", "app.workers.order_consumer_main"]
+          env:
+            - {name: WORKER_TYPE, value: payment}
+            - {name: KAFKA_CONSUMER_GROUP, value: payment-workers}
+            - {name: KAFKA_TOPICS, value: soc.commerce.commands.v1}
+          envFrom: [{secretRef: {name: modira-secrets}}, {configMapRef: {name: modira-config}}]
+          resources:
+            requests: {cpu: 750m, memory: 1Gi}
+            limits: {cpu: "2", memory: 3Gi}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: modira-payment-worker
+  namespace: modira-prod
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: modira-payment-worker}
+  minReplicas: 3
+  maxReplicas: 60
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+    - type: Pods
+      pods:
+        metric: {name: kafka_consumer_lag}
+        target: {type: AverageValue, averageValue: "1000"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modira-inventory-worker
+  namespace: modira-prod
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 2}
+  selector: {matchLabels: {app: modira-inventory-worker}}
+  template:
+    metadata:
+      labels: {app: modira-inventory-worker}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9102"
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: ghcr.io/modira/soc-os-worker:latest
+          command: ["python", "-m", "app.workers.order_consumer_main"]
+          env:
+            - {name: WORKER_TYPE, value: inventory}
+            - {name: KAFKA_CONSUMER_GROUP, value: inventory-workers}
+            - {name: KAFKA_TOPICS, value: soc.commerce.commands.v1}
+          envFrom: [{secretRef: {name: modira-secrets}}, {configMapRef: {name: modira-config}}]
+          resources:
+            requests: {cpu: 750m, memory: 1Gi}
+            limits: {cpu: "2", memory: 3Gi}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: modira-inventory-worker
+  namespace: modira-prod
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: modira-inventory-worker}
+  minReplicas: 3
+  maxReplicas: 60
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+    - type: Pods
+      pods:
+        metric: {name: kafka_consumer_lag}
+        target: {type: AverageValue, averageValue: "1000"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modira-handoff-worker
+  namespace: modira-prod
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 2}
+  selector: {matchLabels: {app: modira-handoff-worker}}
+  template:
+    metadata:
+      labels: {app: modira-handoff-worker}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9102"
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: ghcr.io/modira/soc-os-worker:latest
+          command: ["python", "-m", "app.workers.main"]
+          env:
+            - {name: WORKER_TYPE, value: handoff}
+            - {name: KAFKA_CONSUMER_GROUP, value: handoff-workers}
+            - {name: KAFKA_TOPICS, value: "soc.handoff.v1,soc.scenario.routed.v1"}
+          envFrom: [{secretRef: {name: modira-secrets}}, {configMapRef: {name: modira-config}}]
+          resources:
+            requests: {cpu: 750m, memory: 1Gi}
+            limits: {cpu: "2", memory: 3Gi}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: modira-handoff-worker
+  namespace: modira-prod
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: modira-handoff-worker}
+  minReplicas: 3
+  maxReplicas: 40
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+    - type: Pods
+      pods:
+        metric: {name: kafka_consumer_lag}
+        target: {type: AverageValue, averageValue: "1000"}
