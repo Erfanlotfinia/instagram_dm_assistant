@@ -1,0 +1,39 @@
+# Dependencies (reinstalled in the image)
+node_modules/
+
+# Build and test output
+dist/
+coverage/
+*.tsbuildinfo
+
+# E2E / Playwright (not needed in dev container image)
+e2e/
+playwright-report/
+test-results/
+blob-report/
+
+# Unit tests (not needed in runtime/dev container image)
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Local secrets and env
+.env
+.env.*
+!.env.example
+
+# Editor / OS / VCS
+.git/
+.gitignore
+.cursor/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Docs
+README.md
+*.md
