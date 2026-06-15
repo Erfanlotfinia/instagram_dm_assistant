@@ -1,0 +1,26 @@
+# Dependencies (reinstalled in the image)
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Local secrets and env
+.env
+.env.*
+!.env.example
+
+# Editor / OS / VCS
+.git/
+.gitignore
+.cursor/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Docs
+README.md
+*.md
