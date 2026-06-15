@@ -55,3 +55,40 @@ def test_backpressure_policy_degrades_llm_before_queue_overload():
 
     assert policy.llm_requests_per_minute < policy.tenant_messages_per_minute
     assert policy.queue_depth_degrade_threshold < policy.queue_depth_circuit_open_threshold
+
+
+def test_kubernetes_manifest_matches_production_worker_contract():
+    import yaml
+    from pathlib import Path
+
+    manifest_path = Path(__file__).resolve().parents[3] / "infra/k8s/modira-production.yaml"
+    resources = list(yaml.safe_load_all(manifest_path.read_text()))
+    deployments = {
+        resource["metadata"]["name"]: resource
+        for resource in resources
+        if resource and resource.get("kind") == "Deployment"
+    }
+    hpas = {
+        resource["metadata"]["name"]: resource
+        for resource in resources
+        if resource and resource.get("kind") == "HorizontalPodAutoscaler"
+    }
+
+    api_container = deployments["modira-api"]["spec"]["template"]["spec"]["containers"][0]
+    assert api_container["readinessProbe"]["httpGet"]["path"] == "/ready"
+
+    for worker in WORKERS:
+        deployment_name = f"modira-{worker.worker_type.value}-worker"
+        deployment = deployments[deployment_name]
+        container = deployment["spec"]["template"]["spec"]["containers"][0]
+        env = {item["name"]: item["value"] for item in container["env"]}
+
+        assert container["command"] in (
+            ["python", "-m", "app.workers.main"],
+            ["python", "-m", "app.workers.order_consumer_main"],
+        )
+        assert env["WORKER_TYPE"] == worker.worker_type.value
+        assert env["KAFKA_CONSUMER_GROUP"] == worker.consumer_group
+        assert env["KAFKA_TOPICS"] == ",".join(worker.consumes)
+        assert deployment["spec"]["replicas"] == worker.min_replicas
+        assert hpas[deployment_name]["spec"]["maxReplicas"] == worker.max_replicas
