@@ -70,9 +70,7 @@ def test_retry_then_dlq_for_consumer_group() -> None:
 def test_multi_tenant_isolation_blocks_cross_tenant_poll() -> None:
     bus = InMemoryKafkaBackbone(backoff=lambda _: 0)
     bus.subscribe(Recorder())
-    bus.publish(
-        event(DomainEventType.MESSAGE_RECEIVED, tenant="tenant-a", shop="shop-a")
-    )
+    bus.publish(event(DomainEventType.MESSAGE_RECEIVED, tenant="tenant-a", shop="shop-a"))
 
     with pytest.raises(PermissionError):
         bus.poll("automation-workers", tenant_scope=TenantScope("tenant-b", "shop-b"))
@@ -80,18 +78,36 @@ def test_multi_tenant_isolation_blocks_cross_tenant_poll() -> None:
 
 def test_event_store_is_append_only_and_replay_scoped() -> None:
     store = ImmutableEventStore()
-    store.append(
-        event(DomainEventType.MESSAGE_RECEIVED, tenant="t1", shop="s1", convo="c1")
-    )
-    store.append(
-        event(DomainEventType.MESSAGE_RECEIVED, tenant="t2", shop="s2", convo="c1")
-    )
+    store.append(event(DomainEventType.MESSAGE_RECEIVED, tenant="t1", shop="s1", convo="c1"))
+    store.append(event(DomainEventType.MESSAGE_RECEIVED, tenant="t2", shop="s2", convo="c1"))
 
     assert len(store.replay(TenantScope("t1", "s1"), conversation_id="c1")) == 1
     with pytest.raises(PermissionError):
         store.update("anything")
     with pytest.raises(PermissionError):
         store.delete("anything")
+
+
+def test_event_store_defensively_freezes_payloads() -> None:
+    store = ImmutableEventStore()
+    original = event(
+        DomainEventType.MESSAGE_RECEIVED,
+        customer={"name": "Ada"},
+        tags=["new"],
+    )
+
+    stored = store.append(original)
+    original.payload["customer"]["name"] = "Grace"
+    original.payload["tags"].append("mutated")
+    replayed = store.replay(TenantScope("t1", "s1"), conversation_id="c1")[0]
+
+    assert stored.event.payload["customer"]["name"] == "Ada"
+    assert replayed.payload["customer"]["name"] == "Ada"
+    assert replayed.payload["tags"] == ("new",)
+    with pytest.raises(TypeError):
+        replayed.payload["customer"]["name"] = "changed"
+    with pytest.raises(TypeError):
+        replayed.payload["customer"] = {"name": "changed"}
 
 
 def test_replay_safety_blocks_orders_payments_and_inventory_side_effects() -> None:
@@ -118,6 +134,4 @@ def test_llm_isolation_under_injection_attempt() -> None:
     malicious.validate()
     assert malicious.tenant_id == "t1"
     assert malicious.payload["requested_tenant_id"] == "tenant-b"
-    TenantScope(malicious.tenant_id, malicious.shop_id).assert_matches(
-        TenantScope("t1", "s1")
-    )
+    TenantScope(malicious.tenant_id, malicious.shop_id).assert_matches(TenantScope("t1", "s1"))

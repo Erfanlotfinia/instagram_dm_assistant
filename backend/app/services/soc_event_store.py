@@ -1,11 +1,59 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from collections.abc import Iterable
+from copy import deepcopy
+from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Iterable
+from typing import Any
 
 from app.services.soc_events import DomainEvent, TenantScope
+
+
+class FrozenPayload(dict[str, Any]):
+    """Deeply immutable, JSON-compatible event payload snapshot."""
+
+    _sealed: bool
+
+    def __init__(self, value: dict[str, Any]) -> None:
+        super().__init__((key, _freeze_payload(item)) for key, item in value.items())
+        self._sealed = True
+
+    def _immutable(self, *_: object, **__: object) -> None:
+        raise TypeError("event_payload_is_immutable")
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if getattr(self, "_sealed", False):
+            self._immutable()
+        super().__setitem__(key, value)
+
+    def __delitem__(self, key: str) -> None:
+        self._immutable()
+
+    def __deepcopy__(self, memo: dict[int, object]) -> FrozenPayload:
+        return self
+
+    clear = _immutable
+    pop = _immutable
+    popitem = _immutable
+    setdefault = _immutable
+    update = _immutable
+
+
+def _freeze_payload(value: Any) -> Any:
+    if isinstance(value, FrozenPayload):
+        return value
+    if isinstance(value, dict):
+        return FrozenPayload(deepcopy(value))
+    if isinstance(value, list | tuple):
+        return tuple(_freeze_payload(item) for item in deepcopy(value))
+    if isinstance(value, set | frozenset):
+        return frozenset(_freeze_payload(item) for item in deepcopy(value))
+    return deepcopy(value)
+
+
+def _freeze_event(event: DomainEvent) -> DomainEvent:
+    return replace(event, payload=_freeze_payload(event.payload))
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,17 +68,16 @@ class ImmutableEventStore:
     def __init__(self) -> None:
         self._events: list[StoredEvent] = []
         self._by_tenant: dict[str, list[StoredEvent]] = defaultdict(list)
-        self._by_conversation: dict[tuple[str, str], list[StoredEvent]] = defaultdict(
-            list
-        )
+        self._by_conversation: dict[tuple[str, str], list[StoredEvent]] = defaultdict(list)
         self.audit_compliance_mode = True
 
     def append(self, event: DomainEvent) -> StoredEvent:
         event.validate()
-        stored = StoredEvent(len(self._events), event)
+        frozen_event = _freeze_event(event)
+        stored = StoredEvent(len(self._events), frozen_event)
         self._events.append(stored)
-        self._by_tenant[event.tenant_id].append(stored)
-        self._by_conversation[(event.tenant_id, event.conversation_id)].append(stored)
+        self._by_tenant[frozen_event.tenant_id].append(stored)
+        self._by_conversation[(frozen_event.tenant_id, frozen_event.conversation_id)].append(stored)
         return stored
 
     def update(self, *_: object, **__: object) -> None:
