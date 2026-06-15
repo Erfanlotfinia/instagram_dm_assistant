@@ -2,6 +2,7 @@ from uuid import uuid4
 
 from app.domain.enums import ChannelMessageType, ChannelProvider
 from app.schemas.channels import MediaItem, NormalizedInboundMessage, NormalizedMessage
+from app.services.social_admin.automation_engine import AutomationEngine
 from app.services.social_admin.context_graph import ConversationContextGraph
 from app.services.social_admin.human_handoff_service import HumanHandoffService
 from app.services.social_admin.llm_fallback_orchestrator import LLMFallbackOrchestrator
@@ -91,3 +92,29 @@ def test_handoff_service_skips_db_lookup_for_external_conversation_id():
     assert result.required is True
     assert result.reason == "external_channel_conversation"
     assert result.conversation_id == "telegram-chat-1"
+
+
+def test_automation_engine_never_dispatches_llm_handler():
+    decision = ScenarioRouter().route({"text": "random unrelated chitchat xyz"})
+
+    result = AutomationEngine().execute(decision, {})
+
+    assert result.executed is False
+    assert result.handler_result is None
+    assert result.skipped_reason == "llm_fallback_route"
+
+
+def test_router_accepts_normalized_message_content_for_multichannel_flow():
+    inbound = NormalizedInboundMessage(
+        provider=ChannelProvider.RUBIKA,
+        external_message_id="m-2",
+        external_chat_id="chat-2",
+        external_user_id="user-2",
+        text="I paid by bank transfer",
+    )
+    normalized = NormalizedMessage.from_inbound(inbound)
+
+    decision = ScenarioRouter().route(normalized)
+
+    assert decision.scenario_code == "MANUAL_PAYMENT"
+    assert decision.requires_llm is False
