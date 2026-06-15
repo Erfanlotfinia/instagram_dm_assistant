@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
+from types import MethodType
 from typing import Any
 from uuid import UUID
 
@@ -20,7 +22,11 @@ class ReplayEvent:
 
 
 class EventStoreService:
-    """Append-only interaction log backed by trace_events for replay."""
+    """Append-only immutable event log backed by trace_events for replay.
+
+    Events are never updated or deleted by this service. Corrections are recorded as
+    later events with a higher sequence and schema/event version metadata.
+    """
 
     EVENT_TYPE_MAP = {
         "message_received": TraceEventType.ACTION_ATTEMPTED,
@@ -37,6 +43,34 @@ class EventStoreService:
         self.db = db
         self.traces = DecisionTraceService(db)
 
+    @contextmanager
+    def replay_isolation(self):
+        """Run replay in rollback-only mode even if called services call commit().
+
+        SQLAlchemy nested transactions are not sufficient for dry-runs because a
+        service-level ``Session.commit()`` closes the savepoint and can persist the
+        outer transaction. During replay we temporarily replace ``commit`` with a
+        flush-only operation, then roll back the transaction that this context owns.
+        Callers should pass a dedicated replay session so this rollback never
+        affects request/workflow state outside replay.
+        """
+        owns_transaction = not self.db.in_transaction()
+        transaction = self.db.begin() if owns_transaction else self.db.begin_nested()
+        original_commit = self.db.commit
+
+        def _dry_run_commit(session: Session) -> None:
+            session.flush()
+
+        self.db.commit = MethodType(_dry_run_commit, self.db)  # type: ignore[method-assign]
+        try:
+            yield
+        finally:
+            self.db.commit = original_commit  # type: ignore[method-assign]
+            if transaction.is_active:
+                transaction.rollback()
+            else:
+                self.db.rollback()
+
     def append(
         self,
         *,
@@ -45,17 +79,23 @@ class EventStoreService:
         conversation_id: UUID | None,
         event_type: str,
         payload: dict[str, Any],
-    ) -> TraceEvent:
+        event_version: int = 1,
+        schema_version: str = "event-store.v1",
+        dry_run: bool = False,
+    ) -> TraceEvent | ReplayEvent:
+        event_payload = {"event_type": event_type, "event_version": event_version, "schema_version": schema_version, **payload}
+        if dry_run:
+            return ReplayEvent(sequence=-1, event_type=event_type, payload={"dry_run": True, **event_payload})
         mapped = self.EVENT_TYPE_MAP.get(event_type, TraceEventType.ACTION_ATTEMPTED)
         return self.traces.record(
             trace_id=trace_id,
             shop_id=shop_id,
             conversation_id=conversation_id,
             event_type=mapped,
-            payload={"event_type": event_type, **payload},
+            payload=event_payload,
         )
 
-    def replay(self, conversation_id: UUID) -> list[ReplayEvent]:
+    def replay(self, conversation_id: UUID, *, dry_run: bool = True) -> list[ReplayEvent]:
         rows = self.db.scalars(
             select(TraceEvent)
             .where(TraceEvent.conversation_id == conversation_id)

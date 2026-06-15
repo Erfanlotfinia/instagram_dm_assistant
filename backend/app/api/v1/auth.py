@@ -29,7 +29,7 @@ def login(
             entity_id=str(user.id),
             metadata={"email": user.email},
         )
-        db.commit()
+        AuditService(db).commit()
     return result
 
 

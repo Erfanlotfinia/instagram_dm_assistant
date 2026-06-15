@@ -14,6 +14,7 @@ from app.integrations.redis_cache import RedisCacheService
 from app.repositories.inventory_repository import InventoryRepository
 from app.repositories.inventory_reservation_repository import InventoryReservationRepository
 from app.repositories.variant_repository import VariantRepository
+from app.services.state_transition_service import INVENTORY_RESERVATION_STATE_MACHINE
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +148,7 @@ class InventoryReservationService:
                         )
                     )
 
-        reservation.status = InventoryReservationStatus.RELEASED
+        INVENTORY_RESERVATION_STATE_MACHINE.transition(reservation, InventoryReservationStatus.RELEASED)
         reservation.released_at = datetime.now(UTC)
         self.cache.delete_reservation_cache(str(reservation.id))
         logger.info("reservation_released reservation_id=%s reason=%s", reservation_id, reason)
@@ -165,7 +166,7 @@ class InventoryReservationService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot confirm reservation in status {reservation.status.value}",
             )
-        reservation.status = InventoryReservationStatus.CONFIRMED
+        INVENTORY_RESERVATION_STATE_MACHINE.transition(reservation, InventoryReservationStatus.CONFIRMED)
         reservation.confirmed_at = datetime.now(UTC)
         self.cache.delete_reservation_cache(str(reservation.id))
         logger.info("reservation_confirmed reservation_id=%s", reservation_id)
@@ -179,7 +180,7 @@ class InventoryReservationService:
         if reservation.status != InventoryReservationStatus.ACTIVE:
             return reservation
         self.release_reservation(reservation_id, reason="Reservation expired")
-        reservation.status = InventoryReservationStatus.EXPIRED
+        INVENTORY_RESERVATION_STATE_MACHINE.transition(reservation, InventoryReservationStatus.EXPIRED)
         return reservation
 
     def release_all_for_order(self, order_id: UUID, reason: str = "Order released") -> None:
