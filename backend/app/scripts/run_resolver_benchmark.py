@@ -10,30 +10,67 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.domain.enums import ProductStatus
-from app.domain.models import Product, ProductVariant, Shop, User
+from app.domain.enums import ProductStatus, UserRole
+from app.domain.models import Product, ProductVariant, Shop, ShopMember, User
 from app.integrations.openai_client import MockOpenAIEmbeddingClient
 from app.integrations.qdrant_client import MockQdrantClient
 from app.schemas.resolve import ResolveVariantRequest
 from app.scripts._db_bootstrap import ensure_database_schema
 from app.services.advanced_variant_resolver_service import AdvancedVariantResolverService
+from app.services.auth_service import AuthService
 from app.services.catalog_normalization_service import CatalogNormalizationService
 from app.services.catalog_reindex_service import CatalogReindexService
 
 ROOT = Path(__file__).resolve().parents[2]
 GOLDEN_PATH = ROOT / "app" / "tests" / "fixtures" / "golden_resolver_dataset.json"
+BENCHMARK_EMAIL = "resolver-benchmark@test.local"
+BENCHMARK_SHOP_SLUG = "resolver-benchmark"
+
+
+def _get_or_create_benchmark_subjects() -> tuple[User, Shop]:
+    db = SessionLocal()
+    try:
+        user = db.scalar(select(User).where(User.email == BENCHMARK_EMAIL))
+        if user is None:
+            user = AuthService.create_user(
+                db,
+                email=BENCHMARK_EMAIL,
+                password="password123",
+                full_name="Resolver Benchmark Runner",
+                role=UserRole.OWNER,
+            )
+
+        shop = db.scalar(select(Shop).where(Shop.slug == BENCHMARK_SHOP_SLUG))
+        if shop is None:
+            shop = Shop(name="Resolver Benchmark Shop", slug=BENCHMARK_SHOP_SLUG)
+            db.add(shop)
+            db.flush()
+
+        membership = db.scalar(
+            select(ShopMember).where(
+                ShopMember.shop_id == shop.id,
+                ShopMember.user_id == user.id,
+            )
+        )
+        if membership is None:
+            db.add(ShopMember(shop_id=shop.id, user_id=user.id, role=UserRole.OWNER))
+
+        db.commit()
+        db.refresh(user)
+        db.refresh(shop)
+        return user, shop
+    finally:
+        db.close()
 
 
 def run_benchmark() -> dict:
     ensure_database_schema()
     scenarios = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
+    user, shop = _get_or_create_benchmark_subjects()
     db = SessionLocal()
     try:
-        user = db.scalar(select(User).limit(1))
-        shop = db.scalar(select(Shop).limit(1))
-        if user is None or shop is None:
-            return {"status": "skipped", "reason": "no seed data"}
-
+        user = db.merge(user)
+        shop = db.merge(shop)
         qdrant = MockQdrantClient()
         embeddings = MockOpenAIEmbeddingClient()
         for scenario in scenarios:
