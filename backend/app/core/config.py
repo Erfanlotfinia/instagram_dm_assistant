@@ -94,6 +94,19 @@ class Settings(BaseSettings):
     )
     trl_average_processing_time_ms_threshold: int = Field(default=2000, ge=100)
     trl_p95_processing_time_ms_threshold: int = Field(default=5000, ge=100)
+    default_admin_email: str = Field(
+        default="admin@example.com",
+        description="Email for the bootstrap admin created on startup (local/dev)",
+    )
+    default_admin_password: str = Field(
+        default="changeme123",
+        min_length=8,
+        description="Password for the bootstrap admin created on startup (local/dev)",
+    )
+    default_admin_name: str = Field(
+        default="Platform Admin",
+        description="Display name for the bootstrap admin created on startup (local/dev)",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

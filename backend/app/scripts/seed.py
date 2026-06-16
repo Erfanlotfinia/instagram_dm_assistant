@@ -23,17 +23,13 @@ from app.domain.models import (
     Shop,
     ShopMember,
 )
+from app.core.config import get_settings
 from app.repositories.shop_repository import ShopMemberRepository, ShopRepository
-from app.repositories.user_repository import UserRepository
+from app.scripts.ensure_admin import ensure_default_admin
 from app.scripts.seed_demo_data import seed_rich_demo_data
 from app.scripts.seed_trl_demo_data import DEMO_SHOP_SLUG as TRL_SHOP_SLUG, seed_trl_demo_data
-from app.services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_ADMIN_EMAIL = "admin@example.com"
-DEFAULT_ADMIN_PASSWORD = "changeme123"
-DEFAULT_ADMIN_NAME = "Platform Admin"
 DEFAULT_SHOP_NAME = "Demo Shop"
 DEFAULT_SHOP_SLUG = "demo-shop"
 
@@ -136,7 +132,7 @@ def _link_admin_to_trl_shop(db, admin) -> None:
     )
     if existing is None:
         db.add(ShopMember(shop_id=shop.id, user_id=admin.id, role=UserRole.OWNER))
-        logger.info("Linked %s to TRL demo shop %s", DEFAULT_ADMIN_EMAIL, TRL_SHOP_SLUG)
+        logger.info("Linked %s to TRL demo shop %s", get_settings().default_admin_email, TRL_SHOP_SLUG)
 
 
 def _index_semantic_search_products(db) -> None:
@@ -163,25 +159,20 @@ def _index_semantic_search_products(db) -> None:
     logger.info("Indexed %s products for semantic search (Qdrant)", count)
 
 
+def _index_semantic_search_products_safe(db) -> None:
+    try:
+        _index_semantic_search_products(db)
+    except Exception as exc:
+        logger.warning("Semantic search indexing skipped: %s", exc)
+
+
 def seed() -> None:
     db = SessionLocal()
     try:
-        users = UserRepository(db)
         shops = ShopRepository(db)
         members = ShopMemberRepository(db)
 
-        admin = users.get_by_email(DEFAULT_ADMIN_EMAIL)
-        if admin is None:
-            admin = AuthService.create_user(
-                db,
-                email=DEFAULT_ADMIN_EMAIL,
-                password=DEFAULT_ADMIN_PASSWORD,
-                full_name=DEFAULT_ADMIN_NAME,
-                role=UserRole.OWNER,
-            )
-            logger.info("Created admin user: %s", DEFAULT_ADMIN_EMAIL)
-        else:
-            logger.info("Admin user already exists: %s", DEFAULT_ADMIN_EMAIL)
+        admin = ensure_default_admin(db=db)
 
         shop = shops.get_by_slug(DEFAULT_SHOP_SLUG)
         if shop is None:
@@ -204,7 +195,7 @@ def seed() -> None:
         trl_summary = seed_trl_demo_data(reset=False, db=db)
         logger.info("TRL demo shop seeded: %s", trl_summary)
         _link_admin_to_trl_shop(db, admin)
-        _index_semantic_search_products(db)
+        _index_semantic_search_products_safe(db)
         db.commit()
     finally:
         db.close()
