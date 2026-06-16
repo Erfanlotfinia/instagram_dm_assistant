@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .context_graph import ConversationContextService, ContextItem, ReferenceLink, ReferenceResolution
 from .scenario_router import ScenarioRouter, ScenarioDecision
+from .automation_engine import AutomationEngine, AutomationEngineResult
 from .handlers import AutomationHandlerRegistry, HandlerResult, HandlerDecision, HandlerContext
 from .catalog_query_planner import CatalogQueryPlanner, CatalogQueryPlan
 from .referenced_content_resolver import ReferencedContentResolver, ReferencedContentResolution

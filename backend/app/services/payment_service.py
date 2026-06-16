@@ -29,6 +29,7 @@ from app.services.order_service import OrderService
 from app.services.payment_providers import get_payment_provider
 from app.services.pilot_service import PilotService
 from app.services.shop_service import ShopService
+from app.services.state_transition_service import PAYMENT_STATE_MACHINE
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class PaymentService:
     ) -> Payment:
         payment_provider = get_payment_provider(self.db, provider)
         payment = payment_provider.create_payment(order)
+        PAYMENT_STATE_MACHINE.transition(payment, PaymentRecordStatus.PENDING)
         order.payment_status = OrderPaymentStatus.PENDING
         self.payments.commit()
         logger.info("Payment initiated order=%s payment=%s provider=%s", order.id, payment.id, provider.value)
@@ -85,7 +87,7 @@ class PaymentService:
                     if order is None:
                         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
                     return order
-            payment.status = PaymentRecordStatus.PAID
+            PAYMENT_STATE_MACHINE.transition(payment, PaymentRecordStatus.PAID)
             payment.callback_processed_at = datetime.now(UTC)
             order = self.order_service.mark_paid_internal(payment.order_id, payment=payment)
             from app.core.metrics import PAID_ORDERS
@@ -96,7 +98,7 @@ class PaymentService:
             return order
 
         if callback_status in {PaymentRecordStatus.FAILED, PaymentRecordStatus.CANCELLED}:
-            payment.status = callback_status
+            PAYMENT_STATE_MACHINE.transition(payment, callback_status)
             payment.callback_processed_at = datetime.now(UTC)
             order = self.order_service.get_order_internal(payment.order_id)
             if order:

@@ -773,6 +773,7 @@ class ProductVariant(Base, TimestampMixin):
     stock_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     reserved_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     product: Mapped[Product] = relationship(back_populates="variants")
     inventory_movements: Mapped[list[InventoryMovement]] = relationship(
@@ -980,6 +981,7 @@ class Order(Base, TimestampMixin):
     discount_amount: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     total_amount: Mapped[Any] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     payment_status: Mapped[OrderPaymentStatus] = mapped_column(
         pg_enum(OrderPaymentStatus, name="order_payment_status"),
         nullable=False,
@@ -1271,6 +1273,7 @@ class Payment(Base, TimestampMixin):
     provider_reference: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     callback_processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     order: Mapped[Order] = relationship(back_populates="payments")
 
