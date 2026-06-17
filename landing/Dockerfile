@@ -8,5 +8,5 @@ COPY . .
 
 ENV LANDING_PORT=5174
 EXPOSE 5174
-
-CMD ["sh", "-c", "npm run dev -- --host 0.0.0.0 --port ${LANDING_PORT}"]
+# Re-run install on start so named node_modules volumes pick up new deps from package.json.
+CMD ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0 --port ${LANDING_PORT}"]

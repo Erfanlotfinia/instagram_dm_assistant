@@ -36,7 +36,7 @@ export function Navbar() {
             scrolled ? 'glass-strong' : ''
           }`}
         >
-          <a href="#top" className="flex items-center gap-2" aria-label={`${brand.name} — خانه`}>
+          <a href="/" className="flex items-center gap-2" aria-label={`${brand.name} — خانه`}>
             <span className="grid size-9 place-items-center rounded-xl accent-gradient text-ink-950">
               <Icon name="Sparkles" size={18} />
             </span>
