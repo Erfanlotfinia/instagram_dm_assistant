@@ -9,7 +9,7 @@ import { ConversationDetailPage } from '../pages/ConversationDetailPage';
 import { ConversationsPage } from '../pages/ConversationsPage';
 import { AgentStudioSettingsPage } from '../pages/AgentStudioSettingsPage';
 import { AnalyticsPage } from '../pages/AnalyticsPage';
-import { DashboardPage } from '../pages/DashboardPage';
+import { EnterpriseDashboardPage } from '../pages/EnterpriseDashboardPage';
 import { DMSimulatorPage } from '../pages/DMSimulatorPage';
 import { FashionDictionaryPage } from '../pages/FashionDictionaryPage';
 import { FailedJobsPage } from '../pages/FailedJobsPage';
@@ -57,7 +57,7 @@ export function AppRoutes() {
         path="/"
         element={
           <AuthenticatedShell>
-            <DashboardPage />
+            <EnterpriseDashboardPage />
           </AuthenticatedShell>
         }
       />
