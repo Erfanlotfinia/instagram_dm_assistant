@@ -57,19 +57,19 @@ export function ConversationsPage() {
         ) : null}
 
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table data-table--inbox">
             <thead>
               <tr>
                 <th>Priority</th>
                 <th>Customer</th>
-                <th>Channel</th>
+                <th className="col-hide-sm">Channel</th>
                 <th>Last message</th>
-                <th>Product</th>
-                <th>Order</th>
-                <th>Payment</th>
-                <th>Operator</th>
-                <th>Badges</th>
-                <th>Updated</th>
+                <th className="col-hide-md">Product</th>
+                <th className="col-hide-md">Order</th>
+                <th className="col-hide-md">Payment</th>
+                <th className="col-hide-md">Operator</th>
+                <th className="col-hide-md">Badges</th>
+                <th className="col-hide-sm">Updated</th>
               </tr>
             </thead>
             <tbody>
@@ -95,16 +95,16 @@ export function ConversationsPage() {
                         conversation.customer_id}
                     </Link>
                   </td>
-                  <td>
+                  <td className="col-hide-sm">
                     <span className="status-pill">{conversation.channel_provider ?? 'instagram'}</span>
                     <div className="muted-text">{conversation.channel_conversation_id ?? conversation.channel_customer_id ?? '—'}</div>
                   </td>
                   <td>{conversation.last_message_text ?? '—'}</td>
-                  <td>{conversation.linked_product?.title ?? '—'}</td>
-                  <td>{conversation.linked_order?.status ?? '—'}</td>
-                  <td>{conversation.linked_order?.payment_status ?? '—'}</td>
-                  <td>{conversation.assigned_operator?.full_name ?? '—'}</td>
-                  <td>
+                  <td className="col-hide-md">{conversation.linked_product?.title ?? '—'}</td>
+                  <td className="col-hide-md">{conversation.linked_order?.status ?? '—'}</td>
+                  <td className="col-hide-md">{conversation.linked_order?.payment_status ?? '—'}</td>
+                  <td className="col-hide-md">{conversation.assigned_operator?.full_name ?? '—'}</td>
+                  <td className="col-hide-md">
                     <div className="button-row" aria-label="Conversation badges">
                       {conversation.handoff_required ? (
                         <span className="status-pill">Handoff</span>
@@ -125,7 +125,7 @@ export function ConversationsPage() {
                       ) : null}
                     </div>
                   </td>
-                  <td>{new Date(conversation.updated_at).toLocaleString()}</td>
+                  <td className="col-hide-sm">{new Date(conversation.updated_at).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>

@@ -273,10 +273,10 @@ export function ScenarioCoveragePage() {
                 <thead>
                   <tr>
                     <th scope="col">Scenario</th>
-                    <th scope="col">Group</th>
+                    <th scope="col" className="col-hide-md">Group</th>
                     <th scope="col">Status</th>
-                    <th scope="col">Automation layers</th>
-                    <th scope="col">Priority</th>
+                    <th scope="col" className="col-hide-md">Automation layers</th>
+                    <th scope="col" className="col-hide-md">Priority</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -291,13 +291,13 @@ export function ScenarioCoveragePage() {
                             <span className="sa-scenario__code">{row.scenario_code}</span>
                           </div>
                         </td>
-                        <td>
+                        <td className="col-hide-md">
                           <span className="sa-group-tag">{GROUP_LABELS[group] ?? group}</span>
                         </td>
                         <td>
                           <span className={status.className}>{status.label}</span>
                         </td>
-                        <td>
+                        <td className="col-hide-md">
                           <span className="sa-caps">
                             {CAPABILITIES.map((cap) => {
                               const on = row[cap.key as keyof ScenarioCoverageRow] === true;
@@ -313,7 +313,7 @@ export function ScenarioCoveragePage() {
                             })}
                           </span>
                         </td>
-                        <td>
+                        <td className="col-hide-md">
                           <span className={priorityBadgeClass(row.priority)}>{row.priority}</span>
                         </td>
                       </tr>
@@ -961,18 +961,18 @@ export function OperatorCorrectionsPage() {
               <thead>
                 <tr>
                   <th scope="col">Type</th>
-                  <th scope="col">Before</th>
+                  <th scope="col" className="col-hide-sm">Before</th>
                   <th scope="col">After</th>
-                  <th scope="col">Captured</th>
+                  <th scope="col" className="col-hide-sm">Captured</th>
                 </tr>
               </thead>
               <tbody>
                 {corrections.map((row: OperatorCorrection) => (
                   <tr key={row.id}>
                     <td>{row.correction_type}</td>
-                    <td>{String(Object.values(row.before_json)[0] ?? '—')}</td>
+                    <td className="col-hide-sm">{String(Object.values(row.before_json)[0] ?? '—')}</td>
                     <td>{String(Object.values(row.after_json)[0] ?? '—')}</td>
-                    <td>{new Date(row.created_at).toLocaleString()}</td>
+                    <td className="col-hide-sm">{new Date(row.created_at).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

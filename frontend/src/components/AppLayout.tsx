@@ -196,6 +196,22 @@ function SearchIcon() {
   );
 }
 
+function MenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const STORAGE_KEY = 'sidebar:collapsed-groups';
 
 function loadCollapsed(): Record<string, boolean> {
@@ -211,6 +227,7 @@ export function AppLayout({ children }: PropsWithChildren) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [query, setQuery] = useState('');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     const stored = loadCollapsed();
     const initial: Record<string, boolean> = {};
@@ -229,6 +246,30 @@ export function AppLayout({ children }: PropsWithChildren) {
       // Ignore storage failures (e.g. private mode).
     }
   }, [collapsed]);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) {
+      return;
+    }
+
+    document.body.style.overflow = 'hidden';
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMobileNavOpen(false);
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [mobileNavOpen]);
 
   function isActive(path: string): boolean {
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
@@ -260,6 +301,7 @@ export function AppLayout({ children }: PropsWithChildren) {
         className={`sidebar__link${isActive(item.to) ? ' sidebar__link--active' : ''}`}
         to={item.to}
         aria-current={isActive(item.to) ? 'page' : undefined}
+        onClick={() => setMobileNavOpen(false)}
       >
         <NavIcon name={item.icon} />
         <span className="sidebar__link-label">{item.label}</span>
@@ -269,9 +311,44 @@ export function AppLayout({ children }: PropsWithChildren) {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar" aria-label="Primary navigation">
+      <header className="mobile-header">
+        <button
+          type="button"
+          className="mobile-header__menu"
+          aria-label={mobileNavOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          aria-expanded={mobileNavOpen}
+          aria-controls="app-sidebar"
+          onClick={() => setMobileNavOpen((open) => !open)}
+        >
+          {mobileNavOpen ? <CloseIcon /> : <MenuIcon />}
+        </button>
+        <p className="mobile-header__brand">DM Assistant</p>
+      </header>
+
+      <button
+        type="button"
+        className={`sidebar-backdrop${mobileNavOpen ? ' sidebar-backdrop--visible' : ''}`}
+        aria-label="Close navigation menu"
+        aria-hidden={!mobileNavOpen}
+        tabIndex={mobileNavOpen ? 0 : -1}
+        onClick={() => setMobileNavOpen(false)}
+      />
+
+      <aside
+        id="app-sidebar"
+        className={`sidebar${mobileNavOpen ? ' sidebar--open' : ''}`}
+        aria-label="Primary navigation"
+      >
         <div className="sidebar__head">
           <h1 className="sidebar__brand">DM Assistant</h1>
+          <button
+            type="button"
+            className="sidebar__close"
+            aria-label="Close navigation menu"
+            onClick={() => setMobileNavOpen(false)}
+          >
+            <CloseIcon />
+          </button>
         </div>
 
         <div className="sidebar__search">

@@ -168,12 +168,12 @@ export function OrdersPage() {
                 <th>Order</th>
                 <th>Customer</th>
                 <th>Status</th>
-                <th>Risk</th>
-                <th>Approval</th>
-                <th>Payment</th>
-                <th>Shipping</th>
+                <th className="col-hide-md">Risk</th>
+                <th className="col-hide-md">Approval</th>
+                <th className="col-hide-sm">Payment</th>
+                <th className="col-hide-md">Shipping</th>
                 <th>Total</th>
-                <th>Created</th>
+                <th className="col-hide-sm">Created</th>
               </tr>
             </thead>
             <tbody>
@@ -189,14 +189,14 @@ export function OrdersPage() {
                   </td>
                   <td>{order.customer_name}</td>
                   <td>{order.status}</td>
-                  <td>{order.risk_flags?.length ? order.risk_flags.join(', ') : '—'}</td>
-                  <td>{order.approval_source ?? 'auto-approved'}</td>
-                  <td>{order.payment_status}{order.payment_callback_status ? ` · ${order.payment_callback_status}` : ''}</td>
-                  <td>{order.shipping_status}</td>
+                  <td className="col-hide-md">{order.risk_flags?.length ? order.risk_flags.join(', ') : '—'}</td>
+                  <td className="col-hide-md">{order.approval_source ?? 'auto-approved'}</td>
+                  <td className="col-hide-sm">{order.payment_status}{order.payment_callback_status ? ` · ${order.payment_callback_status}` : ''}</td>
+                  <td className="col-hide-md">{order.shipping_status}</td>
                   <td>
                     {order.total_amount} {order.currency}
                   </td>
-                  <td>{new Date(order.created_at).toLocaleString()}</td>
+                  <td className="col-hide-sm">{new Date(order.created_at).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
