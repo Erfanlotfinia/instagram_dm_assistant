@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.domain.enums import MessageChannel, MessageDirection, MessageType
-from app.domain.models import Message
+from app.domain.models import Conversation, Message
 from app.repositories.message_repository import MessageRepository
 
 logger = logging.getLogger(__name__)
@@ -27,8 +27,15 @@ class InstagramSendService:
         commit: bool = True,
         is_simulation: bool = False,
     ) -> Message:
+        conversation = self.db.get(Conversation, conversation_id)
+        if conversation is None:
+            raise ValueError(f"Conversation {conversation_id} does not exist")
         message = Message(
+            shop_id=conversation.shop_id,
             conversation_id=conversation_id,
+            customer_id=conversation.customer_id,
+            channel_provider=conversation.channel_provider,
+            channel_account_id=conversation.channel_account_id,
             direction=MessageDirection.OUTBOUND,
             channel=MessageChannel.INSTAGRAM,
             message_type=MessageType.TEXT,

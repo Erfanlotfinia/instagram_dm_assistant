@@ -37,9 +37,13 @@ from app.domain.models import (
 from app.schemas.replay import ReplayRunRequest, ReplayScenarioInput
 from app.services.conversation_orchestrator import ConversationOrchestrator
 from app.services.decision_trace_service import DecisionTraceService
+from app.services.legacy_channel_compat import get_instagram_channel_account_id
 from app.services.policy_engine import PolicyEngine, PolicyEvaluationContext, merge_policy_config
 from app.services.slot_merge_service import slots_to_dict
-from app.services.trl_validation_runner import DeterministicSemanticSearch, RuleBasedTRLExtractionService
+from app.services.trl_validation_runner import (
+    DeterministicSemanticSearch,
+    RuleBasedTRLExtractionService,
+)
 
 
 class ReplayEngine:
@@ -202,9 +206,12 @@ class ReplayEngine:
             self.db.add(customer)
             self.db.flush()
 
+        channel_account_id = get_instagram_channel_account_id(self.db, account_id)
         conversation = Conversation(
             shop_id=shop_id,
             instagram_account_id=account_id,
+            channel_account_id=channel_account_id,
+            external_conversation_id=f"replay:{run.id}:{scenario.item_key}",
             customer_id=customer.id,
             channel_provider="instagram",
             channel_conversation_id=f"replay:{run.id}:{scenario.item_key}",
@@ -215,7 +222,11 @@ class ReplayEngine:
         self.db.flush()
 
         message = Message(
+            shop_id=shop_id,
             conversation_id=conversation.id,
+            customer_id=customer.id,
+            channel_provider=MessageChannel.INSTAGRAM.value,
+            channel_account_id=channel_account_id,
             direction=MessageDirection.INBOUND,
             channel=MessageChannel.INSTAGRAM,
             instagram_message_id=f"replay:{run.id}:{scenario.item_key}",
