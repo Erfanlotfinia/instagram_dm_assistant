@@ -10,7 +10,7 @@ const repoRoot = '..';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, repoRoot, '');
   // Reuse the public API base URL so the dev proxy and the app agree on one target.
-  const proxyTarget = env.VITE_API_BASE_URL || 'http://localhost:8800';
+  const proxyTarget = env.VITE_API_BASE_URL || 'http://backend:8000';
 
   return {
     plugins: [react(), tailwindcss()],

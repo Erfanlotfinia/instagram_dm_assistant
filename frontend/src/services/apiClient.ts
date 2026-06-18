@@ -84,7 +84,8 @@ import type {
 } from '../types/shop';
 import { tokenStorage } from './tokenStorage';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+const DEFAULT_API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:8000`;
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '');
 
 function apiUrl(path: string): string {
   if (API_BASE_URL) {
@@ -119,7 +120,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }).catch((error: unknown) => {
     if (error instanceof TypeError) {
       throw new ApiError(
-        'Cannot reach the API server. Start the backend (port 8800) or check VITE_API_BASE_URL.',
+        'Cannot reach the API server. Check that the backend is running and VITE_API_BASE_URL points to http://93.118.120.215:8000.',
         0,
       );
     }
