@@ -26,15 +26,19 @@ class WorkerApp:
         self._publisher = RabbitMQPublisher(self.settings)
 
     def start(self) -> None:
-        queue_name = self.settings.rabbitmq_queue_message_received
+        queue_names = [self.settings.rabbitmq_queue_message_received]
+        legacy_queue_name = self.settings.rabbitmq_legacy_queue_message_received
+        if legacy_queue_name not in queue_names:
+            queue_names.append(legacy_queue_name)
         parameters = pika.URLParameters(self.settings.rabbitmq_url)
         self._connection = pika.BlockingConnection(parameters)
         self._channel = self._connection.channel()
         setup_message_queues(self._channel, self.settings)
         self._channel.basic_qos(prefetch_count=1)
-        self._channel.basic_consume(queue=queue_name, on_message_callback=self._on_message)
+        for queue_name in queue_names:
+            self._channel.basic_consume(queue=queue_name, on_message_callback=self._on_message)
         self._update_queue_lag()
-        logger.info("Worker listening on queue %s", queue_name)
+        logger.info("Worker listening on queues %s", ", ".join(queue_names))
         self._channel.start_consuming()
 
     def stop(self) -> None:
