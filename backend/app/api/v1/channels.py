@@ -4,12 +4,13 @@ import json
 from typing import Annotated, Any
 from uuid import UUID
 
-from sqlalchemy import select
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.api.deps import get_current_user, rate_limit_webhook, require_shop_role
+from app.channels.adapters import InstagramProviderAdapter
+from app.core.config import get_settings
 from app.db.session import get_db_session
 from app.domain.enums import ChannelProvider, UserRole
 from app.domain.models import ChannelAccount, ShopMember, User
@@ -100,8 +101,7 @@ def _resolve_telegram_webhook_account(
         (
             account
             for account in accounts
-            if adapter_for_provider(ChannelProvider.TELEGRAM, account).webhook_secret
-            == secret
+            if adapter_for_provider(ChannelProvider.TELEGRAM, account).webhook_secret == secret
         ),
         None,
     )
@@ -130,9 +130,9 @@ def _candidate_webhook_accounts(
         ChannelProvider.BALE,
         ChannelProvider.RUBIKA,
     }:
-        secret = _header_value(
-            headers, "X-Telegram-Bot-Api-Secret-Token"
-        ) or _header_value(headers, "X-Webhook-Secret")
+        secret = _header_value(headers, "X-Telegram-Bot-Api-Secret-Token") or _header_value(
+            headers, "X-Webhook-Secret"
+        )
         if not secret:
             return []
         # Encrypted webhook secrets cannot be queried directly; candidates are
@@ -146,11 +146,10 @@ async def _verified_webhook_account(
     payload: dict[str, Any],
     request: Request,
     channel_account_id: UUID | None = None,
+    allow_legacy_meta_secret: bool = False,
 ) -> ChannelAccount:
     headers = dict(request.headers)
-    candidates = _candidate_webhook_accounts(
-        db, provider, payload, headers, channel_account_id
-    )
+    candidates = _candidate_webhook_accounts(db, provider, payload, headers, channel_account_id)
     if not candidates and channel_account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -161,6 +160,13 @@ async def _verified_webhook_account(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No channel account configured for this webhook",
         )
+    if allow_legacy_meta_secret and provider == ChannelProvider.INSTAGRAM:
+        settings = get_settings()
+        if settings.webhook_signature_bypass:
+            return candidates[0]
+        if settings.meta_app_secret:
+            if await InstagramProviderAdapter(settings.meta_app_secret).verify_webhook(request):
+                return candidates[0]
     for account in candidates:
         if not account.webhook_secret_encrypted:
             continue
@@ -185,9 +191,7 @@ def list_channel_accounts(
     ]
 
 
-@router.post(
-    "/shops/{shop_id}/channels", response_model=ChannelAccountRead, status_code=201
-)
+@router.post("/shops/{shop_id}/channels", response_model=ChannelAccountRead, status_code=201)
 def create_channel_account(
     shop_id: UUID,
     payload: ChannelAccountCreate,
@@ -196,9 +200,7 @@ def create_channel_account(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> ChannelAccountRead:
     ShopService(db).get_shop(shop_id, current_user)
-    return ChannelAccountRead.from_account(
-        ChannelAccountService(db).create(shop_id, payload)
-    )
+    return ChannelAccountRead.from_account(ChannelAccountService(db).create(shop_id, payload))
 
 
 @router.get(
@@ -291,28 +293,33 @@ def test_channel_webhook(
 
 @router.get("/channels/{provider}/webhook")
 def verify_channel_webhook(
-    provider: ChannelProvider,
+    provider: str,
     db: Annotated[Session, Depends(get_db_session)],
     hub_mode: Annotated[str | None, Query(alias="hub.mode")] = None,
     hub_verify_token: Annotated[str | None, Query(alias="hub.verify_token")] = None,
     hub_challenge: Annotated[str | None, Query(alias="hub.challenge")] = None,
 ) -> Response:
-    if (
-        provider in {ChannelProvider.INSTAGRAM, ChannelProvider.WHATSAPP}
-        and hub_mode == "subscribe"
-    ):
-        if not hub_verify_token:
-            return Response(status_code=403)
-        account = db.scalar(
-            select(ChannelAccount).where(
-                ChannelAccount.provider == provider,
-                ChannelAccount.webhook_verify_token == hub_verify_token,
-            )
+    try:
+        provider_enum = ChannelProvider(provider)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Unsupported channel provider") from exc
+    if provider_enum in {ChannelProvider.INSTAGRAM, ChannelProvider.WHATSAPP}:
+        if hub_mode != "subscribe" or not hub_verify_token:
+            raise HTTPException(status_code=403, detail="Verification failed")
+    elif not hub_verify_token:
+        raise HTTPException(
+            status_code=400,
+            detail="This provider does not support an unauthenticated challenge",
         )
-        if account:
-            return Response(content=hub_challenge or "", media_type="text/plain")
-        return Response(status_code=403)
-    return Response(content="ok", media_type="text/plain")
+    account = db.scalar(
+        select(ChannelAccount).where(
+            ChannelAccount.provider == provider_enum,
+            ChannelAccount.webhook_verify_token == hub_verify_token,
+        )
+    )
+    if account is None:
+        raise HTTPException(status_code=403, detail="Verification failed")
+    return Response(content=hub_challenge or "", media_type="text/plain")
 
 
 @router.post(
@@ -320,12 +327,16 @@ def verify_channel_webhook(
     response_model=WebhookAckResponse | WebhookIgnoredResponse,
 )
 async def receive_channel_webhook(
-    provider: ChannelProvider,
+    provider: str,
     request: Request,
     db: Annotated[Session, Depends(get_db_session)],
     _: Annotated[None, Depends(rate_limit_webhook)],
 ) -> WebhookAckResponse | WebhookIgnoredResponse:
-    return await _receive_channel_webhook(provider, request, db)
+    try:
+        provider_enum = ChannelProvider(provider)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Unsupported channel provider") from exc
+    return await _receive_channel_webhook(provider_enum, request, db)
 
 
 @router.post(
@@ -348,6 +359,7 @@ async def _receive_channel_webhook(
     request: Request,
     db: Session,
     channel_account_id: UUID | None = None,
+    allow_legacy_meta_secret: bool = False,
 ) -> WebhookAckResponse | WebhookIgnoredResponse:
     body = await request.body()
     try:
@@ -357,7 +369,12 @@ async def _receive_channel_webhook(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload"
         ) from exc
     account = await _verified_webhook_account(
-        db, provider, payload, request, channel_account_id
+        db,
+        provider,
+        payload,
+        request,
+        channel_account_id,
+        allow_legacy_meta_secret=allow_legacy_meta_secret,
     )
     return ChannelWebhookIngestionService(db).handle_payload(
         provider,
@@ -368,9 +385,7 @@ async def _receive_channel_webhook(
     )
 
 
-@router.post(
-    "/webhooks/{provider}", response_model=WebhookAckResponse | WebhookIgnoredResponse
-)
+@router.post("/webhooks/{provider}", response_model=WebhookAckResponse | WebhookIgnoredResponse)
 async def receive_provider_compat_webhook(
     provider: ChannelProvider,
     request: Request,
@@ -392,12 +407,8 @@ async def set_telegram_webhook(
     ShopService(db).get_shop(shop_id, current_user)
     account = ChannelAccountService(db).get(shop_id, channel_account_id)
     if not account or account.provider != ChannelProvider.TELEGRAM:
-        raise HTTPException(
-            status_code=404, detail="Telegram channel account not found"
-        )
-    return await adapter_for_provider(
-        ChannelProvider.TELEGRAM, account
-    ).configure_webhook(
+        raise HTTPException(status_code=404, detail="Telegram channel account not found")
+    return await adapter_for_provider(ChannelProvider.TELEGRAM, account).configure_webhook(
         payload.get("url") or _default_telegram_webhook_url(account.id),
         adapter_for_provider(ChannelProvider.TELEGRAM, account).webhook_secret,
     )
@@ -414,12 +425,8 @@ async def delete_telegram_webhook(
     ShopService(db).get_shop(shop_id, current_user)
     account = ChannelAccountService(db).get(shop_id, channel_account_id)
     if not account or account.provider != ChannelProvider.TELEGRAM:
-        raise HTTPException(
-            status_code=404, detail="Telegram channel account not found"
-        )
-    return await adapter_for_provider(
-        ChannelProvider.TELEGRAM, account
-    ).delete_webhook()
+        raise HTTPException(status_code=404, detail="Telegram channel account not found")
+    return await adapter_for_provider(ChannelProvider.TELEGRAM, account).delete_webhook()
 
 
 @router.get("/shops/{shop_id}/channels/{channel_account_id}/telegram/webhook-info")
@@ -432,9 +439,5 @@ async def get_telegram_webhook_info(
     ShopService(db).get_shop(shop_id, current_user)
     account = ChannelAccountService(db).get(shop_id, channel_account_id)
     if not account or account.provider != ChannelProvider.TELEGRAM:
-        raise HTTPException(
-            status_code=404, detail="Telegram channel account not found"
-        )
-    return await adapter_for_provider(
-        ChannelProvider.TELEGRAM, account
-    ).get_webhook_info()
+        raise HTTPException(status_code=404, detail="Telegram channel account not found")
+    return await adapter_for_provider(ChannelProvider.TELEGRAM, account).get_webhook_info()
