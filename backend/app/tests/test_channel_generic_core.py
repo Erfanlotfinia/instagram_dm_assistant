@@ -44,7 +44,7 @@ def test_create_customer_from_channel_identity(db_session, provider) -> None:
     assert customer.primary_channel_provider == provider
     assert customer.primary_external_user_id == "provider-user"
     assert CustomerRepository(db_session).get_customer_by_channel_identity(
-        shop.id, provider, "provider-user"
+        shop.id, provider, account.id, "provider-user"
     ) == customer
 
 
@@ -92,6 +92,38 @@ def test_identity_is_idempotent_and_multiple_providers_link_to_customer(db_sessi
         .count()
         == 2
     )
+
+
+def test_same_external_user_on_different_accounts_creates_distinct_customers(
+    db_session,
+) -> None:
+    shop = Shop(name="Account scoped", slug=f"account-scoped-{uuid4()}")
+    db_session.add(shop)
+    db_session.flush()
+    accounts = [
+        ChannelAccount(
+            shop_id=shop.id,
+            provider=ChannelProvider.INSTAGRAM,
+            display_name=f"Instagram {index}",
+            external_account_id=str(uuid4()),
+        )
+        for index in range(2)
+    ]
+    db_session.add_all(accounts)
+    db_session.flush()
+    repository = CustomerRepository(db_session)
+
+    customers = [
+        repository.create_customer_from_channel_identity(
+            shop_id=shop.id,
+            provider=ChannelProvider.INSTAGRAM,
+            channel_account_id=account.id,
+            external_user_id="reused-user-id",
+        )
+        for account in accounts
+    ]
+
+    assert customers[0].id != customers[1].id
 
 
 def test_create_conversation_without_instagram_account(db_session) -> None:

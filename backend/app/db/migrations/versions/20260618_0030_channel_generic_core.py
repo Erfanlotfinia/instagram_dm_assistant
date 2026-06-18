@@ -118,6 +118,33 @@ def upgrade() -> None:
     )
     op.execute(
         """
+        INSERT INTO channel_accounts (
+            id, shop_id, provider, display_name, external_account_id, bot_username,
+            encrypted_access_token, status, capabilities_json, settings_json,
+            created_at, updated_at
+        )
+        SELECT gen_random_uuid(), ia.shop_id, 'instagram'::channel_provider,
+               ia.username, ia.ig_user_id, ia.username, ia.access_token_encrypted,
+               'connected'::channel_account_status,
+               '{"supports_webhook": true, "supports_text": true, "supports_images": true}'::jsonb,
+               jsonb_build_object('legacy_instagram_account_id', ia.id::text),
+               ia.created_at, ia.updated_at
+        FROM instagram_accounts ia
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM channel_accounts ca
+            WHERE ca.shop_id = ia.shop_id
+              AND ca.provider = 'instagram'::channel_provider
+              AND ca.settings_json->>'legacy_instagram_account_id' = ia.id::text
+        )
+        ON CONFLICT (shop_id, provider, external_account_id)
+        DO UPDATE SET settings_json =
+            COALESCE(channel_accounts.settings_json, '{}'::jsonb)
+            || EXCLUDED.settings_json
+        """
+    )
+    op.execute(
+        """
         UPDATE conversations c
         SET channel_account_id = ca.id,
             external_conversation_id = COALESCE(

@@ -4,12 +4,26 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.enums import ConversationState, MessageChannel, MessageDirection, MessageType, TriggerSourceType
-from app.domain.models import CommentToDmTrigger, Conversation, ConversationSlots, Customer, Message, TriggerEvent, User
+from app.domain.enums import (
+    ConversationState,
+    MessageChannel,
+    MessageDirection,
+    MessageType,
+    TriggerSourceType,
+)
+from app.domain.models import (
+    CommentToDmTrigger,
+    Conversation,
+    ConversationSlots,
+    Customer,
+    Message,
+    TriggerEvent,
+    User,
+)
 from app.schemas.triggers import (
     TriggerMatchRequest,
     TriggerMatchResponse,
@@ -18,6 +32,7 @@ from app.schemas.triggers import (
     TriggerRuleRead,
     TriggerRuleUpdate,
 )
+from app.services.legacy_channel_compat import get_instagram_channel_account_id
 from app.services.shop_service import ShopService
 
 
@@ -84,9 +99,14 @@ class TriggerService:
             customer = Customer(shop_id=shop_id, instagram_user_id=payload.instagram_user_id)
             self.db.add(customer)
             self.db.flush()
+        channel_account_id = get_instagram_channel_account_id(
+            self.db, payload.instagram_account_id
+        )
         conversation = Conversation(
             shop_id=shop_id,
             instagram_account_id=payload.instagram_account_id,
+            channel_account_id=channel_account_id,
+            external_conversation_id=payload.instagram_user_id,
             customer_id=customer.id,
             state=ConversationState.OPEN,
             channel_provider=MessageChannel.INSTAGRAM.value,
@@ -98,8 +118,14 @@ class TriggerService:
         self.db.flush()
         slots = ConversationSlots(conversation_id=conversation.id, product_id=rule.target_product_id)
         self.db.add(slots)
-        self.db.add(Message(conversation_id=conversation.id, direction=MessageDirection.INBOUND, channel=MessageChannel.INSTAGRAM, message_type=MessageType.TEXT, text=payload.text, raw_payload={"trigger_source_type": payload.source_type.value}))
-        self.db.add(Message(conversation_id=conversation.id, direction=MessageDirection.OUTBOUND, channel=MessageChannel.INSTAGRAM, message_type=MessageType.TEXT, text=rule.response_template, raw_payload={"simulation": True, "trigger_rule_id": str(rule.id)}))
+        message_metadata = {
+            "shop_id": shop_id,
+            "customer_id": customer.id,
+            "channel_provider": MessageChannel.INSTAGRAM.value,
+            "channel_account_id": channel_account_id,
+        }
+        self.db.add(Message(**message_metadata, conversation_id=conversation.id, direction=MessageDirection.INBOUND, channel=MessageChannel.INSTAGRAM, message_type=MessageType.TEXT, text=payload.text, raw_payload={"trigger_source_type": payload.source_type.value}))
+        self.db.add(Message(**message_metadata, conversation_id=conversation.id, direction=MessageDirection.OUTBOUND, channel=MessageChannel.INSTAGRAM, message_type=MessageType.TEXT, text=rule.response_template, raw_payload={"simulation": True, "trigger_rule_id": str(rule.id)}))
         self.db.add(TriggerEvent(trigger_id=rule.id, conversation_id=conversation.id, customer_id=customer.id, matched_keyword=rule.keyword, source_type=rule.source_type, dm_sent=True))
         self.db.commit()
         return TriggerMatchResponse(matched=True, trigger_id=rule.id, response_text=rule.response_template, target_product_id=rule.target_product_id, conversation_id=conversation.id)

@@ -22,8 +22,7 @@ from app.domain.enums import (
     WebhookProcessingStatus,
     WebhookProvider,
 )
-from app.domain.models import Conversation, Customer, Message, OutboxEvent, WebhookEvent
-from app.repositories.outbox_event_repository import OutboxEventRepository
+from app.domain.models import Conversation, Customer, Message, OutboxEvent
 from app.integrations.instagram_webhook import (
     ParsedInstagramMessage,
     parse_instagram_webhook_payload,
@@ -34,10 +33,12 @@ from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.customer_repository import CustomerRepository
 from app.repositories.instagram_account_repository import InstagramAccountRepository
 from app.repositories.message_repository import MessageRepository
+from app.repositories.outbox_event_repository import OutboxEventRepository
 from app.repositories.webhook_event_repository import WebhookEventRepository
-from app.services.idempotency_key_manager import IdempotencyKeyManager
 from app.schemas.queue_events import MessageReceivedJob
 from app.schemas.webhook import WebhookAckResponse, WebhookIgnoredResponse
+from app.services.idempotency_key_manager import IdempotencyKeyManager
+from app.services.legacy_channel_compat import get_instagram_channel_account_id
 
 logger = logging.getLogger(__name__)
 
@@ -192,10 +193,14 @@ class WebhookIngestionService:
             customer.id,
         )
         if conversation is None:
+            channel_account_id = get_instagram_channel_account_id(self.db, account.id)
             conversation = self.conversations.create(
                 Conversation(
                     shop_id=account.shop_id,
                     instagram_account_id=account.id,
+                    channel_account_id=channel_account_id,
+                    channel_provider=MessageChannel.INSTAGRAM.value,
+                    external_conversation_id=parsed.sender_id,
                     customer_id=customer.id,
                     state=ConversationState.OPEN,
                 )
@@ -218,7 +223,12 @@ class WebhookIngestionService:
         }
 
         message = Message(
+            shop_id=account.shop_id,
             conversation_id=conversation.id,
+            customer_id=customer.id,
+            channel_provider=MessageChannel.INSTAGRAM.value,
+            channel_account_id=conversation.channel_account_id,
+            external_message_id=parsed.message_id,
             direction=MessageDirection.INBOUND,
             channel=MessageChannel.INSTAGRAM,
             instagram_message_id=parsed.message_id,

@@ -6,7 +6,13 @@ from fastapi import HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.domain.enums import ConversationState, MessageChannel, MessageDirection, MessageType, OrderStatus
+from app.domain.enums import (
+    ConversationState,
+    MessageChannel,
+    MessageDirection,
+    MessageType,
+    OrderStatus,
+)
 from app.domain.models import (
     AgentAction,
     AgentDecisionAudit,
@@ -20,6 +26,7 @@ from app.domain.models import (
 from app.repositories.instagram_account_repository import InstagramAccountRepository
 from app.schemas.simulator import DMSimulatorRequest, DMSimulatorResponse, SimulatorRunSummary
 from app.services.conversation_orchestrator import ConversationOrchestrator
+from app.services.legacy_channel_compat import get_instagram_channel_account_id
 from app.services.shop_service import ShopService
 
 
@@ -45,9 +52,12 @@ class DMSimulatorService:
         if account is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instagram account not found")
         customer = self._get_or_create_customer(shop_id, payload.instagram_user_id)
+        channel_account_id = get_instagram_channel_account_id(self.db, account.id)
         conversation = Conversation(
             shop_id=shop_id,
             instagram_account_id=account.id,
+            channel_account_id=channel_account_id,
+            external_conversation_id=payload.instagram_user_id,
             customer_id=customer.id,
             state=ConversationState.OPEN,
             is_simulation=True,
@@ -58,7 +68,11 @@ class DMSimulatorService:
         self.db.add(conversation)
         self.db.flush()
         message = Message(
+            shop_id=shop_id,
             conversation_id=conversation.id,
+            customer_id=customer.id,
+            channel_provider=MessageChannel.INSTAGRAM.value,
+            channel_account_id=channel_account_id,
             direction=MessageDirection.INBOUND,
             channel=MessageChannel.INSTAGRAM,
             instagram_message_id=f"simulation-{uuid4()}",

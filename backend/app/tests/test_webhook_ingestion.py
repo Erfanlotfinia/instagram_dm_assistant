@@ -3,8 +3,20 @@ from unittest.mock import MagicMock
 from sqlalchemy import func, select
 
 from app.core.security import encrypt_secret
-from app.domain.enums import InstagramAccountStatus, WebhookProcessingStatus
-from app.domain.models import Conversation, Customer, InstagramAccount, Message, WebhookEvent
+from app.domain.enums import (
+    ChannelAccountStatus,
+    ChannelProvider,
+    InstagramAccountStatus,
+    WebhookProcessingStatus,
+)
+from app.domain.models import (
+    ChannelAccount,
+    Conversation,
+    Customer,
+    InstagramAccount,
+    Message,
+    WebhookEvent,
+)
 from app.services.webhook_ingestion_service import WebhookIngestionService
 from app.tests.fixtures.instagram_webhook import (
     SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD,
@@ -22,6 +34,16 @@ def _create_account(db_session, demo_shop, ig_user_id: str = "17841400000000001"
         status=InstagramAccountStatus.CONNECTED,
     )
     db_session.add(account)
+    db_session.flush()
+    channel_account = ChannelAccount(
+        shop_id=demo_shop.id,
+        provider=ChannelProvider.INSTAGRAM,
+        display_name=account.username,
+        external_account_id=account.ig_user_id,
+        status=ChannelAccountStatus.CONNECTED,
+        settings_json={"legacy_instagram_account_id": str(account.id)},
+    )
+    db_session.add_all([account, channel_account])
     db_session.commit()
     db_session.refresh(account)
     return account

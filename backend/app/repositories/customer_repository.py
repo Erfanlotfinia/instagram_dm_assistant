@@ -15,14 +15,18 @@ class CustomerRepository:
         return self.db.get(Customer, customer_id)
 
     def get_by_instagram_user_id(self, shop_id: UUID, instagram_user_id: str) -> Customer | None:
-        return self.get_customer_by_channel_identity(
-            shop_id, ChannelProvider.INSTAGRAM, instagram_user_id
+        return self.db.scalar(
+            select(Customer).where(
+                Customer.shop_id == shop_id,
+                Customer.instagram_user_id == instagram_user_id,
+            )
         )
 
     def get_customer_by_channel_identity(
         self,
         shop_id: UUID,
         provider: ChannelProvider,
+        channel_account_id: UUID,
         external_user_id: str,
     ) -> Customer | None:
         stmt = (
@@ -31,6 +35,7 @@ class CustomerRepository:
             .where(
                 ChannelContactIdentity.shop_id == shop_id,
                 ChannelContactIdentity.provider == provider,
+                ChannelContactIdentity.channel_account_id == channel_account_id,
                 ChannelContactIdentity.external_user_id == external_user_id,
             )
         )
@@ -90,7 +95,9 @@ class CustomerRepository:
         email: str | None = None,
         raw_profile_json: dict | None = None,
     ) -> Customer:
-        existing = self.get_customer_by_channel_identity(shop_id, provider, external_user_id)
+        existing = self.get_customer_by_channel_identity(
+            shop_id, provider, channel_account_id, external_user_id
+        )
         if existing is not None:
             self.get_or_create_channel_contact_identity(
                 shop_id=shop_id,
