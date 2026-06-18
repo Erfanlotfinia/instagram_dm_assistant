@@ -35,6 +35,14 @@ from app.services.pilot_service import PilotService
 logger = logging.getLogger(__name__)
 
 
+class ChannelOutboundError(RuntimeError):
+    """Raised when an outbound provider send does not succeed."""
+
+    def __init__(self, result: ProviderSendResult) -> None:
+        self.result = result
+        super().__init__(result.error_message or result.error_code or "Outbound send failed")
+
+
 class ChannelOutboundService:
     """Single production boundary for every provider outbound message."""
 
@@ -77,7 +85,9 @@ class ChannelOutboundService:
                 safe = safe.replace(credential, "[REDACTED]")
         return safe
 
-    async def send(self, message: NormalizedOutboundMessage) -> ProviderSendResult:
+    async def send(
+        self, message: NormalizedOutboundMessage, *, commit: bool = True
+    ) -> ProviderSendResult:
         idempotency_key = str(
             message.metadata.get("idempotency_key")
             or hashlib.sha256(
@@ -268,7 +278,10 @@ class ChannelOutboundService:
                     resolved=False,
                 )
             )
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         return result
 
     @staticmethod
@@ -315,9 +328,12 @@ class ChannelOutboundService:
                         "is_simulation": is_simulation,
                         **({"idempotency_key": idempotency_key} if idempotency_key else {}),
                     },
-                )
+                ),
+                commit=commit,
             )
         )
+        if not result.success:
+            raise ChannelOutboundError(result)
         message = Message(
             shop_id=conversation.shop_id,
             conversation_id=conversation.id,

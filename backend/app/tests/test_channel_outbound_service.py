@@ -3,10 +3,10 @@ from uuid import uuid4
 import pytest
 
 from app.domain.enums import ChannelMessageType, ChannelProvider, MessageDirection
-from app.domain.models import ChannelMessage
+from app.domain.models import ChannelMessage, Conversation, Message
 from app.schemas.channels import NormalizedOutboundMessage, ProviderSendResult
 from app.services import channel_outbound_service
-from app.services.channel_outbound_service import ChannelOutboundService
+from app.services.channel_outbound_service import ChannelOutboundError, ChannelOutboundService
 
 
 class FakeSession:
@@ -25,6 +25,27 @@ class FakeSession:
 
     def commit(self):
         self.commits += 1
+
+
+class WrapperSession:
+    def __init__(self, conversation: Conversation):
+        self.conversation = conversation
+        self.added = []
+        self.commits = 0
+        self.flushes = 0
+
+    def get(self, model, key):
+        assert model is Conversation
+        return self.conversation
+
+    def add(self, instance):
+        self.added.append(instance)
+
+    def commit(self):
+        self.commits += 1
+
+    def flush(self):
+        self.flushes += 1
 
 
 @pytest.mark.anyio
@@ -71,6 +92,65 @@ async def test_outbound_idempotency_returns_in_flight_duplicate_without_provider
         retryable=True,
     )
     assert service.db.commits == 0
+
+
+def test_send_text_message_commit_false_preserves_caller_transaction(monkeypatch) -> None:
+    conversation = Conversation(
+        id=uuid4(),
+        shop_id=uuid4(),
+        customer_id=uuid4(),
+        channel_account_id=uuid4(),
+        channel_provider=ChannelProvider.TELEGRAM.value,
+        external_conversation_id="chat-1",
+    )
+    conversation.channel_provider = ChannelProvider.TELEGRAM
+    session = WrapperSession(conversation)
+    service = ChannelOutboundService(session)
+    observed_commit = None
+
+    async def successful_send(message, *, commit=True):
+        nonlocal observed_commit
+        observed_commit = commit
+        return ProviderSendResult(provider=message.provider, success=True)
+
+    monkeypatch.setattr(service, "send", successful_send)
+    result = service.send_text_message(conversation.id, "Hello", commit=False)
+
+    assert isinstance(result, Message)
+    assert observed_commit is False
+    assert session.commits == 0
+    assert session.flushes == 1
+
+
+def test_send_text_message_does_not_record_failed_send(monkeypatch) -> None:
+    conversation = Conversation(
+        id=uuid4(),
+        shop_id=uuid4(),
+        customer_id=uuid4(),
+        channel_account_id=uuid4(),
+        channel_provider=ChannelProvider.TELEGRAM.value,
+        external_conversation_id="chat-1",
+    )
+    conversation.channel_provider = ChannelProvider.TELEGRAM
+    session = WrapperSession(conversation)
+    service = ChannelOutboundService(session)
+
+    async def failed_send(message, *, commit=True):
+        return ProviderSendResult(
+            provider=message.provider,
+            success=False,
+            error_code="provider_error",
+            error_message="Provider rejected the message",
+        )
+
+    monkeypatch.setattr(service, "send", failed_send)
+
+    with pytest.raises(ChannelOutboundError, match="Provider rejected the message"):
+        service.send_text_message(conversation.id, "Hello")
+
+    assert session.added == []
+    assert session.commits == 0
+    assert session.flushes == 0
 
 
 class _InstagramFakeClient:
