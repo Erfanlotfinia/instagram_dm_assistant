@@ -21,18 +21,23 @@
     "react-dom": "latest",
     "react-hook-form": "^7.77.0",
     "react-router-dom": "latest",
+    "recharts": "^2.15.0",
     "typescript": "latest",
     "vite": "latest",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "zustand": "^5.0.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
+    "@tailwindcss/vite": "^4",
     "@testing-library/jest-dom": "latest",
     "@testing-library/react": "latest",
     "@testing-library/user-event": "latest",
+    "@types/node": "^25.9.3",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "jsdom": "latest",
+    "tailwindcss": "^4",
     "vitest": "latest"
   }
 }

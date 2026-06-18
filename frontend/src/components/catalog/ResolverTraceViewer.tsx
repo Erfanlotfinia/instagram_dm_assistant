@@ -1,53 +1,57 @@
+import { Badge } from '../ui';
+import { confidenceBandTone } from '../../lib/confidenceBand';
 import type { ResolverTrace } from '../../types/resolve';
 
 export function ResolverTraceViewer({ trace }: { trace: ResolverTrace }) {
   return (
-    <div className="cc-trace">
-      <div className="cc-card__head">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="cc-card__title">Resolver trace</h2>
-          <p className="cc-card__hint cc-trace__id">{trace.id}</p>
+          <h2 className="text-sm font-semibold text-fg">Resolver trace</h2>
+          <p className="font-mono text-xs text-subtle">{trace.id}</p>
         </div>
-        <span className={`status-pill status-pill--${trace.confidence_band}`}>
+        <Badge tone={confidenceBandTone(trace.confidence_band)}>
           {trace.confidence_band} · {Math.round(trace.confidence_score * 100)}%
-        </span>
+        </Badge>
       </div>
 
-      <div className="cc-trace__meta">
-        <div className="cc-trace__metaitem">
-          <span className="cc-trace__metakey">Type</span>
-          <span className="cc-trace__metaval">{trace.trace_type}</span>
+      <dl className="grid gap-3 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-xs text-muted">Type</dt>
+          <dd className="text-fg">{trace.trace_type}</dd>
         </div>
-        <div className="cc-trace__metaitem">
-          <span className="cc-trace__metakey">Missing slots</span>
-          <span className="cc-trace__metaval">
-            {trace.missing_slots.length > 0 ? trace.missing_slots.join(', ') : 'None'}
-          </span>
+        <div>
+          <dt className="text-xs text-muted">Missing slots</dt>
+          <dd className="text-fg">{trace.missing_slots.length > 0 ? trace.missing_slots.join(', ') : 'None'}</dd>
         </div>
-      </div>
+      </dl>
 
-      {trace.rationale ? <p className="cc-trace__rationale">{trace.rationale}</p> : null}
+      {trace.rationale ? <p className="text-sm leading-relaxed text-muted">{trace.rationale}</p> : null}
 
       {trace.rules_fired.length > 0 ? (
-        <div className="cc-why__row">
-          <span className="cc-why__key">Rules fired</span>
-          <span className="cc-why__tags">
+        <div className="flex flex-col gap-1.5 text-sm">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">Rules fired</span>
+          <span className="flex flex-wrap gap-1.5">
             {trace.rules_fired.map((rule) => (
-              <span key={rule} className="cc-tag cc-tag--rule">
+              <Badge key={rule} tone="accent">
                 {rule}
-              </span>
+              </Badge>
             ))}
           </span>
         </div>
       ) : null}
 
-      <details className="cc-why__meta" open>
-        <summary>Top candidates ({trace.top_candidates.length})</summary>
-        <pre className="cc-json">{JSON.stringify(trace.top_candidates, null, 2)}</pre>
+      <details className="rounded-lg border border-border bg-surface-sunken p-3" open>
+        <summary className="cursor-pointer text-sm font-medium text-fg">
+          Top candidates ({trace.top_candidates.length})
+        </summary>
+        <pre className="mt-2 overflow-x-auto text-xs text-subtle">{JSON.stringify(trace.top_candidates, null, 2)}</pre>
       </details>
-      <details className="cc-why__meta">
-        <summary>Matched aliases ({trace.matched_aliases.length})</summary>
-        <pre className="cc-json">{JSON.stringify(trace.matched_aliases, null, 2)}</pre>
+      <details className="rounded-lg border border-border bg-surface-sunken p-3">
+        <summary className="cursor-pointer text-sm font-medium text-fg">
+          Matched aliases ({trace.matched_aliases.length})
+        </summary>
+        <pre className="mt-2 overflow-x-auto text-xs text-subtle">{JSON.stringify(trace.matched_aliases, null, 2)}</pre>
       </details>
     </div>
   );

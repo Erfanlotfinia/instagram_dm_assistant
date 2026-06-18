@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { EmptyState, LoadingState } from '../data';
 import { queryKeys } from '../../lib/queryClient';
 import { apiClient } from '../../services/apiClient';
 
@@ -14,15 +15,15 @@ export function OrderTimelineTab({ orderId }: OrderTimelineTabProps) {
   });
 
   if (isLoading) {
-    return <p className="empty-state">Loading timeline…</p>;
+    return <LoadingState label="Loading timeline…" />;
   }
 
   if (isError || !data) {
-    return <p className="empty-state">Unable to load timeline.</p>;
+    return <EmptyState title="Unable to load timeline" />;
   }
 
   if (data.entries.length === 0) {
-    return <p className="empty-state">No timeline events yet.</p>;
+    return <EmptyState title="No timeline events yet" />;
   }
 
   return (

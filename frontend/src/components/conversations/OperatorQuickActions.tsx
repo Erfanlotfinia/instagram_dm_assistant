@@ -1,3 +1,5 @@
+import { Button } from '../ui';
+
 interface OperatorQuickActionsProps {
   hasOrder: boolean;
   orderStatus?: string;
@@ -38,54 +40,49 @@ export function OperatorQuickActions({
   const canCancel = hasOrder && orderStatus !== 'cancelled' && orderStatus !== 'completed';
 
   return (
-    <div className="conversation-actions" aria-label="Quick actions">
-      <div className="conversation-actions__group">
-        <span className="conversation-actions__label">Handoff</span>
-        <div className="conversation-actions__buttons">
-          <button className="button button--primary" type="button" onClick={onTakeOver} disabled={isLoading}>
+    <div className="flex flex-col gap-4" aria-label="Quick actions">
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Handoff</p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" onClick={onTakeOver} disabled={isLoading}>
             Take over
-          </button>
-          <button className="button button--ghost-dark" type="button" onClick={onRelease} disabled={isLoading}>
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={onRelease} disabled={isLoading}>
             Release to agent
-          </button>
-          <button className="button button--ghost-dark" type="button" onClick={onResolve} disabled={isLoading}>
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={onResolve} disabled={isLoading}>
             Mark resolved
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="conversation-actions__divider" aria-hidden="true" />
+      <div className="h-px bg-border" aria-hidden="true" />
 
-      <div className="conversation-actions__group">
-        <span className="conversation-actions__label">Order</span>
-        <div className="conversation-actions__buttons">
-          <button className="button button--ghost-dark" type="button" onClick={onCreateOrder} disabled={isLoading}>
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Order</p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={onCreateOrder} disabled={isLoading}>
             Create order
-          </button>
+          </Button>
           {canSendPayment ? (
-            <button
-              className="button button--ghost-dark"
-              type="button"
-              onClick={onSendPaymentLink}
-              disabled={isLoading}
-            >
+            <Button type="button" variant="secondary" size="sm" onClick={onSendPaymentLink} disabled={isLoading}>
               Send payment link
-            </button>
+            </Button>
           ) : null}
           {canMarkPaid ? (
-            <button className="button button--ghost-dark" type="button" onClick={onMarkPaid} disabled={isLoading}>
+            <Button type="button" variant="secondary" size="sm" onClick={onMarkPaid} disabled={isLoading}>
               Mark paid
-            </button>
+            </Button>
           ) : null}
           {canShip ? (
-            <button className="button button--ghost-dark" type="button" onClick={onSendTracking} disabled={isLoading}>
+            <Button type="button" variant="secondary" size="sm" onClick={onSendTracking} disabled={isLoading}>
               Send tracking
-            </button>
+            </Button>
           ) : null}
           {canCancel ? (
-            <button className="button button--danger" type="button" onClick={onCancelOrder} disabled={isLoading}>
+            <Button type="button" variant="danger" size="sm" onClick={onCancelOrder} disabled={isLoading}>
               Cancel order
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>

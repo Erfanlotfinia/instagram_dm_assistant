@@ -6,16 +6,20 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { OrderTimelineTab } from '../components/orders/OrderTimelineTab';
 import { PilotModeBadge } from '../components/orders/PilotModeBadge';
 import { ReservationStatusChip } from '../components/orders/ReservationStatusChip';
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Card, CardBody, CardHeader, Field, Input } from '../components/ui';
+import type { BadgeTone } from '../components/ui';
+import { DataTable, EmptyState, LoadingState } from '../components/data';
+import type { Column } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
+import { cn } from '../lib/cn';
 import { queryKeys } from '../lib/queryClient';
 import { apiClient } from '../services/apiClient';
-import type { Payment, Shipment } from '../types/order';
+import type { OrderItem, Payment, Shipment } from '../types/order';
 import type { PaymentRecordStatus, ShipmentStatus } from '../types/orderEnums';
 
 type PendingAction = 'markPaid' | 'ship' | 'cancel' | 'confirm' | null;
-
-type StatusTone = 'success' | 'warning' | 'danger' | 'neutral';
 
 const PROVIDER_LABELS: Record<string, string> = {
   mock: 'Mock gateway',
@@ -63,34 +67,18 @@ function formatDateTime(value: string | null | undefined): string | null {
   });
 }
 
-function paymentStatusTone(status: PaymentRecordStatus): StatusTone {
-  if (status === 'paid') {
-    return 'success';
-  }
-  if (status === 'pending' || status === 'created') {
-    return 'warning';
-  }
-  if (status === 'failed' || status === 'cancelled') {
-    return 'danger';
-  }
+function paymentStatusTone(status: PaymentRecordStatus): BadgeTone {
+  if (status === 'paid') return 'success';
+  if (status === 'pending' || status === 'created') return 'warning';
+  if (status === 'failed' || status === 'cancelled') return 'danger';
   return 'neutral';
 }
 
-function shipmentStatusTone(status: ShipmentStatus): StatusTone {
-  if (status === 'delivered' || status === 'shipped') {
-    return 'success';
-  }
-  if (status === 'preparing' || status === 'pending') {
-    return 'warning';
-  }
-  if (status === 'failed') {
-    return 'danger';
-  }
+function shipmentStatusTone(status: ShipmentStatus): BadgeTone {
+  if (status === 'delivered' || status === 'shipped') return 'success';
+  if (status === 'preparing' || status === 'pending') return 'warning';
+  if (status === 'failed') return 'danger';
   return 'neutral';
-}
-
-function StatusBadge({ label, tone }: { label: string; tone: StatusTone }) {
-  return <span className={`order-status-badge order-status-badge--${tone}`}>{label}</span>;
 }
 
 function FulfillmentField({
@@ -103,11 +91,9 @@ function FulfillmentField({
   mono?: boolean;
 }) {
   return (
-    <div className="order-fulfillment-field">
-      <span className="order-fulfillment-field__label">{label}</span>
-      <span className={mono ? 'order-fulfillment-field__value order-fulfillment-field__value--mono' : 'order-fulfillment-field__value'}>
-        {value}
-      </span>
+    <div className="flex flex-col gap-0.5">
+      <span className="text-xs font-medium text-muted">{label}</span>
+      <span className={cn('text-sm text-fg', mono && 'font-mono')}>{value}</span>
     </div>
   );
 }
@@ -115,53 +101,47 @@ function FulfillmentField({
 function PaymentPanel({ payment }: { payment: Payment | undefined }) {
   if (!payment) {
     return (
-      <article className="order-fulfillment-card order-fulfillment-card--empty">
-        <div className="order-fulfillment-card__header">
-          <h3>Payment</h3>
-          <StatusBadge label="No record" tone="neutral" />
-        </div>
-        <p className="order-fulfillment-card__empty">
-          No payment has been initiated for this order yet.
-        </p>
-      </article>
+      <Card as="article">
+        <CardHeader title="Payment" actions={<Badge tone="neutral">No record</Badge>} />
+        <CardBody>
+          <p className="text-sm text-muted">No payment has been initiated for this order yet.</p>
+        </CardBody>
+      </Card>
     );
   }
 
   const recordedAt = formatDateTime(payment.updated_at ?? payment.created_at);
 
   return (
-    <article className="order-fulfillment-card order-fulfillment-card--payment">
-      <div className="order-fulfillment-card__header">
-        <div>
-          <h3>Payment</h3>
-          <p className="order-fulfillment-card__subtitle">{providerLabel(payment.provider)}</p>
-        </div>
-        <StatusBadge label={PAYMENT_STATUS_LABELS[payment.status]} tone={paymentStatusTone(payment.status)} />
-      </div>
-
-      <div className="order-fulfillment-card__body">
+    <Card as="article">
+      <CardHeader
+        title="Payment"
+        description={providerLabel(payment.provider)}
+        actions={<Badge tone={paymentStatusTone(payment.status)}>{PAYMENT_STATUS_LABELS[payment.status]}</Badge>}
+      />
+      <CardBody className="flex flex-col gap-3">
         {payment.provider_reference ? (
           <FulfillmentField label="Reference" value={payment.provider_reference} mono />
         ) : null}
         {recordedAt ? <FulfillmentField label="Last updated" value={recordedAt} /> : null}
-      </div>
 
-      {payment.payment_url ? (
-        <div className="order-fulfillment-card__actions">
-          <a
-            className="button button--ghost-dark order-fulfillment-card__link"
-            href={payment.payment_url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open payment page
-          </a>
-          <span className="order-fulfillment-card__url-hint" title={payment.payment_url}>
-            Demo checkout link
-          </span>
-        </div>
-      ) : null}
-    </article>
+        {payment.payment_url ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              className="inline-flex h-8 items-center rounded-lg border border-border bg-surface px-3 text-xs font-medium text-fg hover:bg-surface-sunken"
+              href={payment.payment_url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open payment page
+            </a>
+            <span className="truncate text-xs text-subtle" title={payment.payment_url}>
+              Demo checkout link
+            </span>
+          </div>
+        ) : null}
+      </CardBody>
+    </Card>
   );
 }
 
@@ -169,7 +149,7 @@ function OperatorActionRow({
   title,
   description,
   buttonLabel,
-  buttonClassName = 'button button--ghost-dark',
+  buttonVariant = 'secondary',
   disabled,
   unavailableReason,
   completed = false,
@@ -179,7 +159,7 @@ function OperatorActionRow({
   title: string;
   description: string;
   buttonLabel: string;
-  buttonClassName?: string;
+  buttonVariant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   disabled: boolean;
   unavailableReason?: string;
   completed?: boolean;
@@ -188,25 +168,30 @@ function OperatorActionRow({
 }) {
   if (completed) {
     return (
-      <li className="order-operator-action-item order-operator-action-item--complete">
-        <div className="order-operator-action-item__content">
-          <strong>{title}</strong>
-          <p>{description}</p>
+      <li className="flex items-start justify-between gap-3 rounded-md border border-success/30 bg-success-soft/20 px-3 py-3">
+        <div>
+          <strong className="text-sm text-fg">{title}</strong>
+          <p className="mt-0.5 text-xs text-muted">{description}</p>
         </div>
-        <span className="order-operator-action-item__done">{completedLabel}</span>
+        <Badge tone="success">{completedLabel}</Badge>
       </li>
     );
   }
 
   return (
-    <li className={`order-operator-action-item${disabled ? ' order-operator-action-item--disabled' : ''}`}>
-      <div className="order-operator-action-item__content">
-        <strong>{title}</strong>
-        <p>{disabled && unavailableReason ? unavailableReason : description}</p>
+    <li
+      className={cn(
+        'flex items-start justify-between gap-3 rounded-md border border-border px-3 py-3',
+        disabled && 'opacity-60',
+      )}
+    >
+      <div>
+        <strong className="text-sm text-fg">{title}</strong>
+        <p className="mt-0.5 text-xs text-muted">{disabled && unavailableReason ? unavailableReason : description}</p>
       </div>
-      <button className={buttonClassName} type="button" onClick={onClick} disabled={disabled}>
+      <Button variant={buttonVariant} size="sm" type="button" onClick={onClick} disabled={disabled}>
         {buttonLabel}
-      </button>
+      </Button>
     </li>
   );
 }
@@ -260,123 +245,108 @@ function OperatorActionsPanel({
     order.status !== 'order_created';
 
   return (
-    <div className="order-operator-actions">
-      <article className="order-operator-card order-operator-card--payment">
-        <header className="order-operator-card__top">
-          <div className="order-operator-card__title-block">
-            <span className="order-operator-card__step">Step 1</span>
-            <h3>Payment &amp; confirmation</h3>
-          </div>
-          <div className="order-operator-status-row" aria-label="Current order state">
-            <StatusBadge label={humanize(order.status)} tone="neutral" />
-            <StatusBadge
-              label={`Payment: ${humanize(order.payment_status)}`}
-              tone={
-                order.payment_status === 'paid'
-                  ? 'success'
-                  : order.payment_status === 'pending'
-                    ? 'warning'
-                    : 'neutral'
-              }
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card as="article">
+        <CardHeader
+          title="Payment & confirmation"
+          description="Step 1"
+          actions={
+            <div className="flex flex-wrap gap-1.5">
+              <Badge tone="neutral">{humanize(order.status)}</Badge>
+              <Badge
+                tone={
+                  order.payment_status === 'paid'
+                    ? 'success'
+                    : order.payment_status === 'pending'
+                      ? 'warning'
+                      : 'neutral'
+                }
+              >
+                Payment: {humanize(order.payment_status)}
+              </Badge>
+            </div>
+          }
+        />
+        <CardBody>
+          <ul className="flex flex-col gap-2">
+            <OperatorActionRow
+              title="Confirm order"
+              description="Reserve inventory and send the customer to checkout."
+              unavailableReason="Available when the order is draft or awaiting confirmation."
+              buttonLabel="Confirm"
+              buttonVariant="primary"
+              disabled={isPending || !canConfirm}
+              completed={confirmComplete}
+              completedLabel="Confirmed"
+              onClick={onConfirm}
             />
-          </div>
-        </header>
+            <OperatorActionRow
+              title="Mark as paid"
+              description="Record a manual payment when checkout happened offline."
+              unavailableReason="This order is already marked as paid."
+              buttonLabel="Mark paid"
+              disabled={isPending || !canMarkPaid}
+              completed={markPaidComplete}
+              completedLabel="Paid"
+              onClick={onMarkPaid}
+            />
+          </ul>
+        </CardBody>
+      </Card>
 
-        <ul className="order-operator-action-list">
-          <OperatorActionRow
-            title="Confirm order"
-            description="Reserve inventory and send the customer to checkout."
-            unavailableReason="Available when the order is draft or awaiting confirmation."
-            buttonLabel="Confirm"
-            buttonClassName="button button--primary"
-            disabled={isPending || !canConfirm}
-            completed={confirmComplete}
-            completedLabel="Confirmed"
-            onClick={onConfirm}
-          />
-          <OperatorActionRow
-            title="Mark as paid"
-            description="Record a manual payment when checkout happened offline."
-            unavailableReason="This order is already marked as paid."
-            buttonLabel="Mark paid"
-            disabled={isPending || !canMarkPaid}
-            completed={markPaidComplete}
-            completedLabel="Paid"
-            onClick={onMarkPaid}
-          />
-        </ul>
-      </article>
+      <Card as="article">
+        <CardHeader title="Ship order" description="Step 2" />
+        <CardBody className="flex flex-col gap-3">
+          <p className="text-xs text-muted">Add tracking details and notify the customer when the package leaves.</p>
+          <form className="flex flex-col gap-3" onSubmit={onShipSubmit}>
+            <Field label="Tracking code">
+              <Input
+                value={trackingCode}
+                onChange={(event) => onTrackingCodeChange(event.target.value)}
+                placeholder="e.g. DEMO-123456"
+                disabled={isPending || !canShip}
+                required
+              />
+            </Field>
+            <Field label="Tracking URL">
+              <Input
+                value={trackingUrl}
+                onChange={(event) => onTrackingUrlChange(event.target.value)}
+                placeholder="https://tracking.example.com/..."
+                disabled={isPending || !canShip}
+              />
+            </Field>
+            <Button type="submit" disabled={isPending || !canShip || !trackingCode.trim()}>
+              {isPending ? 'Saving…' : 'Ship order'}
+            </Button>
+          </form>
+          {!canShip ? (
+            <p className="text-xs text-subtle">Shipping is available after the order is paid.</p>
+          ) : null}
+        </CardBody>
+      </Card>
 
-      <article className="order-operator-card order-operator-card--ship">
-        <header className="order-operator-card__top">
-          <div className="order-operator-card__title-block">
-            <span className="order-operator-card__step">Step 2</span>
-            <h3>Ship order</h3>
-          </div>
-        </header>
-        <p className="order-operator-card__lead">
-          Add tracking details and notify the customer when the package leaves.
-        </p>
-        <form className="order-operator-form" onSubmit={onShipSubmit}>
-          <label className="form-field">
-            <span>Tracking code</span>
-            <input
-              value={trackingCode}
-              onChange={(event) => onTrackingCodeChange(event.target.value)}
-              placeholder="e.g. DEMO-123456"
-              disabled={isPending || !canShip}
-              required
-            />
-          </label>
-          <label className="form-field">
-            <span>Tracking URL</span>
-            <input
-              value={trackingUrl}
-              onChange={(event) => onTrackingUrlChange(event.target.value)}
-              placeholder="https://tracking.example.com/..."
-              disabled={isPending || !canShip}
-            />
-          </label>
-          <button
-            className="button button--primary"
-            type="submit"
-            disabled={isPending || !canShip || !trackingCode.trim()}
-          >
-            {isPending ? 'Saving…' : 'Ship order'}
-          </button>
-        </form>
-        {!canShip ? (
-          <p className="order-operator-card__footnote order-operator-card__footnote--muted">
-            Shipping is available after the order is paid.
+      <Card as="article" className="lg:col-span-2">
+        <CardHeader title="Cancel order" description="Danger zone" />
+        <CardBody className="flex flex-col gap-3">
+          <p className="text-xs text-danger">
+            Releases inventory reservations and closes the order permanently.
           </p>
-        ) : null}
-      </article>
-
-      <article className="order-operator-card order-operator-card--danger">
-        <header className="order-operator-card__top">
-          <div className="order-operator-card__title-block">
-            <span className="order-operator-card__step order-operator-card__step--danger">Danger zone</span>
-            <h3>Cancel order</h3>
-          </div>
-        </header>
-        <p className="order-operator-card__lead order-operator-card__lead--danger">
-          Releases inventory reservations and closes the order permanently.
-        </p>
-        <form className="order-operator-form" onSubmit={onCancelSubmit}>
-          <label className="form-field form-field--wide">
-            <span>Cancel reason</span>
-            <input
-              value={cancelReason}
-              onChange={(event) => onCancelReasonChange(event.target.value)}
-              placeholder="Optional note for the audit trail"
-              disabled={isPending || !canCancel}
-            />
-          </label>
-          <button className="button button--danger" type="submit" disabled={isPending || !canCancel}>
-            Cancel order
-          </button>
-        </form>
-      </article>
+          <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={onCancelSubmit}>
+            <Field label="Cancel reason" className="flex-1">
+              <Input
+                value={cancelReason}
+                onChange={(event) => onCancelReasonChange(event.target.value)}
+                placeholder="Optional note for the audit trail"
+                disabled={isPending || !canCancel}
+              />
+            </Field>
+            <Button variant="danger" type="submit" disabled={isPending || !canCancel}>
+              Cancel order
+            </Button>
+          </form>
+        </CardBody>
+      </Card>
     </div>
   );
 }
@@ -384,48 +354,42 @@ function OperatorActionsPanel({
 function ShippingPanel({ shipment }: { shipment: Shipment | undefined }) {
   if (!shipment) {
     return (
-      <article className="order-fulfillment-card order-fulfillment-card--empty">
-        <div className="order-fulfillment-card__header">
-          <h3>Shipping</h3>
-          <StatusBadge label="Not started" tone="neutral" />
-        </div>
-        <p className="order-fulfillment-card__empty">
-          Shipment has not been created yet. Use operator actions below to ship this order.
-        </p>
-      </article>
+      <Card as="article">
+        <CardHeader title="Shipping" actions={<Badge tone="neutral">Not started</Badge>} />
+        <CardBody>
+          <p className="text-sm text-muted">
+            Shipment has not been created yet. Use operator actions below to ship this order.
+          </p>
+        </CardBody>
+      </Card>
     );
   }
 
   const shippedAt = formatDateTime(shipment.shipped_at ?? shipment.created_at);
 
   return (
-    <article className="order-fulfillment-card order-fulfillment-card--shipping">
-      <div className="order-fulfillment-card__header">
-        <div>
-          <h3>Shipping</h3>
-          <p className="order-fulfillment-card__subtitle">{providerLabel(shipment.provider)}</p>
-        </div>
-        <StatusBadge label={SHIPMENT_STATUS_LABELS[shipment.status]} tone={shipmentStatusTone(shipment.status)} />
-      </div>
-
-      <div className="order-fulfillment-card__body">
+    <Card as="article">
+      <CardHeader
+        title="Shipping"
+        description={providerLabel(shipment.provider)}
+        actions={<Badge tone={shipmentStatusTone(shipment.status)}>{SHIPMENT_STATUS_LABELS[shipment.status]}</Badge>}
+      />
+      <CardBody className="flex flex-col gap-3">
         <FulfillmentField label="Tracking code" value={shipment.tracking_code ?? '—'} mono />
         {shippedAt ? <FulfillmentField label="Shipped at" value={shippedAt} /> : null}
-      </div>
 
-      {shipment.tracking_url ? (
-        <div className="order-fulfillment-card__actions">
+        {shipment.tracking_url ? (
           <a
-            className="button button--ghost-dark order-fulfillment-card__link"
+            className="inline-flex h-8 w-fit items-center rounded-lg border border-border bg-surface px-3 text-xs font-medium text-fg hover:bg-surface-sunken"
             href={shipment.tracking_url}
             target="_blank"
             rel="noreferrer"
           >
             Track shipment
           </a>
-        </div>
-      ) : null}
-    </article>
+        ) : null}
+      </CardBody>
+    </Card>
   );
 }
 
@@ -508,193 +472,198 @@ export function OrderDetailPage() {
 
   if (!shopId) {
     return (
-      <section className="dashboard-card">
-        <p className="empty-state">Select a shop to view this order.</p>
-        <Link className="table-link" to="/orders">
-          Back to orders
-        </Link>
-      </section>
+      <HubPage eyebrow="Orders" title="Order detail">
+        <Card>
+          <CardBody className="flex flex-col gap-3">
+            <EmptyState title="Select a shop" description="Use the shop switcher in the top bar." />
+            <Link className="font-medium text-accent hover:underline" to="/orders">
+              Back to orders
+            </Link>
+          </CardBody>
+        </Card>
+      </HubPage>
     );
   }
 
   if (orderQuery.isLoading) {
-    return <p className="loading-state">Loading order...</p>;
+    return (
+      <HubPage eyebrow="Orders" title="Order detail">
+        <Card>
+          <CardBody>
+            <LoadingState label="Loading order…" />
+          </CardBody>
+        </Card>
+      </HubPage>
+    );
   }
 
   if (orderQuery.error || !order) {
     return (
-      <section className="dashboard-card">
-        <p className="form-error">
-          {orderQuery.error instanceof Error ? orderQuery.error.message : 'Order not found'}
-        </p>
-        <Link className="table-link" to="/orders">
-          Back to orders
-        </Link>
-      </section>
+      <HubPage eyebrow="Orders" title="Order detail">
+        <Card>
+          <CardBody className="flex flex-col gap-3">
+            <p className="text-sm text-danger">
+              {orderQuery.error instanceof Error ? orderQuery.error.message : 'Order not found'}
+            </p>
+            <Link className="font-medium text-accent hover:underline" to="/orders">
+              Back to orders
+            </Link>
+          </CardBody>
+        </Card>
+      </HubPage>
     );
   }
 
   const latestPayment = order.payments?.[0];
 
+  const itemColumns: Column<OrderItem>[] = [
+    { key: 'product', header: 'Product', render: (item) => item.product_title_snapshot },
+    {
+      key: 'variant',
+      header: 'Variant',
+      render: (item) =>
+        [item.variant_color_snapshot, item.variant_size_snapshot].filter(Boolean).join(' / ') || '—',
+    },
+    { key: 'sku', header: 'SKU', render: (item) => item.sku_snapshot },
+    { key: 'qty', header: 'Qty', render: (item) => item.quantity },
+    { key: 'unit', header: 'Unit', render: (item) => item.unit_price },
+    { key: 'total', header: 'Total', render: (item) => item.total_price },
+  ];
+
   return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Order detail</p>
-        <div className="section-header section-header--stacked">
-          <h1>Order {order.id.slice(0, 8)}</h1>
-          <div className="order-draft-panel__meta">
-            <PilotModeBadge snapshot={correctness?.pilot_mode_snapshot} />
-            {correctness && <ReservationStatusChip reservations={correctness.reservations} />}
-          </div>
-        </div>
-        <p>
-          <Link className="table-link" to="/orders">
+    <HubPage
+      eyebrow="Order detail"
+      title={`Order ${order.id.slice(0, 8)}`}
+      description={
+        <>
+          <Link className="font-medium text-accent hover:underline" to="/orders">
             Back to orders
           </Link>
           {' · '}
-          <Link
-            className="table-link"
-            to={`/conversations/${order.conversation_id}?shopId=${shopId}`}
-          >
+          <Link className="font-medium text-accent hover:underline" to={`/conversations/${order.conversation_id}?shopId=${shopId}`}>
             View conversation
           </Link>
-        </p>
-
-        <dl className="detail-grid">
-          <div>
-            <dt>Status</dt>
-            <dd>{order.status}</dd>
-          </div>
-          <div>
-            <dt>Payment</dt>
-            <dd>{order.payment_status}</dd>
-          </div>
-          <div>
-            <dt>Shipping</dt>
-            <dd>{order.shipping_status}</dd>
-          </div>
-          <div>
-            <dt>Total</dt>
-            <dd>
-              {order.total_amount} {order.currency}
-            </dd>
-          </div>
-          <div>
-            <dt>Customer</dt>
-            <dd>{order.customer_name}</dd>
-          </div>
-          <div>
-            <dt>Phone</dt>
-            <dd>{order.phone}</dd>
-          </div>
-          <div>
-            <dt>City</dt>
-            <dd>{order.city}</dd>
-          </div>
-          <div>
-            <dt>Address</dt>
-            <dd>{order.address}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section className="dashboard-card dashboard-card--wide">
-        <h2>Items</h2>
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Variant</th>
-                <th>SKU</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {order.items.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.product_title_snapshot}</td>
-                  <td>
-                    {[item.variant_color_snapshot, item.variant_size_snapshot].filter(Boolean).join(' / ') || '—'}
-                  </td>
-                  <td>{item.sku_snapshot}</td>
-                  <td>{item.quantity}</td>
-                  <td>{item.unit_price}</td>
-                  <td>{item.total_price}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        </>
+      }
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <PilotModeBadge snapshot={correctness?.pilot_mode_snapshot} />
+          {correctness ? <ReservationStatusChip reservations={correctness.reservations} /> : null}
         </div>
-      </section>
+      }
+    >
+      <Card>
+        <CardHeader title="Order summary" />
+        <CardBody>
+          <dl className="detail-grid">
+            <div>
+              <dt>Status</dt>
+              <dd>{order.status}</dd>
+            </div>
+            <div>
+              <dt>Payment</dt>
+              <dd>{order.payment_status}</dd>
+            </div>
+            <div>
+              <dt>Shipping</dt>
+              <dd>{order.shipping_status}</dd>
+            </div>
+            <div>
+              <dt>Total</dt>
+              <dd>
+                {order.total_amount} {order.currency}
+              </dd>
+            </div>
+            <div>
+              <dt>Customer</dt>
+              <dd>{order.customer_name}</dd>
+            </div>
+            <div>
+              <dt>Phone</dt>
+              <dd>{order.phone}</dd>
+            </div>
+            <div>
+              <dt>City</dt>
+              <dd>{order.city}</dd>
+            </div>
+            <div>
+              <dt>Address</dt>
+              <dd>{order.address}</dd>
+            </div>
+          </dl>
+        </CardBody>
+      </Card>
 
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h2>Fulfillment</h2>
-            <p className="dashboard-card__subtitle">
-              Payment and shipping records linked to this order.
-            </p>
-          </div>
-        </div>
-
-        <div className="order-fulfillment-grid">
-          <PaymentPanel payment={latestPayment} />
-          <ShippingPanel shipment={latestShipment} />
-        </div>
-      </section>
-
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h2>Operator actions</h2>
-            <p className="dashboard-card__subtitle">
-              Manual steps for confirming, paying, shipping, or cancelling this order.
-            </p>
-          </div>
-        </div>
-
-        <OperatorActionsPanel
-          order={order}
-          trackingCode={trackingCode}
-          trackingUrl={trackingUrl}
-          cancelReason={cancelReason}
-          isPending={actionMutation.isPending}
-          onTrackingCodeChange={setTrackingCode}
-          onTrackingUrlChange={setTrackingUrl}
-          onCancelReasonChange={setCancelReason}
-          onConfirm={() => setPendingAction('confirm')}
-          onMarkPaid={() => setPendingAction('markPaid')}
-          onShipSubmit={(event) => {
-            event.preventDefault();
-            if (trackingCode.trim()) {
-              setPendingAction('ship');
-            }
-          }}
-          onCancelSubmit={(event) => {
-            event.preventDefault();
-            setPendingAction('cancel');
-          }}
+      <Card>
+        <CardHeader title="Items" />
+        <DataTable
+          columns={itemColumns}
+          rows={order.items}
+          rowKey={(item) => item.id}
+          emptyTitle="No line items"
         />
-      </section>
+      </Card>
 
-      <section className="dashboard-card dashboard-card--wide">
-        <h2>Audit timeline</h2>
-        {orderId ? <OrderTimelineTab orderId={orderId} /> : null}
-        <h3 className="context-section__title">Legacy timeline</h3>
-        <ol className="timeline-list">
-          {order.timeline.map((event) => (
-            <li key={`${event.status}-${event.occurred_at}`}>
-              <strong>{event.label}</strong>
-              <span>
-                {new Date(event.occurred_at).toLocaleString()} · {event.source}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <Card>
+        <CardHeader title="Fulfillment" description="Payment and shipping records linked to this order." />
+        <CardBody>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <PaymentPanel payment={latestPayment} />
+            <ShippingPanel shipment={latestShipment} />
+          </div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Operator actions"
+          description="Manual steps for confirming, paying, shipping, or cancelling this order."
+        />
+        <CardBody>
+          <OperatorActionsPanel
+            order={order}
+            trackingCode={trackingCode}
+            trackingUrl={trackingUrl}
+            cancelReason={cancelReason}
+            isPending={actionMutation.isPending}
+            onTrackingCodeChange={setTrackingCode}
+            onTrackingUrlChange={setTrackingUrl}
+            onCancelReasonChange={setCancelReason}
+            onConfirm={() => setPendingAction('confirm')}
+            onMarkPaid={() => setPendingAction('markPaid')}
+            onShipSubmit={(event) => {
+              event.preventDefault();
+              if (trackingCode.trim()) {
+                setPendingAction('ship');
+              }
+            }}
+            onCancelSubmit={(event) => {
+              event.preventDefault();
+              setPendingAction('cancel');
+            }}
+          />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="Audit timeline" />
+        <CardBody className="flex flex-col gap-4">
+          {orderId ? <OrderTimelineTab orderId={orderId} /> : null}
+          <div>
+            <h3 className="mb-3 text-sm font-semibold text-fg">Legacy timeline</h3>
+            <ol className="space-y-2 text-sm">
+              {order.timeline.map((event) => (
+                <li key={`${event.status}-${event.occurred_at}`} className="rounded-md border border-border px-3 py-2">
+                  <strong className="text-fg">{event.label}</strong>
+                  <span className="mt-0.5 block text-xs text-muted">
+                    {new Date(event.occurred_at).toLocaleString()} · {event.source}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </CardBody>
+      </Card>
 
       <ConfirmDialog
         open={pendingAction === 'markPaid'}
@@ -732,6 +701,6 @@ export function OrderDetailPage() {
         onCancel={() => setPendingAction(null)}
         isLoading={actionMutation.isPending}
       />
-    </div>
+    </HubPage>
   );
 }

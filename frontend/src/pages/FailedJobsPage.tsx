@@ -2,10 +2,14 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { ShopSelector } from '../components/ShopSelector';
+import { Pagination } from '../components/Pagination';
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Card, CardBody, CardHeader, Field, Input, Select } from '../components/ui';
+import { EmptyState, LoadingState } from '../components/data';
 import { useAuth } from '../contexts/AuthContext';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
+import { cn } from '../lib/cn';
 import { apiClient } from '../services/apiClient';
 import type { FailedJob } from '../types/health';
 
@@ -13,17 +17,9 @@ function formatPayload(payload: Record<string, unknown>): string {
   return JSON.stringify(payload, null, 2);
 }
 
-const STATUS_TONE: Record<FailedJob['status'], string> = {
-  failed: 'status-pill--danger',
-  retried: 'status-pill--success',
-  ignored: 'status-pill--neutral',
-};
-
 function formatRelativeTime(iso: string): string {
   const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) {
-    return iso;
-  }
+  if (Number.isNaN(then)) return iso;
   const diffMs = Date.now() - then;
   const minutes = Math.round(diffMs / 60000);
   if (minutes < 1) return 'just now';
@@ -35,76 +31,78 @@ function formatRelativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-interface JobCardProps {
+const STATUS_TONE: Record<FailedJob['status'], 'danger' | 'success' | 'neutral'> = {
+  failed: 'danger',
+  retried: 'success',
+  ignored: 'neutral',
+};
+
+function JobCard({
+  job,
+  canManage,
+  actionsBusy,
+  onRetry,
+  onIgnore,
+}: {
   job: FailedJob;
   canManage: boolean;
   actionsBusy: boolean;
   onRetry: () => void;
   onIgnore: () => void;
-}
-
-function JobCard({ job, canManage, actionsBusy, onRetry, onIgnore }: JobCardProps) {
+}) {
   const resolved = job.status !== 'failed';
   const retriesExhausted = job.retry_count >= job.max_retries;
 
   return (
-    <article className="job-card">
-      <div className="job-card__head">
-        <div className="job-card__identity">
-          <span className="job-card__queue">{job.queue_name}</span>
-          <span className="job-card__type">{job.job_type}</span>
+    <article className="rounded-lg border border-border bg-surface p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="neutral">{job.queue_name}</Badge>
+            <span className="font-mono text-xs text-muted">{job.job_type}</span>
+          </div>
         </div>
-        <span className={`status-pill ${STATUS_TONE[job.status] ?? 'status-pill--neutral'}`}>
-          {job.status}
-        </span>
+        <Badge tone={STATUS_TONE[job.status]}>{job.status}</Badge>
       </div>
 
-      <div className="job-card__meta">
-        <span className="job-card__meta-item">
-          <span className="job-card__meta-label">Retries</span>
-          <span className={retriesExhausted ? 'job-card__meta-value job-card__meta-value--alert' : 'job-card__meta-value'}>
+      <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted">
+        <span>
+          <span className="font-medium text-subtle">Retries </span>
+          <span className={cn(retriesExhausted && 'text-danger')}>
             {job.retry_count}/{job.max_retries}
             {retriesExhausted ? ' · exhausted' : ''}
           </span>
         </span>
-        <span className="job-card__meta-item">
-          <span className="job-card__meta-label">Failed</span>
-          <time className="job-card__meta-value" dateTime={job.created_at} title={new Date(job.created_at).toLocaleString()}>
+        <span>
+          <span className="font-medium text-subtle">Failed </span>
+          <time dateTime={job.created_at} title={new Date(job.created_at).toLocaleString()}>
             {formatRelativeTime(job.created_at)}
           </time>
         </span>
       </div>
 
       {job.error_message ? (
-        <div className="job-card__error" role="note">
-          <span className="job-card__error-label">Error</span>
-          <p className="job-card__error-text">{job.error_message}</p>
+        <div className="mt-3 rounded-md border border-danger/20 bg-danger-soft/30 px-3 py-2" role="note">
+          <span className="text-xs font-semibold uppercase text-danger">Error</span>
+          <p className="mt-1 text-sm text-fg">{job.error_message}</p>
         </div>
       ) : null}
 
-      <details className="job-card__payload">
-        <summary>View redacted payload</summary>
-        <pre className="code-block">{formatPayload(job.redacted_payload)}</pre>
+      <details className="mt-3 text-sm">
+        <summary className="cursor-pointer text-accent hover:underline">View redacted payload</summary>
+        <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-surface-sunken p-3 text-xs text-subtle">
+          {formatPayload(job.redacted_payload)}
+        </pre>
       </details>
 
       {canManage ? (
-        <div className="job-card__actions">
-          <button
-            className="button button--primary"
-            type="button"
-            disabled={actionsBusy || resolved}
-            onClick={onRetry}
-          >
+        <div className="mt-3 flex gap-2">
+          <Button type="button" size="sm" disabled={actionsBusy || resolved} onClick={onRetry}>
             Retry
-          </button>
-          <button
-            className="button button--ghost-dark"
-            type="button"
-            disabled={actionsBusy || resolved}
-            onClick={onIgnore}
-          >
+          </Button>
+          <Button type="button" variant="secondary" size="sm" disabled={actionsBusy || resolved} onClick={onIgnore}>
             Ignore
-          </button>
+          </Button>
         </div>
       ) : null}
     </article>
@@ -176,156 +174,119 @@ export function FailedJobsPage() {
   }
 
   const items = jobs.data?.items ?? [];
-  const totalPages = jobs.data ? Math.max(1, Math.ceil(jobs.data.total / jobs.data.page_size)) : 1;
+  const totalItems = jobs.data?.total ?? 0;
+  const pageSize = jobs.data?.page_size ?? 20;
   const actionsBusy = retry.isPending || ignore.isPending;
 
   return (
-    <div className="page-stack page-stack--wide failed-jobs">
-      <div className="page-header">
-        <div>
-          <p className="dashboard-card__eyebrow">Reliability</p>
-          <h1>Failed jobs</h1>
-          <p className="dashboard-card__subtitle">
-            Review dead-lettered worker jobs and safely retry or ignore them. Payloads are redacted by the API.
-          </p>
-        </div>
-        <ShopSelector />
-      </div>
-
+    <HubPage
+      eyebrow="Reliability"
+      title="Failed jobs"
+      description="Review dead-lettered worker jobs and safely retry or ignore them. Payloads are redacted by the API."
+    >
       {!selectedShopId ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="empty-state">Select a shop to view failed jobs.</p>
-        </section>
+        <Card>
+          <CardBody>
+            <EmptyState title="Select a shop" description="Use the shop switcher in the top bar." />
+          </CardBody>
+        </Card>
       ) : null}
 
       {!canManage && selectedShopId ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="empty-state">Admin access is required to view failed jobs.</p>
-        </section>
+        <Card>
+          <CardBody>
+            <EmptyState title="Admin access required" description="Only owners and admins can view failed jobs." />
+          </CardBody>
+        </Card>
       ) : null}
 
       {canManage && selectedShopId ? (
         <>
-          <section className="dashboard-card dashboard-card--wide failed-jobs__filters">
-            <div className="failed-jobs__filter-grid">
-              <label className="form-field">
-                <span>Status</span>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setPage(1);
-                    setStatusFilter(e.target.value);
-                  }}
-                >
-                  <option value="failed">Failed</option>
-                  <option value="retried">Retried</option>
-                  <option value="ignored">Ignored</option>
-                </select>
-              </label>
-              <label className="form-field">
-                <span>Queue</span>
-                <input value={queueFilter} onChange={(e) => setQueueFilter(e.target.value)} placeholder="queue name" />
-              </label>
-              <label className="form-field">
-                <span>Job type</span>
-                <input value={jobTypeFilter} onChange={(e) => setJobTypeFilter(e.target.value)} placeholder="job type" />
-              </label>
-              <div className="failed-jobs__date-range">
-                <label className="form-field">
-                  <span>From</span>
-                  <input type="datetime-local" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                </label>
-                <label className="form-field">
-                  <span>To</span>
-                  <input type="datetime-local" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-                </label>
+          <Card>
+            <CardHeader title="Filters" />
+            <CardBody className="flex flex-col gap-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Field label="Status">
+                  <Select
+                    value={statusFilter}
+                    onChange={(e) => { setPage(1); setStatusFilter(e.target.value); }}
+                  >
+                    <option value="failed">Failed</option>
+                    <option value="retried">Retried</option>
+                    <option value="ignored">Ignored</option>
+                  </Select>
+                </Field>
+                <Field label="Queue">
+                  <Input value={queueFilter} onChange={(e) => setQueueFilter(e.target.value)} placeholder="queue name" />
+                </Field>
+                <Field label="Job type">
+                  <Input value={jobTypeFilter} onChange={(e) => setJobTypeFilter(e.target.value)} placeholder="job type" />
+                </Field>
+                <Field label="From">
+                  <Input type="datetime-local" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                </Field>
+                <Field label="To">
+                  <Input type="datetime-local" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                </Field>
               </div>
-            </div>
-            {hasFilters ? (
-              <button className="button button--ghost-dark" type="button" onClick={clearFilters}>
-                Clear filters
-              </button>
-            ) : null}
-          </section>
+              {hasFilters ? (
+                <Button type="button" variant="secondary" size="sm" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              ) : null}
+            </CardBody>
+          </Card>
 
-          <section className="dashboard-card dashboard-card--wide failed-jobs__results">
-            {!jobs.isLoading && !jobs.error ? (
-              <div className="failed-jobs__summary">
-                <span className="failed-jobs__count">{jobs.data?.total ?? 0}</span>
-                <span className="failed-jobs__count-label">
-                  {(jobs.data?.total ?? 0) === 1 ? 'job' : 'jobs'} matching “{statusFilter}”
-                </span>
-              </div>
-            ) : null}
+          <Card>
+            <CardHeader
+              title="Results"
+              description={
+                !jobs.isLoading && !jobs.error
+                  ? `${totalItems} ${totalItems === 1 ? 'job' : 'jobs'} matching “${statusFilter}”`
+                  : undefined
+              }
+            />
+            <CardBody className="flex flex-col gap-4">
+              {jobs.isLoading ? <LoadingState label="Loading failed jobs…" /> : null}
 
-            {jobs.isLoading ? (
-              <div className="failed-jobs__list" aria-busy="true">
-                {[0, 1, 2].map((key) => (
-                  <article className="job-card job-card--skeleton" key={key}>
-                    <div className="skeleton-line skeleton-line--title" />
-                    <div className="skeleton-line skeleton-line--short" />
-                    <div className="skeleton-line" />
-                  </article>
-                ))}
-              </div>
-            ) : null}
+              {jobs.error ? (
+                <p className="text-sm text-danger">
+                  {jobs.error instanceof Error ? jobs.error.message : 'Failed to load jobs'}
+                </p>
+              ) : null}
 
-            {jobs.error ? (
-              <p className="form-error">
-                {jobs.error instanceof Error ? jobs.error.message : 'Failed to load jobs'}
-              </p>
-            ) : null}
+              {!jobs.isLoading && !jobs.error && items.length === 0 ? (
+                <EmptyState
+                  title={`No ${statusFilter} jobs found`}
+                  description={hasFilters ? 'Try adjusting your filters.' : undefined}
+                  action={
+                    hasFilters ? (
+                      <Button type="button" variant="secondary" size="sm" onClick={clearFilters}>
+                        Reset filters
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              ) : null}
 
-            {!jobs.isLoading && !jobs.error && items.length === 0 ? (
-              <div className="failed-jobs__empty">
-                <p className="empty-state">No {statusFilter} jobs found.</p>
-                {hasFilters ? (
-                  <button className="button button--ghost-dark" type="button" onClick={clearFilters}>
-                    Reset filters
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
+              {items.length > 0 ? (
+                <div className="flex flex-col gap-3">
+                  {items.map((job) => (
+                    <JobCard
+                      key={job.id}
+                      job={job}
+                      canManage={canManage}
+                      actionsBusy={actionsBusy}
+                      onRetry={() => setPendingAction({ type: 'retry', jobId: job.id })}
+                      onIgnore={() => setPendingAction({ type: 'ignore', jobId: job.id })}
+                    />
+                  ))}
+                </div>
+              ) : null}
 
-            {items.length > 0 ? (
-              <div className="failed-jobs__list">
-                {items.map((job) => (
-                  <JobCard
-                    key={job.id}
-                    job={job}
-                    canManage={canManage}
-                    actionsBusy={actionsBusy}
-                    onRetry={() => setPendingAction({ type: 'retry', jobId: job.id })}
-                    onIgnore={() => setPendingAction({ type: 'ignore', jobId: job.id })}
-                  />
-                ))}
-              </div>
-            ) : null}
-
-            {jobs.data && jobs.data.total > jobs.data.page_size ? (
-              <div className="failed-jobs__pagination">
-                <button
-                  className="button button--ghost-dark"
-                  type="button"
-                  disabled={page <= 1}
-                  onClick={() => setPage((v) => Math.max(1, v - 1))}
-                >
-                  Previous
-                </button>
-                <span className="failed-jobs__page-indicator">
-                  Page {page} of {totalPages}
-                </span>
-                <button
-                  className="button button--ghost-dark"
-                  type="button"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((v) => v + 1)}
-                >
-                  Next
-                </button>
-              </div>
-            ) : null}
-          </section>
+              <Pagination page={page} pageSize={pageSize} totalItems={totalItems} onPageChange={setPage} />
+            </CardBody>
+          </Card>
         </>
       ) : null}
 
@@ -345,6 +306,6 @@ export function FailedJobsPage() {
         onConfirm={() => pendingAction && ignore.mutate(pendingAction.jobId)}
         onCancel={() => setPendingAction(null)}
       />
-    </div>
+    </HubPage>
   );
 }

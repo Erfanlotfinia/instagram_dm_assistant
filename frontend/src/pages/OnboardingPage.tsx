@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
-import { ShopSelector } from '../components/ShopSelector';
+import { HubPage } from '../components/shell/HubPage';
+import { Card, CardBody, CardHeader } from '../components/ui';
+import { EmptyState, LoadingState } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
 import { apiClient } from '../services/apiClient';
 
@@ -16,103 +18,110 @@ export function OnboardingPage() {
   const nextStep = status?.steps.find((step) => !step.completed);
 
   return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Fashion agent setup</p>
-        <h1>Onboarding checklist</h1>
-        <p>Complete these steps before enabling autonomous Instagram fashion ordering.</p>
-        <ShopSelector />
-      </section>
-      {statusQuery.isLoading && selectedShopId ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="loading-state">Loading onboarding status...</p>
-        </section>
-      ) : null}
-      {statusQuery.isError ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="form-error">Could not load onboarding status. Try again shortly.</p>
-        </section>
-      ) : null}
+    <HubPage
+      eyebrow="Fashion agent setup"
+      title="Onboarding checklist"
+      description="Complete these steps before enabling autonomous Instagram fashion ordering."
+    >
       {!selectedShopId ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="empty-state">Select a shop to view onboarding progress.</p>
-        </section>
+        <Card>
+          <CardBody>
+            <EmptyState title="Select a shop" description="Use the shop switcher in the top bar." />
+          </CardBody>
+        </Card>
       ) : null}
+
+      {statusQuery.isLoading && selectedShopId ? (
+        <Card>
+          <CardBody>
+            <LoadingState label="Loading onboarding status…" />
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {statusQuery.isError ? (
+        <Card>
+          <CardBody>
+            <p className="text-sm text-danger">Could not load onboarding status. Try again shortly.</p>
+          </CardBody>
+        </Card>
+      ) : null}
+
       {status ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <div className="onboarding-progress">
-            <div className="onboarding-progress__meta">
-              <h2>
-                {status.completed_steps.length} of {status.total_steps} steps complete
-              </h2>
-              <span className="onboarding-progress__percent">{status.progress_percent}%</span>
-            </div>
-            <div
-              className="onboarding-progress__track"
-              role="progressbar"
-              aria-valuenow={status.progress_percent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label="Onboarding progress"
-            >
+        <Card>
+          <CardHeader
+            title={`${status.completed_steps.length} of ${status.total_steps} steps complete`}
+            description={`${status.progress_percent}% complete`}
+          />
+          <CardBody>
+            <div className="onboarding-progress">
               <div
-                className="onboarding-progress__fill"
-                style={{ width: `${status.progress_percent}%` }}
-              />
+                className="onboarding-progress__track"
+                role="progressbar"
+                aria-valuenow={status.progress_percent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Onboarding progress"
+              >
+                <div
+                  className="onboarding-progress__fill"
+                  style={{ width: `${status.progress_percent}%` }}
+                />
+              </div>
             </div>
-          </div>
 
-          {status.missing_steps.length > 0 ? (
-            <div className="onboarding-next-action">
-              <p className="onboarding-next-action__label">Next recommended action</p>
-              <p className="onboarding-next-action__text">{status.next_recommended_action}</p>
-              {nextStep ? (
-                <Link className="button button--primary" to={nextStep.href}>
-                  {nextStep.label}
-                </Link>
-              ) : null}
-            </div>
-          ) : (
-            <p className="onboarding-progress__complete">
-              All setup steps are complete. You can enable autonomous ordering when ready.
-            </p>
-          )}
+            {status.missing_steps.length > 0 ? (
+              <div className="onboarding-next-action mt-4">
+                <p className="onboarding-next-action__label text-xs font-medium text-muted">Next recommended action</p>
+                <p className="onboarding-next-action__text mt-1 text-sm text-fg">{status.next_recommended_action}</p>
+                {nextStep ? (
+                  <Link className="mt-3 inline-flex h-10 items-center rounded-lg bg-accent px-4 text-sm font-medium text-accent-fg hover:opacity-90" to={nextStep.href}>
+                    {nextStep.label}
+                  </Link>
+                ) : null}
+              </div>
+            ) : (
+              <p className="onboarding-progress__complete mt-4 text-sm text-muted">
+                All setup steps are complete. You can enable autonomous ordering when ready.
+              </p>
+            )}
 
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th scope="col">Status</th>
-                  <th scope="col">Step</th>
-                  <th scope="col">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {status.steps.map((step) => (
-                  <tr
-                    key={step.key}
-                    className={
-                      step.completed
-                        ? 'row-success'
-                        : step.key === nextStep?.key
-                          ? 'row-warning row-highlight'
-                          : 'row-warning'
-                    }
-                  >
-                    <td>{step.completed ? '✅' : '○'}</td>
-                    <td>{step.label}</td>
-                    <td>
-                      <Link className="table-link" to={step.href}>
-                        {step.completed ? 'Review' : 'Complete step'}
-                      </Link>
-                    </td>
+            <div className="table-wrap mt-6">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Status</th>
+                    <th scope="col">Step</th>
+                    <th scope="col">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                </thead>
+                <tbody>
+                  {status.steps.map((step) => (
+                    <tr
+                      key={step.key}
+                      className={
+                        step.completed
+                          ? 'row-success'
+                          : step.key === nextStep?.key
+                            ? 'row-warning row-highlight'
+                            : 'row-warning'
+                      }
+                    >
+                      <td>{step.completed ? '✅' : '○'}</td>
+                      <td>{step.label}</td>
+                      <td>
+                        <Link className="font-medium text-accent hover:underline" to={step.href}>
+                          {step.completed ? 'Review' : 'Complete step'}
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardBody>
+        </Card>
       ) : null}
-    </div>
+    </HubPage>
   );
 }

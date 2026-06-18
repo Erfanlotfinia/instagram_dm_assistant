@@ -2,6 +2,9 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { DecisionTraceDrawer } from './DecisionTraceDrawer';
+import { Badge, Button, Card, CardBody, CardHeader, Field, Input, Select } from '../ui';
+import { DataTable, EmptyState, KpiCard } from '../data';
+import type { Column } from '../data';
 import { useShop } from '../../contexts/ShopContext';
 import { useToast } from '../../contexts/ToastContext';
 import { apiClient } from '../../services/apiClient';
@@ -26,37 +29,14 @@ function packToScenarios(pack: ScenarioPack): ReplayScenarioInput[] {
   }));
 }
 
-function ReplayItemRow({
-  item,
-  onInspectTrace,
-}: {
-  item: SimulatorRunItem;
-  onInspectTrace: (traceId: string) => void;
-}) {
-  const mismatches = item.diff_json.mismatches ?? [];
-  return (
-    <tr className={item.passed ? undefined : 'data-table__row--attention'}>
-      <td>{item.item_key}</td>
-      <td>
-        <span className={item.passed ? 'priority-badge priority-badge--low' : 'priority-badge priority-badge--high'}>
-          {item.passed ? 'Pass' : 'Fail'}
-        </span>
-      </td>
-      <td>{String(item.actual_json.intent ?? '—')}</td>
-      <td>{String(item.expected_json.intent ?? '—')}</td>
-      <td>{mismatches.length ? mismatches.join('; ') : '—'}</td>
-      <td>
-        {item.trace_id ? (
-          <button className="button button--ghost-dark" type="button" onClick={() => onInspectTrace(item.trace_id!)}>
-            Trace
-          </button>
-        ) : (
-          '—'
-        )}
-      </td>
-    </tr>
-  );
-}
+type ReplayRunRow = {
+  id: string;
+  label?: string | null;
+  status: string;
+  passed_items: number;
+  total_items: number;
+  model_version: string | null;
+};
 
 export function ReplayPanel() {
   const { selectedShopId, shops } = useShop();
@@ -127,163 +107,159 @@ export function ReplayPanel() {
   });
 
   const selectedPack = scenarioPacksQuery.data?.find((pack) => pack.id === selectedPackId) ?? null;
-
   const run = runDetailQuery.data;
 
-  return (
-    <div className="page-stack">
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h2>Deterministic replay</h2>
-            <p className="dashboard-card__subtitle">
-              Replays golden scenarios against frozen catalog snapshot and deterministic orchestrator.
-            </p>
-          </div>
-        </div>
-        <div className="filter-grid">
-          <label className="form-field">
-            <span>Model version</span>
-            <input value={modelVersion} onChange={(e) => setModelVersion(e.target.value)} placeholder="gpt-4o-mini" />
-          </label>
-          <label className="form-field">
-            <span>Prompt version</span>
-            <input value={promptVersion} onChange={(e) => setPromptVersion(e.target.value)} placeholder="trust-layer-v1" />
-          </label>
-          <label className="form-field">
-            <span>Campaign filter</span>
-            <input value={campaign} onChange={(e) => setCampaign(e.target.value)} placeholder="Optional" />
-          </label>
-        </div>
-        <div className="button-row">
-          <button
-            className="button button--primary"
-            type="button"
-            disabled={!selectedShopId || replayMutation.isPending}
-            onClick={() => replayMutation.mutate(GOLDEN_SCENARIOS)}
-          >
-            {replayMutation.isPending ? 'Running replay…' : 'Run golden replay pack'}
-          </button>
-        </div>
-      </section>
+  const runColumns: Column<ReplayRunRow>[] = [
+    { key: 'label', header: 'Label', render: (row) => row.label ?? row.id.slice(0, 8) },
+    { key: 'status', header: 'Status', render: (row) => <Badge tone="neutral">{row.status}</Badge> },
+    {
+      key: 'pass',
+      header: 'Pass rate',
+      render: (row) => (
+        <span className="tabular-nums">
+          {row.passed_items}/{row.total_items}
+        </span>
+      ),
+    },
+    { key: 'model', header: 'Model', render: (row) => row.model_version ?? '—' },
+    {
+      key: 'action',
+      header: 'Action',
+      render: (row) => (
+        <Button variant="ghost" size="sm" type="button" onClick={() => setSelectedRunId(row.id)}>
+          View diff
+        </Button>
+      ),
+    },
+  ];
 
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h3>Scenario packs</h3>
-            <p className="dashboard-card__subtitle">Save and replay handcrafted or synthetic scenario collections.</p>
+  const itemColumns: Column<SimulatorRunItem>[] = [
+    { key: 'key', header: 'Scenario', render: (item) => item.item_key },
+    {
+      key: 'result',
+      header: 'Result',
+      render: (item) => <Badge tone={item.passed ? 'success' : 'danger'}>{item.passed ? 'Pass' : 'Fail'}</Badge>,
+    },
+    { key: 'actual', header: 'Actual intent', render: (item) => String(item.actual_json.intent ?? '—') },
+    { key: 'expected', header: 'Expected intent', render: (item) => String(item.expected_json.intent ?? '—') },
+    {
+      key: 'diff',
+      header: 'Diff',
+      render: (item) => (item.diff_json.mismatches?.length ? item.diff_json.mismatches.join('; ') : '—'),
+    },
+    {
+      key: 'trace',
+      header: 'Trace',
+      render: (item) =>
+        item.trace_id ? (
+          <Button variant="ghost" size="sm" type="button" onClick={() => setTraceId(item.trace_id!)}>
+            Trace
+          </Button>
+        ) : (
+          '—'
+        ),
+    },
+  ];
+
+  if (!selectedShopId) {
+    return (
+      <Card>
+        <CardBody>
+          <EmptyState title="Select a shop" description="Use the shop switcher in the top bar." />
+        </CardBody>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Card>
+        <CardHeader
+          title="Deterministic replay"
+          description="Replays golden scenarios against frozen catalog snapshot and deterministic orchestrator."
+        />
+        <CardBody>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Model version">
+              <Input value={modelVersion} onChange={(e) => setModelVersion(e.target.value)} placeholder="gpt-4o-mini" />
+            </Field>
+            <Field label="Prompt version">
+              <Input value={promptVersion} onChange={(e) => setPromptVersion(e.target.value)} placeholder="trust-layer-v1" />
+            </Field>
+            <Field label="Campaign filter">
+              <Input value={campaign} onChange={(e) => setCampaign(e.target.value)} placeholder="Optional" />
+            </Field>
           </div>
-        </div>
-        <div className="filter-grid">
-          <label className="form-field">
-            <span>Pack name</span>
-            <input value={packName} onChange={(e) => setPackName(e.target.value)} />
-          </label>
-          <label className="form-field">
-            <span>Run from pack</span>
-            <select value={selectedPackId ?? ''} onChange={(e) => setSelectedPackId(e.target.value || null)}>
-              <option value="">Select saved pack</option>
-              {scenarioPacksQuery.data?.map((pack) => (
-                <option key={pack.id} value={pack.id}>
-                  {pack.name} ({pack.scenarios_json.length} scenarios)
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="button-row">
-          <button
-            className="button button--ghost-dark"
-            type="button"
-            disabled={!selectedShopId || !packName.trim() || createPackMutation.isPending}
-            onClick={() => createPackMutation.mutate()}
-          >
-            {createPackMutation.isPending ? 'Saving…' : 'Save golden pack'}
-          </button>
-          <button
-            className="button button--primary"
-            type="button"
-            disabled={!selectedShopId || !selectedPack || replayMutation.isPending}
-            onClick={() => selectedPack && replayMutation.mutate(packToScenarios(selectedPack))}
-          >
-            {replayMutation.isPending ? 'Running replay…' : 'Run selected pack'}
-          </button>
-        </div>
-      </section>
+          <div className="mt-4">
+            <Button type="button" disabled={replayMutation.isPending} onClick={() => replayMutation.mutate(GOLDEN_SCENARIOS)}>
+              {replayMutation.isPending ? 'Running replay…' : 'Run golden replay pack'}
+            </Button>
+          </div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="Scenario packs" description="Save and replay handcrafted or synthetic scenario collections." />
+        <CardBody>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Pack name">
+              <Input value={packName} onChange={(e) => setPackName(e.target.value)} />
+            </Field>
+            <Field label="Run from pack">
+              <Select value={selectedPackId ?? ''} onChange={(e) => setSelectedPackId(e.target.value || null)}>
+                <option value="">Select saved pack</option>
+                {scenarioPacksQuery.data?.map((pack) => (
+                  <option key={pack.id} value={pack.id}>
+                    {pack.name} ({pack.scenarios_json.length} scenarios)
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              type="button"
+              disabled={!packName.trim() || createPackMutation.isPending}
+              onClick={() => createPackMutation.mutate()}
+            >
+              {createPackMutation.isPending ? 'Saving…' : 'Save golden pack'}
+            </Button>
+            <Button
+              type="button"
+              disabled={!selectedPack || replayMutation.isPending}
+              onClick={() => selectedPack && replayMutation.mutate(packToScenarios(selectedPack))}
+            >
+              {replayMutation.isPending ? 'Running replay…' : 'Run selected pack'}
+            </Button>
+          </div>
+        </CardBody>
+      </Card>
 
       {replayRunsQuery.data && replayRunsQuery.data.length > 0 ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <h3>Replay runs</h3>
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th scope="col">Label</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Pass rate</th>
-                  <th scope="col">Model</th>
-                  <th scope="col">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {replayRunsQuery.data.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.label ?? item.id.slice(0, 8)}</td>
-                    <td>{item.status}</td>
-                    <td>
-                      {item.passed_items}/{item.total_items}
-                    </td>
-                    <td>{item.model_version}</td>
-                    <td>
-                      <button className="table-link" type="button" onClick={() => setSelectedRunId(item.id)}>
-                        View diff
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <Card>
+          <CardHeader title="Replay runs" />
+          <DataTable
+            columns={runColumns}
+            rows={replayRunsQuery.data}
+            rowKey={(row) => row.id}
+            emptyTitle="No replay runs"
+          />
+        </Card>
       ) : null}
 
       {run ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <h3>Regression diff — {run.label ?? run.id}</h3>
-          <div className="stats-grid">
-            <article className="stat-card">
-              <p className="stat-card__label">Passed</p>
-              <p className="stat-card__value">{run.passed_items}</p>
-            </article>
-            <article className="stat-card">
-              <p className="stat-card__label">Failed</p>
-              <p className="stat-card__value">{run.failed_items}</p>
-            </article>
-            <article className="stat-card">
-              <p className="stat-card__label">Catalog hash</p>
-              <p className="stat-card__value">{run.catalog_snapshot_hash.slice(0, 12)}…</p>
-            </article>
-          </div>
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th scope="col">Scenario</th>
-                  <th scope="col">Result</th>
-                  <th scope="col">Actual intent</th>
-                  <th scope="col">Expected intent</th>
-                  <th scope="col">Diff</th>
-                  <th scope="col">Trace</th>
-                </tr>
-              </thead>
-              <tbody>
-                {run.items.map((item) => (
-                  <ReplayItemRow key={item.id} item={item} onInspectTrace={setTraceId} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <Card>
+          <CardHeader title={`Regression diff — ${run.label ?? run.id}`} />
+          <CardBody className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <KpiCard label="Passed" value={String(run.passed_items)} tone="success" />
+              <KpiCard label="Failed" value={String(run.failed_items)} tone="danger" />
+              <KpiCard label="Catalog hash" value={`${run.catalog_snapshot_hash.slice(0, 12)}…`} />
+            </div>
+            <DataTable columns={itemColumns} rows={run.items} rowKey={(item) => item.id} emptyTitle="No items" />
+          </CardBody>
+        </Card>
       ) : null}
 
       <DecisionTraceDrawer

@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 
+import { Button, Field } from '../ui';
 import { useToast } from '../../contexts/ToastContext';
 import { apiClient } from '../../services/apiClient';
 import type { ResolveProductResponse, ResolveVariantResponse, ResolverTrace } from '../../types/resolve';
+import { cn } from '../../lib/cn';
 
 export function OperatorCorrectionPanel({
   shopId,
@@ -36,55 +38,37 @@ export function OperatorCorrectionPanel({
   const isPending = feedbackMutation.isPending;
 
   return (
-    <div className="cc-correction">
-      <h3 className="cc-subhead">Operator correction</h3>
-      <p className="cc-card__hint">Review the AI decision and record operator feedback.</p>
-      <div className="cc-field">
-        <label className="cc-field-label" htmlFor="correction-notes">
-          Notes / corrected alias hint
-        </label>
+    <div className="flex flex-col gap-3">
+      <div>
+        <h3 className="text-sm font-semibold text-fg">Operator correction</h3>
+        <p className="text-xs text-muted">Review the AI decision and record operator feedback.</p>
+      </div>
+      <Field label="Notes / corrected alias hint" htmlFor="correction-notes">
         <textarea
           id="correction-notes"
-          className="cc-textarea"
           rows={3}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Optional context for this correction…"
+          className={cn(
+            'w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg',
+            'placeholder:text-subtle focus:border-accent focus:outline-none',
+          )}
         />
-      </div>
-      <div className="cc-correction__actions">
-        <button
-          className="button button--primary"
-          type="button"
-          disabled={isPending}
-          onClick={() => feedbackMutation.mutate('accept_ai')}
-        >
+      </Field>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" disabled={isPending} onClick={() => feedbackMutation.mutate('accept_ai')}>
           Accept AI choice
-        </button>
-        <button
-          className="button button--secondary"
-          type="button"
-          disabled={isPending}
-          onClick={() => feedbackMutation.mutate('correct_product')}
-        >
+        </Button>
+        <Button type="button" variant="secondary" size="sm" disabled={isPending} onClick={() => feedbackMutation.mutate('correct_product')}>
           Correct product
-        </button>
-        <button
-          className="button button--secondary"
-          type="button"
-          disabled={isPending}
-          onClick={() => feedbackMutation.mutate('correct_variant')}
-        >
+        </Button>
+        <Button type="button" variant="secondary" size="sm" disabled={isPending} onClick={() => feedbackMutation.mutate('correct_variant')}>
           Correct variant
-        </button>
-        <button
-          className="button button--ghost-dark"
-          type="button"
-          disabled={isPending}
-          onClick={() => feedbackMutation.mutate('taxonomy_issue')}
-        >
+        </Button>
+        <Button type="button" variant="ghost" size="sm" disabled={isPending} onClick={() => feedbackMutation.mutate('taxonomy_issue')}>
           Mark taxonomy issue
-        </button>
+        </Button>
       </div>
     </div>
   );

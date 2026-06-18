@@ -28,6 +28,7 @@ from app.api.v1.social_admin import router as social_admin_router
 from app.api.v1.traces import router as traces_router
 from app.api.v1.upsells import router as upsells_router
 from app.api.v1.products import router as products_router
+from app.api.v1.realtime import router as realtime_router
 from app.api.v1.shops import router as shops_router
 from app.api.v1.semantic_search import router as semantic_search_router
 from app.api.v1.suggested_replies import router as suggested_replies_router
@@ -74,3 +75,4 @@ router.include_router(agent_settings_router)
 router.include_router(agent_risk_router)
 router.include_router(trl_validation_router)
 router.include_router(suggested_replies_router)
+router.include_router(realtime_router)

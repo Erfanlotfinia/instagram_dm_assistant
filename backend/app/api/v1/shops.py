@@ -8,7 +8,7 @@ from app.api.deps import get_current_user, require_shop_role
 from app.db.session import get_db_session
 from app.domain.enums import UserRole
 from app.domain.models import ShopMember, User
-from app.schemas.dashboard import DashboardMetrics
+from app.schemas.dashboard import DashboardMetrics, DashboardTrends
 from app.schemas.instagram_account import InstagramAccountCreate, InstagramAccountRead
 from app.schemas.shop import OnboardingStatusRead, ShopAgentSettings, ShopCreate, ShopMemberRead, ShopRead, ShopSettingsRead, ShopUpdate
 from app.services.dashboard_service import DashboardService
@@ -83,6 +83,16 @@ def get_dashboard_metrics(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> DashboardMetrics:
     return DashboardService(db).get_metrics(shop_id, current_user)
+
+
+@router.get("/{shop_id}/dashboard/trends", response_model=DashboardTrends)
+def get_dashboard_trends(
+    shop_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db_session)],
+    period: str = "7d",
+) -> DashboardTrends:
+    return DashboardService(db).get_trends(shop_id, current_user, period)
 
 
 @router.get("/{shop_id}/onboarding-status", response_model=OnboardingStatusRead)

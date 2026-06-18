@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { ShopSelector } from '../components/ShopSelector';
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Card, CardBody, CardHeader, Field, Input, Select } from '../components/ui';
+import { DataTable, EmptyState } from '../components/data';
+import type { Column } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { queryKeys } from '../lib/queryClient';
 import { apiClient } from '../services/apiClient';
-import type { ResolveInstagramProductResponse } from '../types/product';
+import type { InstagramProductMap, ResolveInstagramProductResponse } from '../types/product';
 
 export function InstagramProductMappingPage() {
   const { selectedShopId } = useShop();
@@ -91,139 +94,154 @@ export function InstagramProductMappingPage() {
   const products = productsQuery.data ?? [];
   const maps = mapsQuery.data ?? [];
 
+  const columns: Column<InstagramProductMap>[] = [
+    {
+      key: 'url',
+      header: 'Post URL',
+      render: (row) => (
+        <a href={row.instagram_post_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+          {row.instagram_post_url}
+        </a>
+      ),
+    },
+    {
+      key: 'media',
+      header: 'Media ID',
+      className: 'hidden md:table-cell',
+      render: (row) => <span className="font-mono text-xs">{row.instagram_media_id ?? '—'}</span>,
+    },
+    {
+      key: 'product',
+      header: 'Product ID',
+      className: 'hidden lg:table-cell',
+      render: (row) => <span className="font-mono text-xs">{row.product_id}</span>,
+    },
+    {
+      key: 'source',
+      header: 'Source',
+      render: (row) => <Badge tone="neutral">{row.confidence_source}</Badge>,
+    },
+    {
+      key: 'active',
+      header: 'Active',
+      align: 'right',
+      render: (row) => <Badge tone={row.is_active ? 'success' : 'neutral'}>{row.is_active ? 'yes' : 'no'}</Badge>,
+    },
+  ];
+
   return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Instagram</p>
-        <h1>Post-to-product mapping</h1>
-        <p>Link Instagram posts to catalog products for DM order resolution.</p>
-        <ShopSelector />
+    <HubPage
+      eyebrow="Instagram"
+      title="Post-to-product mapping"
+      description="Link Instagram posts to catalog products for DM order resolution."
+    >
+      <Card>
+        <CardHeader title="Create mapping" description="Manually associate a post URL with a catalog product." />
+        <CardBody>
+          <form
+            className="grid gap-4 sm:grid-cols-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              createMapMutation.mutate();
+            }}
+          >
+            <Field label="Instagram account">
+              <Select value={selectedAccountId} onChange={(e) => setSelectedAccountId(e.target.value)} required>
+                <option value="">Select account</option>
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>@{account.username}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Product">
+              <Select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} required>
+                <option value="">Select product</option>
+                {products.map((product) => (
+                  <option key={product.id} value={product.id}>{product.title}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Instagram post URL" className="sm:col-span-2">
+              <Input value={postUrl} onChange={(e) => setPostUrl(e.target.value)} required />
+            </Field>
+            <Field label="Media ID (optional)">
+              <Input value={mediaId} onChange={(e) => setMediaId(e.target.value)} />
+            </Field>
+            <div className="flex items-end">
+              <Button type="submit" disabled={createMapMutation.isPending}>
+                {createMapMutation.isPending ? 'Saving…' : 'Save mapping'}
+              </Button>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
 
-        <form
-          className="inline-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            createMapMutation.mutate();
-          }}
-        >
-          <label className="form-field">
-            <span>Instagram account</span>
-            <select
-              value={selectedAccountId}
-              onChange={(event) => setSelectedAccountId(event.target.value)}
-              required
-            >
-              <option value="">Select account</option>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  @{account.username}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="form-field">
-            <span>Instagram post URL</span>
-            <input value={postUrl} onChange={(event) => setPostUrl(event.target.value)} required />
-          </label>
-          <label className="form-field">
-            <span>Media ID (optional)</span>
-            <input value={mediaId} onChange={(event) => setMediaId(event.target.value)} />
-          </label>
-          <label className="form-field">
-            <span>Product</span>
-            <select
-              value={selectedProductId}
-              onChange={(event) => setSelectedProductId(event.target.value)}
-              required
-            >
-              <option value="">Select product</option>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="button button--primary" type="submit" disabled={createMapMutation.isPending}>
-            {createMapMutation.isPending ? 'Saving...' : 'Save mapping'}
-          </button>
-        </form>
-      </section>
+      <Card>
+        <CardHeader
+          title="Test resolve & confirm match"
+          description="Paste a post URL to test resolution, then confirm a semantic match if needed."
+        />
+        <CardBody>
+          <form
+            className="flex flex-wrap items-end gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              resolveMutation.mutate();
+            }}
+          >
+            <Field label="Instagram post URL" className="min-w-[16rem] flex-1">
+              <Input value={testPostUrl} onChange={(e) => setTestPostUrl(e.target.value)} required />
+            </Field>
+            <Button type="submit" disabled={resolveMutation.isPending}>
+              {resolveMutation.isPending ? 'Resolving…' : 'Test resolve'}
+            </Button>
+          </form>
 
-      <section className="dashboard-card dashboard-card--wide">
-        <h2>Test resolve &amp; confirm match</h2>
-        <p>Paste a post URL to test resolution, then confirm a semantic match if needed.</p>
-        <form
-          className="inline-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            resolveMutation.mutate();
-          }}
-        >
-          <label className="form-field">
-            <span>Instagram post URL</span>
-            <input value={testPostUrl} onChange={(event) => setTestPostUrl(event.target.value)} required />
-          </label>
-          <button className="button button--primary" type="submit" disabled={resolveMutation.isPending}>
-            {resolveMutation.isPending ? 'Resolving...' : 'Test resolve'}
-          </button>
-        </form>
+          {resolveResult ? (
+            <div className="mt-4 rounded-lg border border-border bg-surface-sunken p-4">
+              {resolveResult.product ? (
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <p className="font-medium text-fg">{resolveResult.product.title}</p>
+                    <p className="text-sm text-muted">
+                      {resolveResult.product.base_price} {resolveResult.product.currency} · Source:{' '}
+                      {resolveResult.confidence_source}
+                    </p>
+                  </div>
+                  {resolveResult.confidence_source !== 'manual' ? (
+                    <Button
+                      type="button"
+                      disabled={confirmSemanticMutation.isPending || !selectedAccountId}
+                      onClick={() => confirmSemanticMutation.mutate()}
+                    >
+                      Confirm semantic match
+                    </Button>
+                  ) : null}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No product matched"
+                  description="Create a manual mapping above or try a different post URL."
+                />
+              )}
+            </div>
+          ) : null}
+        </CardBody>
+      </Card>
 
-        {resolveResult ? (
-          <div className="match-panel">
-            {resolveResult.product ? (
-              <>
-                <p>
-                  <strong>{resolveResult.product.title}</strong> · {resolveResult.product.base_price}{' '}
-                  {resolveResult.product.currency}
-                </p>
-                <p>Source: {resolveResult.confidence_source}</p>
-                {resolveResult.confidence_source !== 'manual' ? (
-                  <button
-                    className="button button--primary"
-                    type="button"
-                    disabled={confirmSemanticMutation.isPending || !selectedAccountId}
-                    onClick={() => confirmSemanticMutation.mutate()}
-                  >
-                    Confirm semantic match
-                  </button>
-                ) : null}
-              </>
-            ) : (
-              <p className="empty-state">No product matched. Create a manual mapping above.</p>
-            )}
-          </div>
-        ) : null}
-      </section>
-
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Post URL</th>
-                <th>Media ID</th>
-                <th>Product ID</th>
-                <th>Source</th>
-                <th>Active</th>
-              </tr>
-            </thead>
-            <tbody>
-              {maps.map((mapping) => (
-                <tr key={mapping.id}>
-                  <td>{mapping.instagram_post_url}</td>
-                  <td>{mapping.instagram_media_id ?? '—'}</td>
-                  <td>{mapping.product_id}</td>
-                  <td>{mapping.confidence_source}</td>
-                  <td>{mapping.is_active ? 'yes' : 'no'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {maps.length === 0 ? <p className="empty-state">No mappings yet.</p> : null}
-        </div>
-      </section>
-    </div>
+      <Card>
+        <CardHeader title="Saved mappings" description={`${maps.length} post-to-product links for this shop.`} />
+        <DataTable
+          columns={columns}
+          rows={maps}
+          rowKey={(row) => row.id}
+          isLoading={mapsQuery.isLoading}
+          error={mapsQuery.error instanceof Error ? mapsQuery.error.message : null}
+          emptyTitle="No mappings yet"
+          emptyDescription="Create your first mapping above."
+        />
+      </Card>
+    </HubPage>
   );
 }
 

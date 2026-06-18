@@ -41,7 +41,7 @@ describe('RecoveryRulesPage', () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByRole('option', { name: 'Demo' });
+    await screen.findByRole('button', { name: /create recovery rule/i });
     await user.click(screen.getByRole('button', { name: /create recovery rule/i }));
 
     await waitFor(() => {

@@ -2,8 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import { Pagination } from '../components/Pagination';
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Card, CardBody, CardHeader } from '../components/ui';
+import { EmptyState, KpiCard, LoadingState } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
+import { cn } from '../lib/cn';
 import { apiClient } from '../services/apiClient';
 import type { FailedJob, ReadinessCheckStatus, ReadinessResponse } from '../types/health';
 
@@ -21,28 +25,16 @@ const STATUS_LABELS: Record<ReadinessResponse['status'], string> = {
   failed: 'Critical failures detected',
 };
 
-function statusClass(status: ReadinessCheckStatus): string {
-  return status === 'ok' ? 'health-check__status health-check__status--ok' : 'health-check__status health-check__status--error';
-}
+type ShopFilter = 'all' | 'unscoped' | string;
 
 function shopLabel(shopId: string | null, shopsById: Map<string, string>): string {
-  if (!shopId) {
-    return 'Unscoped';
-  }
+  if (!shopId) return 'Unscoped';
   return shopsById.get(shopId) ?? shopId.slice(0, 8);
-}
-
-function shopBadgeClass(shopId: string | null): string {
-  return shopId
-    ? 'failed-job-badge failed-job-badge--shop'
-    : 'failed-job-badge failed-job-badge--unscoped';
 }
 
 function formatJobType(jobType: string): string {
   return jobType.replace(/_/g, ' ');
 }
-
-type ShopFilter = 'all' | 'unscoped' | string;
 
 function filterSummary(filter: ShopFilter, shopsById: Map<string, string>): string {
   if (filter === 'all') {
@@ -52,9 +44,37 @@ function filterSummary(filter: ShopFilter, shopsById: Map<string, string>): stri
     return 'Showing unscoped worker failures only (jobs without a shop assignment).';
   }
   const shopName = shopsById.get(filter);
-  return shopName
-    ? `Showing failed jobs for ${shopName} only.`
-    : 'Showing failed jobs for the selected shop only.';
+  return shopName ? `Showing failed jobs for ${shopName} only.` : 'Showing failed jobs for the selected shop only.';
+}
+
+function statusTone(status: ReadinessResponse['status']): 'success' | 'warning' | 'danger' {
+  if (status === 'ok') return 'success';
+  if (status === 'degraded') return 'warning';
+  return 'danger';
+}
+
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+        active ? 'border-accent bg-accent-soft text-accent' : 'border-border bg-surface text-muted hover:text-fg',
+      )}
+    >
+      {children}
+    </button>
+  );
 }
 
 function FailedJobCard({
@@ -75,60 +95,45 @@ function FailedJobCard({
   const retriesExhausted = job.retry_count >= job.max_retries;
 
   return (
-    <article className="failed-job-card">
-      <div className="failed-job-card__header">
-        <div className="failed-job-card__title-row">
-          <h3 className="failed-job-card__title">{formatJobType(job.job_type)}</h3>
-          <time className="failed-job-card__time" dateTime={job.created_at}>
+    <article className="rounded-lg border border-border bg-surface p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-fg">{formatJobType(job.job_type)}</h3>
+          <time className="text-xs text-muted" dateTime={job.created_at}>
             {new Date(job.created_at).toLocaleString()}
           </time>
         </div>
-        <div className="failed-job-card__meta">
-          <span className={shopBadgeClass(job.shop_id)}>{label}</span>
-          <span className="failed-job-badge failed-job-badge--queue">{job.queue_name}</span>
-          <span
-            className={`failed-job-badge${retriesExhausted ? ' failed-job-badge--danger' : ' failed-job-badge--warn'}`}
-          >
+        <div className="flex flex-wrap gap-1.5">
+          <Badge tone={job.shop_id ? 'info' : 'neutral'}>{label}</Badge>
+          <Badge tone="neutral">{job.queue_name}</Badge>
+          <Badge tone={retriesExhausted ? 'danger' : 'warning'}>
             {job.retry_count}/{job.max_retries} retries
-          </span>
+          </Badge>
         </div>
       </div>
 
-      <div className="failed-job-card__error-panel">
-        <p className="failed-job-card__error">{job.error_message ?? 'No error message recorded'}</p>
-      </div>
+      <p className="mt-3 rounded-md border border-danger/20 bg-danger-soft/30 px-3 py-2 text-sm text-fg">
+        {job.error_message ?? 'No error message recorded'}
+      </p>
 
       {job.traceback ? (
-        <div className="failed-job-card__trace-section">
-          <button
-            type="button"
-            className="failed-job-card__trace-toggle"
-            aria-expanded={showTrace}
-            onClick={() => setShowTrace((current) => !current)}
-          >
+        <div className="mt-3">
+          <Button variant="ghost" size="sm" type="button" aria-expanded={showTrace} onClick={() => setShowTrace((c) => !c)}>
             {showTrace ? 'Hide traceback' : 'Show traceback'}
-          </button>
-          {showTrace ? <pre className="failed-job-card__trace">{job.traceback}</pre> : null}
+          </Button>
+          {showTrace ? (
+            <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-surface-sunken p-3 text-xs text-subtle">{job.traceback}</pre>
+          ) : null}
         </div>
       ) : null}
 
-      <div className="failed-job-card__actions">
-        <button
-          type="button"
-          className="button button--primary"
-          disabled={actionsDisabled}
-          onClick={() => onRetry(job.id)}
-        >
+      <div className="mt-3 flex gap-2">
+        <Button type="button" size="sm" disabled={actionsDisabled} onClick={() => onRetry(job.id)}>
           Retry
-        </button>
-        <button
-          type="button"
-          className="button button--ghost-dark"
-          disabled={actionsDisabled}
-          onClick={() => onIgnore(job.id)}
-        >
+        </Button>
+        <Button type="button" variant="secondary" size="sm" disabled={actionsDisabled} onClick={() => onIgnore(job.id)}>
           Ignore
-        </button>
+        </Button>
       </div>
     </article>
   );
@@ -177,14 +182,9 @@ export function SystemHealthPage() {
   });
 
   const readinessStats = useMemo(() => {
-    if (!readiness.data) {
-      return { healthy: 0, total: 0 };
-    }
+    if (!readiness.data) return { healthy: 0, total: 0 };
     const checks = Object.values(readiness.data.checks);
-    return {
-      healthy: checks.filter((status) => status === 'ok').length,
-      total: checks.length,
-    };
+    return { healthy: checks.filter((s) => s === 'ok').length, total: checks.length };
   }, [readiness.data]);
 
   const jobStats = useMemo(() => {
@@ -203,222 +203,175 @@ export function SystemHealthPage() {
     setPage(1);
   }
 
+  const platformStatus = readiness.data?.status;
+
   return (
-    <div className="page-stack page-stack--wide system-health-page">
-      <section className="dashboard-card dashboard-card--wide system-health-hero">
-        <div className="system-health-hero__intro">
-          <p className="dashboard-card__eyebrow">Operations</p>
-          <h1>System health</h1>
-          <p className="system-health-hero__description">
-            Dependency readiness, worker queue failures, and retry controls for pilot operations.
-          </p>
-        </div>
+    <HubPage
+      eyebrow="Operations"
+      title="System health"
+      description="Dependency readiness, worker queue failures, and retry controls for pilot operations."
+    >
+      <div className="grid gap-3 sm:grid-cols-3">
+        <KpiCard
+          label="Platform status"
+          value={
+            readiness.isLoading
+              ? 'Checking…'
+              : readiness.error
+                ? 'Unavailable'
+                : readiness.data
+                  ? STATUS_LABELS[readiness.data.status]
+                  : '—'
+          }
+          tone={platformStatus ? statusTone(platformStatus) : 'accent'}
+          hint={platformStatus ? `Overall status: ${platformStatus}` : undefined}
+        />
+        <KpiCard
+          label="Dependencies"
+          value={readiness.isLoading ? 'Checking…' : readiness.data ? `${readinessStats.healthy}/${readinessStats.total} healthy` : '—'}
+          tone={readinessStats.healthy === readinessStats.total ? 'success' : 'warning'}
+        />
+        <KpiCard
+          label="Failed jobs"
+          value={failedJobs.isLoading ? 'Loading…' : jobStats.total > 0 ? `${jobStats.total} waiting` : 'Queue clear'}
+          tone={jobStats.total > 0 ? 'danger' : 'success'}
+          hint={jobStats.total > 0 ? 'Requires retry or ignore' : undefined}
+        />
+      </div>
 
-        <div className="system-health-kpis">
-          <article
-            className={`system-health-kpi system-health-kpi--${readiness.data?.status ?? 'loading'}`}
-          >
-            <p className="system-health-kpi__label">Platform status</p>
-            {readiness.isLoading ? (
-              <p className="system-health-kpi__value">Checking…</p>
-            ) : readiness.error ? (
-              <p className="system-health-kpi__value system-health-kpi__value--error">Unavailable</p>
-            ) : readiness.data ? (
-              <>
-                <p className="system-health-kpi__value">{STATUS_LABELS[readiness.data.status]}</p>
-                <p className={`health-overall health-overall--${readiness.data.status}`}>
-                  Overall status: {readiness.data.status}
-                </p>
-              </>
-            ) : null}
-          </article>
-
-          <article className="system-health-kpi">
-            <p className="system-health-kpi__label">Dependencies</p>
-            {readiness.isLoading ? (
-              <p className="system-health-kpi__value">Checking…</p>
-            ) : readiness.data ? (
-              <p className="system-health-kpi__value">
-                {readinessStats.healthy}/{readinessStats.total} healthy
-              </p>
-            ) : (
-              <p className="system-health-kpi__value">—</p>
-            )}
-          </article>
-
-          <article
-            className={`system-health-kpi${jobStats.total > 0 ? ' system-health-kpi--alert' : ' system-health-kpi--clear'}`}
-          >
-            <p className="system-health-kpi__label">Failed jobs</p>
-            {failedJobs.isLoading ? (
-              <p className="system-health-kpi__value">Loading…</p>
-            ) : (
-              <>
-                <p className="system-health-kpi__value">
-                  {jobStats.total > 0 ? `${jobStats.total} waiting` : 'Queue clear'}
-                </p>
-                {jobStats.total > 0 ? (
-                  <p className="system-health-kpi__hint">Requires retry or ignore</p>
-                ) : null}
-              </>
-            )}
-          </article>
-        </div>
-      </section>
-
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header">
-          <div>
-            <h2>Platform readiness</h2>
-            <p className="section-header__subtitle">Live dependency checks refreshed every 30 seconds.</p>
-          </div>
-        </div>
-
-        {readiness.isLoading ? <p className="loading-state">Checking dependencies...</p> : null}
-        {readiness.error ? (
-          <p className="form-error">
-            {readiness.error instanceof Error ? readiness.error.message : 'Failed to load readiness'}
-          </p>
-        ) : null}
-
-        {readiness.data ? (
-          <>
-            <div className={`health-status-banner health-status-banner--${readiness.data.status}`}>
-              <div className="health-status-banner__indicator" aria-hidden="true" />
-              <div>
-                <p className="health-status-banner__title">{STATUS_LABELS[readiness.data.status]}</p>
-                <p className="health-status-banner__meta">
-                  {readinessStats.healthy} of {readinessStats.total} dependencies reporting OK
-                </p>
-              </div>
-            </div>
-
-            <div className="health-checks-grid">
-              {(Object.entries(readiness.data.checks) as [keyof ReadinessResponse['checks'], ReadinessCheckStatus][]).map(
-                ([name, status]) => (
-                  <article
-                    key={name}
-                    className={`health-check health-check--${status}`}
-                  >
-                    <span className="health-check__dot" aria-hidden="true" />
-                    <div className="health-check__body">
-                      <p className="health-check__name">{CHECK_LABELS[name]}</p>
-                      <p className={statusClass(status)}>{status}</p>
-                    </div>
-                  </article>
-                ),
-              )}
-            </div>
-          </>
-        ) : null}
-      </section>
-
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header">
-          <div>
-            <h2>Failed jobs</h2>
-            <p className="section-header__subtitle">
-              Queue failures across all shops you can access, including unscoped worker payloads.
+      <Card>
+        <CardHeader title="Platform readiness" description="Live dependency checks refreshed every 30 seconds." />
+        <CardBody>
+          {readiness.isLoading ? <LoadingState label="Checking dependencies…" /> : null}
+          {readiness.error ? (
+            <p className="text-sm text-danger">
+              {readiness.error instanceof Error ? readiness.error.message : 'Failed to load readiness'}
             </p>
-          </div>
-        </div>
+          ) : null}
 
-        {failedJobs.isLoading ? <p className="loading-state">Loading failed jobs...</p> : null}
-        {failedJobs.error ? (
-          <p className="form-error">
-            {failedJobs.error instanceof Error ? failedJobs.error.message : 'Failed to load jobs'}
-          </p>
-        ) : null}
-
-        {!failedJobs.isLoading && !failedJobs.error && failedJobs.data ? (
-          <>
-            <div className="analytics-toolbar failed-jobs-toolbar">
-              <div className="form-field failed-jobs-toolbar__filters">
-                <span>Filter by shop</span>
-                <div className="filter-chips analytics-toolbar__chips" role="group" aria-label="Shop filter">
-                  <button
-                    type="button"
-                    className={`filter-chip${shopFilter === 'all' ? ' filter-chip--active' : ''}`}
-                    aria-pressed={shopFilter === 'all'}
-                    onClick={() => applyShopFilter('all')}
-                  >
-                    All shops
-                  </button>
-                  <button
-                    type="button"
-                    className={`filter-chip${shopFilter === 'unscoped' ? ' filter-chip--active' : ''}`}
-                    aria-pressed={shopFilter === 'unscoped'}
-                    onClick={() => applyShopFilter('unscoped')}
-                  >
-                    Unscoped
-                  </button>
-                  {shops.map((shop) => (
-                    <button
-                      key={shop.id}
-                      type="button"
-                      className={`filter-chip${shopFilter === shop.id ? ' filter-chip--active' : ''}`}
-                      aria-pressed={shopFilter === shop.id}
-                      onClick={() => applyShopFilter(shop.id)}
-                    >
-                      {shop.name}
-                    </button>
-                  ))}
+          {readiness.data ? (
+            <>
+              <div
+                className={cn(
+                  'mb-4 flex items-center gap-3 rounded-lg border px-4 py-3',
+                  platformStatus === 'ok' && 'border-success/30 bg-success-soft/40',
+                  platformStatus === 'degraded' && 'border-warning/30 bg-warning-soft/40',
+                  platformStatus === 'failed' && 'border-danger/30 bg-danger-soft/40',
+                )}
+              >
+                <span
+                  className={cn(
+                    'h-2.5 w-2.5 rounded-full',
+                    platformStatus === 'ok' && 'bg-success',
+                    platformStatus === 'degraded' && 'bg-warning',
+                    platformStatus === 'failed' && 'bg-danger',
+                  )}
+                  aria-hidden="true"
+                />
+                <div>
+                  <p className="text-sm font-medium text-fg">{STATUS_LABELS[readiness.data.status]}</p>
+                  <p className="text-xs text-muted">
+                    {readinessStats.healthy} of {readinessStats.total} dependencies reporting OK
+                  </p>
                 </div>
               </div>
-              <p className="analytics-toolbar__summary">{filterSummary(shopFilter, shopsById)}</p>
-            </div>
 
-            <div className="failed-jobs-stats">
-              <article className="failed-jobs-stat">
-                <p className="failed-jobs-stat__label">On this page</p>
-                <p className="failed-jobs-stat__value">{failedJobs.data.items.length}</p>
-              </article>
-              <article className="failed-jobs-stat">
-                <p className="failed-jobs-stat__label">Shop-scoped</p>
-                <p className="failed-jobs-stat__value">{jobStats.shopScoped}</p>
-              </article>
-              <article className="failed-jobs-stat">
-                <p className="failed-jobs-stat__label">Unscoped</p>
-                <p className="failed-jobs-stat__value">{jobStats.unscoped}</p>
-              </article>
-            </div>
-          </>
-        ) : null}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {(Object.entries(readiness.data.checks) as [keyof ReadinessResponse['checks'], ReadinessCheckStatus][]).map(
+                  ([name, status]) => (
+                    <div
+                      key={name}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg border px-3 py-2.5',
+                        status === 'ok' ? 'border-success/20 bg-success-soft/20' : 'border-danger/20 bg-danger-soft/20',
+                      )}
+                    >
+                      <span
+                        className={cn('h-2 w-2 rounded-full', status === 'ok' ? 'bg-success' : 'bg-danger')}
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-fg">{CHECK_LABELS[name]}</p>
+                        <p className={cn('text-xs uppercase', status === 'ok' ? 'text-success' : 'text-danger')}>{status}</p>
+                      </div>
+                    </div>
+                  ),
+                )}
+              </div>
+            </>
+          ) : null}
+        </CardBody>
+      </Card>
 
-        {failedJobs.data?.items.length ? (
-          <div className="failed-jobs-list">
-            {failedJobs.data.items.map((job) => (
-              <FailedJobCard
-                key={job.id}
-                job={job}
-                shopsById={shopsById}
-                actionsDisabled={actionsDisabled}
-                onRetry={(jobId) => retryMutation.mutate(jobId)}
-                onIgnore={(jobId) => ignoreMutation.mutate(jobId)}
-              />
-            ))}
-          </div>
-        ) : null}
-
-        {!failedJobs.isLoading && !failedJobs.error && (failedJobs.data?.items.length ?? 0) === 0 ? (
-          <div className="empty-state-panel system-health-empty">
-            <div className="system-health-empty__icon" aria-hidden="true">✓</div>
-            <p className="empty-state-panel__title">No failed jobs are waiting for action</p>
-            <p className="empty-state-panel__hint">
-              When workers exhaust retries, failed payloads appear here with retry and ignore controls.
+      <Card>
+        <CardHeader
+          title="Failed jobs"
+          description="Queue failures across all shops you can access, including unscoped worker payloads."
+        />
+        <CardBody className="flex flex-col gap-4">
+          {failedJobs.isLoading ? <LoadingState label="Loading failed jobs…" /> : null}
+          {failedJobs.error ? (
+            <p className="text-sm text-danger">
+              {failedJobs.error instanceof Error ? failedJobs.error.message : 'Failed to load jobs'}
             </p>
-          </div>
-        ) : null}
+          ) : null}
 
-        {failedJobs.data ? (
-          <Pagination
-            page={page}
-            pageSize={failedJobs.data.page_size}
-            totalItems={failedJobs.data.total}
-            onPageChange={setPage}
-          />
-        ) : null}
-      </section>
-    </div>
+          {!failedJobs.isLoading && !failedJobs.error && failedJobs.data ? (
+            <>
+              <div className="flex flex-col gap-2">
+                <span className="text-xs font-medium text-muted">Filter by shop</span>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Shop filter">
+                  <Chip active={shopFilter === 'all'} onClick={() => applyShopFilter('all')}>All shops</Chip>
+                  <Chip active={shopFilter === 'unscoped'} onClick={() => applyShopFilter('unscoped')}>Unscoped</Chip>
+                  {shops.map((shop) => (
+                    <Chip key={shop.id} active={shopFilter === shop.id} onClick={() => applyShopFilter(shop.id)}>
+                      {shop.name}
+                    </Chip>
+                  ))}
+                </div>
+                <p className="text-xs text-muted">{filterSummary(shopFilter, shopsById)}</p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <KpiCard label="On this page" value={failedJobs.data.items.length} />
+                <KpiCard label="Shop-scoped" value={jobStats.shopScoped} />
+                <KpiCard label="Unscoped" value={jobStats.unscoped} />
+              </div>
+            </>
+          ) : null}
+
+          {failedJobs.data?.items.length ? (
+            <div className="flex flex-col gap-3">
+              {failedJobs.data.items.map((job) => (
+                <FailedJobCard
+                  key={job.id}
+                  job={job}
+                  shopsById={shopsById}
+                  actionsDisabled={actionsDisabled}
+                  onRetry={(jobId) => retryMutation.mutate(jobId)}
+                  onIgnore={(jobId) => ignoreMutation.mutate(jobId)}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {!failedJobs.isLoading && !failedJobs.error && (failedJobs.data?.items.length ?? 0) === 0 ? (
+            <EmptyState
+              title="No failed jobs are waiting for action"
+              description="When workers exhaust retries, failed payloads appear here with retry and ignore controls."
+            />
+          ) : null}
+
+          {failedJobs.data ? (
+            <Pagination
+              page={page}
+              pageSize={failedJobs.data.page_size}
+              totalItems={failedJobs.data.total}
+              onPageChange={setPage}
+            />
+          ) : null}
+        </CardBody>
+      </Card>
+    </HubPage>
   );
 }

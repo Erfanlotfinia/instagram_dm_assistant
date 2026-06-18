@@ -1,9 +1,13 @@
 import { FormEvent, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { ShopSelector } from '../components/ShopSelector';
+import { HubPage } from '../components/shell/HubPage';
+import { Button, Card, CardBody, CardHeader, Field, Input } from '../components/ui';
+import { DataTable, EmptyState } from '../components/data';
+import type { Column } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
+import { cn } from '../lib/cn';
 import { apiClient } from '../services/apiClient';
 import type { ColorAlias, SizeAlias } from '../types/fashion';
 
@@ -20,6 +24,29 @@ const SIZE_EXAMPLES = [
   { raw: 'XL', normalized: 'XL' },
   { raw: 'medium', normalized: 'M' },
 ] as const;
+
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+        active ? 'border-accent bg-accent-soft text-accent' : 'border-border bg-surface text-muted hover:text-fg',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
 interface AliasFormProps {
   type: 'color' | 'size';
@@ -49,53 +76,46 @@ function AliasForm({
   const submitLabel = type === 'color' ? 'Add color alias' : 'Add size alias';
 
   return (
-    <form className="alias-form" onSubmit={onSubmit}>
-      <div className="filter-grid">
-        <label className="form-field">
-          <span>{rawLabel}</span>
-          <input
+    <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={rawLabel}>
+          <Input
             value={rawValue}
             onChange={(event) => onRawChange(event.target.value)}
             placeholder={type === 'color' ? 'مشکی' : 'فری سایز'}
             dir="auto"
             required
           />
-        </label>
-        <label className="form-field">
-          <span>{normalizedLabel}</span>
-          <input
+        </Field>
+        <Field label={normalizedLabel}>
+          <Input
             value={normalizedValue}
             onChange={(event) => onNormalizedChange(event.target.value)}
             placeholder={type === 'color' ? 'black' : 'FREE'}
             required
           />
-        </label>
+        </Field>
       </div>
 
-      <div className="form-field alias-form__examples">
-        <span>Quick examples</span>
-        <div className="filter-chips" role="group" aria-label={`${type} alias examples`}>
+      <Field label="Quick examples">
+        <div className="flex flex-wrap gap-2" role="group" aria-label={`${type} alias examples`}>
           {examples.map((example) => (
-            <button
+            <Chip
               key={`${example.raw}-${example.normalized}`}
-              type="button"
-              className="filter-chip"
               onClick={() => {
                 onRawChange(example.raw);
                 onNormalizedChange(example.normalized);
               }}
             >
               {example.raw} → {example.normalized}
-            </button>
+            </Chip>
           ))}
         </div>
-      </div>
+      </Field>
 
-      <div className="button-row">
-        <button className="button button--primary" type="submit" disabled={disabled || isPending}>
-          {isPending ? 'Adding…' : submitLabel}
-        </button>
-      </div>
+      <Button type="submit" disabled={disabled || isPending}>
+        {isPending ? 'Adding…' : submitLabel}
+      </Button>
     </form>
   );
 }
@@ -111,44 +131,31 @@ function AliasTable<T extends ColorAlias | SizeAlias>({
   isLoading: boolean;
   error: Error | null;
 }) {
-  if (isLoading) {
-    return <p className="loading-state">Loading {type} aliases...</p>;
-  }
-
-  if (error) {
-    return <p className="form-error">{error.message}</p>;
-  }
+  const columns: Column<T>[] = [
+    { key: 'raw', header: 'Raw value', render: (alias) => alias.raw_value },
+    { key: 'normalized', header: 'Normalized', render: (alias) => alias.normalized_value },
+    {
+      key: 'scope',
+      header: type === 'color' ? 'Scope' : 'Category',
+      render: (alias) =>
+        type === 'color'
+          ? alias.shop_id
+            ? 'Shop'
+            : 'Global'
+          : ((alias as SizeAlias).category ?? 'Any category'),
+    },
+  ];
 
   return (
-    <div className="table-wrap">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Raw value</th>
-            <th>Normalized</th>
-            <th>{type === 'color' ? 'Scope' : 'Category'}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows?.map((alias) => (
-            <tr key={alias.id}>
-              <td>{alias.raw_value}</td>
-              <td>{alias.normalized_value}</td>
-              <td>
-                {type === 'color'
-                  ? alias.shop_id
-                    ? 'Shop'
-                    : 'Global'
-                  : ((alias as SizeAlias).category ?? 'Any category')}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {(rows?.length ?? 0) === 0 ? (
-        <p className="empty-state">No {type} aliases yet. Add one above.</p>
-      ) : null}
-    </div>
+    <DataTable
+      columns={columns}
+      rows={rows ?? []}
+      rowKey={(alias) => alias.id}
+      isLoading={isLoading}
+      error={error?.message ?? null}
+      emptyTitle={`No ${type} aliases yet`}
+      emptyDescription="Add one using the form above."
+    />
   );
 }
 
@@ -210,87 +217,83 @@ export function FashionDictionaryPage() {
 
   function submitColor(event: FormEvent) {
     event.preventDefault();
-    if (shopId) {
-      createColor.mutate();
-    }
+    if (shopId) createColor.mutate();
   }
 
   function submitSize(event: FormEvent) {
     event.preventDefault();
-    if (shopId) {
-      createSize.mutate();
-    }
+    if (shopId) createSize.mutate();
   }
 
   const formDisabled = !shopId;
 
   return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Catalog intelligence</p>
-        <h1>Fashion dictionary</h1>
-        <p>
-          Manage deterministic color and size aliases used by the variant resolver. Shop-specific
-          aliases override global defaults.
-        </p>
-        <ShopSelector />
-      </section>
-
+    <HubPage
+      eyebrow="Catalog"
+      title="Fashion dictionary"
+      description="Manage color and size aliases for the variant resolver. Shop-specific aliases override global defaults."
+    >
       {!shopId ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="empty-state">Select a shop to manage fashion aliases.</p>
-        </section>
+        <Card>
+          <CardBody>
+            <EmptyState title="Select a shop" description="Use the shop switcher in the top bar to manage aliases." />
+          </CardBody>
+        </Card>
       ) : (
-        <div className="dashboard-grid">
-          <section className="dashboard-card">
-            <h2>Color aliases</h2>
-            <p className="analytics-toolbar__summary">
-              Map customer color words (including Persian) to a canonical color value.
-            </p>
-            <AliasForm
-              type="color"
-              rawValue={colorRaw}
-              normalizedValue={colorNormalized}
-              onRawChange={setColorRaw}
-              onNormalizedChange={setColorNormalized}
-              onSubmit={submitColor}
-              isPending={createColor.isPending}
-              disabled={formDisabled}
-              examples={COLOR_EXAMPLES}
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Card>
+            <CardHeader
+              title="Color aliases"
+              description="Map customer color words (including Persian) to a canonical color value."
             />
-            <AliasTable
-              rows={colors.data}
-              type="color"
-              isLoading={colors.isLoading}
-              error={colors.error instanceof Error ? colors.error : null}
-            />
-          </section>
+            <CardBody className="flex flex-col gap-5">
+              <AliasForm
+                type="color"
+                rawValue={colorRaw}
+                normalizedValue={colorNormalized}
+                onRawChange={setColorRaw}
+                onNormalizedChange={setColorNormalized}
+                onSubmit={submitColor}
+                isPending={createColor.isPending}
+                disabled={formDisabled}
+                examples={COLOR_EXAMPLES}
+              />
+              <AliasTable
+                rows={colors.data}
+                type="color"
+                isLoading={colors.isLoading}
+                error={colors.error instanceof Error ? colors.error : null}
+              />
+            </CardBody>
+          </Card>
 
-          <section className="dashboard-card">
-            <h2>Size aliases</h2>
-            <p className="analytics-toolbar__summary">
-              Normalize size phrases like free size or medium into standard variant sizes.
-            </p>
-            <AliasForm
-              type="size"
-              rawValue={sizeRaw}
-              normalizedValue={sizeNormalized}
-              onRawChange={setSizeRaw}
-              onNormalizedChange={setSizeNormalized}
-              onSubmit={submitSize}
-              isPending={createSize.isPending}
-              disabled={formDisabled}
-              examples={SIZE_EXAMPLES}
+          <Card>
+            <CardHeader
+              title="Size aliases"
+              description="Normalize size phrases like free size or medium into standard variant sizes."
             />
-            <AliasTable
-              rows={sizes.data}
-              type="size"
-              isLoading={sizes.isLoading}
-              error={sizes.error instanceof Error ? sizes.error : null}
-            />
-          </section>
+            <CardBody className="flex flex-col gap-5">
+              <AliasForm
+                type="size"
+                rawValue={sizeRaw}
+                normalizedValue={sizeNormalized}
+                onRawChange={setSizeRaw}
+                onNormalizedChange={setSizeNormalized}
+                onSubmit={submitSize}
+                isPending={createSize.isPending}
+                disabled={formDisabled}
+                examples={SIZE_EXAMPLES}
+              />
+              <AliasTable
+                rows={sizes.data}
+                type="size"
+                isLoading={sizes.isLoading}
+                error={sizes.error instanceof Error ? sizes.error : null}
+              />
+            </CardBody>
+          </Card>
         </div>
       )}
-    </div>
+    </HubPage>
   );
 }

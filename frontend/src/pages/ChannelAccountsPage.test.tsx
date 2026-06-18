@@ -56,7 +56,7 @@ describe('ChannelAccountsPage', () => {
     renderPage();
 
     expect(await screen.findByRole('heading', { name: 'Channel Accounts' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox')).toBeInTheDocument();
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
     expect(await screen.findByText('WhatsApp main')).toBeInTheDocument();
     expect(screen.getByText('Webhook test')).toBeInTheDocument();
   });

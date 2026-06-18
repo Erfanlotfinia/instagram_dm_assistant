@@ -22,7 +22,7 @@ import type {
   RecoveryRuleCreate,
   RecoveryRuleUpdate,
 } from '../types/sprintD';
-import type { DashboardMetrics } from '../types/dashboard';
+import type { DashboardMetrics, DashboardTrends } from '../types/dashboard';
 import type { ChannelAccount, ChannelAccountCreate, TelegramWebhookInfo } from '../types/channel';
 import type { AgentPerformanceMetrics, AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PaginatedLostDemand, PaginatedOperatorPerformance, PostPerformanceRow, ResponseTimeAnalytics, SimulatorRunSummary, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
 import type { SemanticSearchResponse } from '../types/semanticSearch';
@@ -188,6 +188,8 @@ export const apiClient = {
     }),
   getDashboardMetrics: (shopId: string) =>
     request<DashboardMetrics>(`/api/v1/shops/${shopId}/dashboard/metrics`),
+  getDashboardTrends: (shopId: string, period: '7d' | '30d' = '7d') =>
+    request<DashboardTrends>(`/api/v1/shops/${shopId}/dashboard/trends${buildQuery({ period })}`),
   getOnboardingStatus: (shopId: string) =>
     request<OnboardingStatus>(`/api/v1/shops/${shopId}/onboarding-status`),
 

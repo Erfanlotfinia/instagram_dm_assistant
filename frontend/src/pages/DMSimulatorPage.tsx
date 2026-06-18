@@ -1,14 +1,17 @@
-import { FormEvent, ReactNode, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DataTable, EmptyState, KpiCard, LoadingState } from '../components/data';
+import type { Column } from '../components/data';
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Card, CardBody, CardHeader, Field, FilterChip, Input, SectionPanel, Select } from '../components/ui';
 import { ReplayPanel } from '../components/trust/ReplayPanel';
-import { ShopSelector } from '../components/ShopSelector';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { apiClient } from '../services/apiClient';
-import type { DMSimulatorResponse } from '../types/competitive';
+import type { DMSimulatorResponse, SimulatorRunSummary } from '../types/competitive';
 
 const EXAMPLE_MESSAGES = [
   {
@@ -42,42 +45,46 @@ function SimulatorMessagePreview({
   const hasPost = Boolean(postUrl.trim());
 
   return (
-    <aside className="dm-simulator-preview" aria-label="Message preview">
-      <div className="dm-simulator-preview__header">
-        <div className="dm-simulator-preview__avatar" aria-hidden="true">
+    <aside
+      className="grid gap-3 rounded-lg border border-accent/25 bg-gradient-to-b from-accent-soft/40 to-surface p-4 lg:order-first lg:min-h-full"
+      aria-label="Message preview"
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-sm font-bold text-white"
+          aria-hidden="true"
+        >
           {username ? username.charAt(0).toUpperCase() : '?'}
         </div>
         <div>
-          <p className="dm-simulator-preview__title">Customer preview</p>
-          <p className="dm-simulator-preview__subtitle">
-            {username ? `@${username}` : 'Select an account to preview'}
-          </p>
+          <p className="text-sm font-semibold text-fg">Customer preview</p>
+          <p className="text-xs text-muted">{username ? `@${username}` : 'Select an account to preview'}</p>
         </div>
       </div>
 
-      <div className="message-thread dm-simulator-preview__thread">
+      <div className="min-h-36 rounded-lg border border-border bg-surface p-3">
         {hasPost ? (
-          <div className="dm-simulator-preview__post">
-            <span className="dm-simulator-preview__post-label">Shared post</span>
-            <p className="dm-simulator-preview__post-url">{postUrl.trim()}</p>
+          <div className="mb-3 rounded-lg border border-dashed border-accent/40 bg-accent-soft/30 px-3 py-2">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-muted">Shared post</span>
+            <p className="mt-0.5 break-all text-xs text-accent">{postUrl.trim()}</p>
           </div>
         ) : null}
 
         {trimmedMessage ? (
-          <div className="message-bubble message-bubble--inbound">
-            <p className="message-bubble__meta">Customer</p>
-            <p className="message-bubble__text" dir="auto">
+          <div className="flex max-w-[90%] flex-col gap-1 self-start">
+            <p className="px-1 text-xs text-subtle">Customer</p>
+            <div className="rounded-2xl rounded-bl-md bg-surface-sunken px-3 py-2 text-sm leading-relaxed text-fg" dir="auto">
               {trimmedMessage}
-            </p>
+            </div>
           </div>
         ) : (
-          <p className="dm-simulator-preview__placeholder">
+          <p className="py-6 text-center text-sm text-subtle">
             Your fake customer message will appear here as you type.
           </p>
         )}
       </div>
 
-      <p className="dm-simulator-preview__footnote">
+      <p className="text-center text-xs text-muted">
         Nothing is sent to any provider — this is a local preview only.
       </p>
     </aside>
@@ -97,8 +104,8 @@ function humanizeToken(value: string | null | undefined): string {
 
 type PillTone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
 
-function SimulationStatusPill({ tone, children }: { tone: PillTone; children: ReactNode }) {
-  return <span className={`status-pill status-pill--${tone}`}>{children}</span>;
+function SimulationStatusBadge({ tone, children }: { tone: PillTone; children: ReactNode }) {
+  return <Badge tone={tone}>{children}</Badge>;
 }
 
 type HandoffReason = {
@@ -133,41 +140,39 @@ function HandoffReasonPanel({ reason }: { reason: string }) {
   const reasons = parseHandoffReasons(reason);
 
   return (
-    <section className="handoff-panel" aria-label="Handoff required">
-      <div className="handoff-panel__header">
-        <span className="status-pill status-pill--danger">Handoff required</span>
-        <p className="handoff-panel__intro">
+    <section className="rounded-lg border border-danger/30 bg-danger-soft p-4" aria-label="Handoff required">
+      <div className="mb-3 flex flex-col gap-2">
+        <Badge tone="danger">Handoff required</Badge>
+        <p className="text-sm text-muted">
           Auto-send was blocked because one or more confidence checks fell below their threshold.
         </p>
       </div>
 
-      <ul className="handoff-panel__list">
+      <ul className="grid gap-2">
         {reasons.map((item) => {
           const hasScores = item.metric !== null && item.threshold !== null;
           const pct =
             hasScores && item.threshold ? Math.min(100, (item.metric! / item.threshold) * 100) : 0;
           return (
-            <li className="handoff-reason" key={item.raw}>
-              <div className="handoff-reason__top">
-                <span className="handoff-reason__label">{item.label}</span>
+            <li className="rounded-lg border border-border bg-surface p-3" key={item.raw}>
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="font-medium text-fg">{item.label}</span>
                 {hasScores ? (
-                  <span className="handoff-reason__scores">
-                    <span className="handoff-reason__value">{item.metric!.toFixed(2)}</span>
-                    <span className="handoff-reason__divider">/</span>
-                    <span className="handoff-reason__threshold">{item.threshold!.toFixed(2)}</span>
+                  <span className="font-mono text-xs text-muted">
+                    {item.metric!.toFixed(2)} / {item.threshold!.toFixed(2)}
                   </span>
                 ) : null}
               </div>
               {hasScores ? (
                 <div
-                  className="handoff-reason__meter"
+                  className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-sunken"
                   role="meter"
                   aria-valuenow={item.metric!}
                   aria-valuemin={0}
                   aria-valuemax={item.threshold!}
                   aria-label={`${item.label}: ${item.metric!.toFixed(2)} of required ${item.threshold!.toFixed(2)}`}
                 >
-                  <span className="handoff-reason__meter-fill" style={{ width: `${pct}%` }} />
+                  <span className="block h-full rounded-full bg-warning" style={{ width: `${pct}%` }} />
                 </div>
               ) : null}
             </li>
@@ -188,18 +193,19 @@ function SimulationIdRow({
   onCopy: (value: string, label: string) => void;
 }) {
   return (
-    <div className="simulation-result__id">
-      <dt>{label}</dt>
-      <dd>
-        <code className="simulation-result__id-value">{value}</code>
-        <button
+    <div className="grid gap-1 text-sm">
+      <dt className="text-xs font-medium text-muted">{label}</dt>
+      <dd className="flex flex-wrap items-center gap-2">
+        <code className="rounded bg-surface-sunken px-2 py-0.5 font-mono text-xs">{value}</code>
+        <Button
           type="button"
-          className="simulation-result__id-copy"
+          variant="ghost"
+          size="sm"
           onClick={() => onCopy(value, label)}
           aria-label={`Copy ${label}`}
         >
           Copy
-        </button>
+        </Button>
       </dd>
     </div>
   );
@@ -225,99 +231,94 @@ function SimulationResultPanel({ result }: { result: DMSimulatorResponse }) {
   }
 
   return (
-    <section className="dashboard-card dashboard-card--wide simulation-result">
-      <div className="section-header">
-        <div>
-          <h2>Simulation result</h2>
-          <p className="dashboard-card__subtitle">
-            Outcome from the orchestrator. Nothing was sent to any provider.
-          </p>
-        </div>
-        {isSimulation ? (
-          <span className="status-pill status-pill--accent">Simulation</span>
-        ) : null}
-      </div>
-
-      <div className="simulation-result__pills" role="list" aria-label="Send decision summary">
-        <SimulationStatusPill tone={autoSendAllowed ? 'success' : 'neutral'}>
+    <Card>
+      <CardHeader
+        title="Simulation result"
+        description="Outcome from the orchestrator. Nothing was sent to any provider."
+        actions={isSimulation ? <Badge tone="accent">Simulation</Badge> : undefined}
+      />
+      <CardBody className="flex flex-col gap-4">
+      <div className="flex flex-wrap gap-2" role="list" aria-label="Send decision summary">
+        <SimulationStatusBadge tone={autoSendAllowed ? 'success' : 'neutral'}>
           {autoSendAllowed ? 'Auto-send allowed' : 'Auto-send blocked'}
-        </SimulationStatusPill>
-        <SimulationStatusPill tone={requiresPreview ? 'warning' : 'neutral'}>
+        </SimulationStatusBadge>
+        <SimulationStatusBadge tone={requiresPreview ? 'warning' : 'neutral'}>
           {requiresPreview ? 'Preview required' : 'No preview needed'}
-        </SimulationStatusPill>
-        <SimulationStatusPill tone={requiresHandoff ? 'danger' : 'neutral'}>
+        </SimulationStatusBadge>
+        <SimulationStatusBadge tone={requiresHandoff ? 'danger' : 'neutral'}>
           {requiresHandoff ? 'Handoff required' : 'No handoff'}
-        </SimulationStatusPill>
+        </SimulationStatusBadge>
       </div>
 
-      <div className="stats-grid">
-        <article className="stat-card">
-          <p className="stat-card__label">Intent</p>
-          <p className="stat-card__value">{humanizeToken(result.intent)}</p>
-          {result.intent ? <code className="stat-card__token">{result.intent}</code> : null}
-        </article>
-        <article className={`stat-card${requiresHandoff ? ' stat-card--warning' : ''}`}>
-          <p className="stat-card__label">Next state</p>
-          <p className="stat-card__value">{humanizeToken(result.next_state)}</p>
-          {result.next_state ? <code className="stat-card__token">{result.next_state}</code> : null}
-        </article>
-        <article className={`stat-card${autoSendAllowed ? ' stat-card--success' : ''}`}>
-          <p className="stat-card__label">Auto-send</p>
-          <p className="stat-card__value">{autoSendAllowed ? 'Allowed' : 'Blocked'}</p>
-        </article>
-        <article className={`stat-card${requiresHandoff ? ' stat-card--warning' : ''}`}>
-          <p className="stat-card__label">Handoff</p>
-          <p className="stat-card__value">{requiresHandoff ? 'Required' : 'No'}</p>
-        </article>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard label="Intent" value={humanizeToken(result.intent)} hint={result.intent ?? undefined} />
+        <KpiCard
+          label="Next state"
+          value={humanizeToken(result.next_state)}
+          hint={result.next_state ?? undefined}
+          tone={requiresHandoff ? 'warning' : 'accent'}
+        />
+        <KpiCard
+          label="Auto-send"
+          value={autoSendAllowed ? 'Allowed' : 'Blocked'}
+          tone={autoSendAllowed ? 'success' : 'accent'}
+        />
+        <KpiCard
+          label="Handoff"
+          value={requiresHandoff ? 'Required' : 'No'}
+          tone={requiresHandoff ? 'warning' : 'accent'}
+        />
       </div>
 
       {result.handoff_reason ? <HandoffReasonPanel reason={result.handoff_reason} /> : null}
 
-      <dl className="detail-grid simulation-result__id-grid">
+      <dl className="grid gap-3 sm:grid-cols-2">
         <SimulationIdRow label="Conversation ID" value={result.conversation_id} onCopy={copyToClipboard} />
         <SimulationIdRow label="Message ID" value={result.message_id} onCopy={copyToClipboard} />
       </dl>
 
-      <div className="match-panel simulator-reply-panel">
-        <div className="section-header">
-          <h3>Suggested reply</h3>
+      <div className="rounded-lg border border-border bg-surface-sunken p-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-fg">Suggested reply</h3>
           {result.suggested_reply ? (
-            <button
-              className="button button--ghost-dark"
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => void copyToClipboard(result.suggested_reply ?? '', 'Suggested reply')}
             >
               Copy reply
-            </button>
+            </Button>
           ) : null}
         </div>
         {result.suggested_reply ? (
-          <div className="message-thread">
-            <div className="message-bubble message-bubble--outbound">
-              <p className="message-bubble__meta">Suggested assistant reply</p>
-              <p className="message-bubble__text simulator-reply" dir="auto">
-                {result.suggested_reply}
-              </p>
+          <div className="flex flex-col items-end gap-1">
+            <p className="px-1 text-xs text-subtle">Suggested assistant reply</p>
+            <div className="max-w-[90%] rounded-2xl rounded-br-md bg-accent px-3 py-2 text-sm leading-relaxed text-accent-fg" dir="auto">
+              {result.suggested_reply}
             </div>
           </div>
         ) : (
-          <p className="empty-state">No reply generated</p>
+          <EmptyState title="No suggested reply" />
         )}
       </div>
 
       {result.draft_order ? (
-        <div className="match-panel">
-          <h3>Draft order</h3>
-          <pre className="resolver-raw-json">{JSON.stringify(result.draft_order, null, 2)}</pre>
+        <div className="rounded-lg border border-border bg-surface-sunken p-4">
+          <h3 className="mb-2 text-sm font-semibold text-fg">Draft order</h3>
+          <pre className="overflow-x-auto rounded-lg bg-fg p-3 text-xs text-canvas">{JSON.stringify(result.draft_order, null, 2)}</pre>
         </div>
       ) : null}
 
-      <div className="button-row">
-        <Link className="button button--ghost-dark" to={`/conversations/${result.conversation_id}`}>
-          Open simulation conversation
+      <div className="flex flex-wrap gap-2">
+        <Link to={`/conversations/${result.conversation_id}`}>
+          <Button type="button" variant="secondary">
+            Open simulation conversation
+          </Button>
         </Link>
       </div>
-    </section>
+      </CardBody>
+    </Card>
   );
 }
 
@@ -417,83 +418,99 @@ export function DMSimulatorPage() {
   const selectedAccount = accountsQuery.data?.find((account) => account.id === instagramAccountId);
   const messageLength = messageText.trim().length;
 
+  const runColumns: Column<SimulatorRunSummary>[] = useMemo(
+    () => [
+      {
+        key: 'message',
+        header: 'Message',
+        render: (run) => run.message_preview ?? '—',
+      },
+      {
+        key: 'intent',
+        header: 'Intent',
+        render: (run) => run.intent ?? '—',
+      },
+      {
+        key: 'state',
+        header: 'State',
+        render: (run) => run.next_state ?? '—',
+      },
+      {
+        key: 'action',
+        header: 'Action',
+        render: (run) => (
+          <Link className="font-medium text-accent hover:underline" to={`/conversations/${run.conversation_id}`}>
+            Open
+          </Link>
+        ),
+      },
+    ],
+    [],
+  );
+
   return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Safe test mode</p>
-        <h1>DM Simulator</h1>
-        <p>
-          Runs through the production orchestrator but never sends a real Instagram message. Use
-          this to test intents, product resolution, and reply drafting.
-        </p>
-        <ShopSelector />
-        <div className="filter-chips" role="tablist" aria-label="Simulator mode">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'live'}
-            className={`filter-chip${activeTab === 'live' ? ' filter-chip--active' : ''}`}
-            onClick={() => setActiveTab('live')}
-          >
-            Live simulate
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'replay'}
-            className={`filter-chip${activeTab === 'replay' ? ' filter-chip--active' : ''}`}
-            onClick={() => setActiveTab('replay')}
-          >
-            Deterministic replay
-          </button>
-        </div>
-      </section>
+    <HubPage
+      eyebrow="Safe test mode"
+      title="DM Simulator"
+      description="Runs through the production orchestrator but never sends a real Instagram message. Use this to test intents, product resolution, and reply drafting."
+    >
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Simulator mode">
+        <FilterChip
+          role="tab"
+          aria-selected={activeTab === 'live'}
+          active={activeTab === 'live'}
+          onClick={() => setActiveTab('live')}
+        >
+          Live simulate
+        </FilterChip>
+        <FilterChip
+          role="tab"
+          aria-selected={activeTab === 'replay'}
+          active={activeTab === 'replay'}
+          onClick={() => setActiveTab('replay')}
+        >
+          Deterministic replay
+        </FilterChip>
+      </div>
 
       {activeTab === 'replay' ? <ReplayPanel /> : null}
 
       {activeTab === 'live' ? (
       <>
-      <section className="dashboard-card dashboard-card--wide dm-simulator-card">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h2>Run a simulated DM</h2>
-            <p className="dashboard-card__subtitle">
-              Pick a provider/channel account, enter a fake customer message, and optionally attach a
-              shared post URL. Non-Instagram choices stay in simulation mode and never send real messages.
-            </p>
-          </div>
-          <span className="priority-badge priority-badge--medium">Test harness</span>
-        </div>
-
+      <Card>
+        <CardHeader
+          title="Run a simulated DM"
+          description="Pick a provider/channel account, enter a fake customer message, and optionally attach a shared post URL. Non-Instagram choices stay in simulation mode and never send real messages."
+          actions={<Badge tone="warning">Test harness</Badge>}
+        />
+        <CardBody>
         {!selectedShopId ? (
-          <div className="empty-state-panel dm-simulator-empty">
-            <p className="empty-state-panel__title">Select a shop first</p>
-            <p className="empty-state-panel__hint">
-              Choose a shop above to load Instagram accounts and run simulations.
-            </p>
-          </div>
+          <EmptyState
+            title="Select a shop first"
+            description="Use the shop switcher in the top bar to load Instagram accounts and run simulations."
+          />
         ) : accountsQuery.isLoading ? (
-          <p className="loading-state dm-simulator-loading">Loading Instagram accounts…</p>
+          <LoadingState label="Loading Instagram accounts…" />
         ) : (accountsQuery.data?.length ?? 0) === 0 ? (
-          <div className="empty-state-panel dm-simulator-empty">
-            <p className="empty-state-panel__title">No Instagram accounts connected</p>
-            <p className="empty-state-panel__hint">
-              Add an account under Instagram Accounts, then return here to test DM flows.
-            </p>
-            <Link className="button button--ghost-dark" to="/instagram-accounts">
-              Go to Instagram Accounts
-            </Link>
-          </div>
+          <EmptyState
+            title="No Instagram accounts connected"
+            description="Add an account under Instagram Accounts, then return here to test DM flows."
+            action={
+              <Link to="/instagram-accounts">
+                <Button type="button" variant="secondary">
+                  Go to Instagram Accounts
+                </Button>
+              </Link>
+            }
+          />
         ) : (
-          <form className="dm-simulator-form" onSubmit={submit}>
-            <div className="dm-simulator-layout">
-              <div className="dm-simulator-form__main">
-                <div className="dm-simulator-panel">
-                  <p className="dm-simulator-panel__label">Setup</p>
-                  <div className="filter-grid dm-simulator-setup">
-                    <label className="form-field">
-                      <span>Provider</span>
-                      <select
+          <form className="flex flex-col gap-4" onSubmit={submit}>
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+              <div className="flex flex-col gap-4">
+                <SectionPanel title="Setup">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Provider">
+                      <Select
                         value={provider}
                         onChange={(event) => {
                           setProvider(event.target.value as typeof provider);
@@ -505,13 +522,12 @@ export function DMSimulatorPage() {
                         <option value="telegram">Telegram</option>
                         <option value="bale">Bale</option>
                         <option value="rubika">Rubika</option>
-                      </select>
-                    </label>
+                      </Select>
+                    </Field>
 
-                    <label className="form-field">
-                      <span>{provider === 'instagram' ? 'Instagram account' : 'Channel account'}</span>
+                    <Field label={provider === 'instagram' ? 'Instagram account' : 'Channel account'}>
                       {provider === 'instagram' ? (
-                        <select
+                        <Select
                           value={instagramAccountId}
                           onChange={(event) => setInstagramAccountId(event.target.value)}
                           required
@@ -522,9 +538,9 @@ export function DMSimulatorPage() {
                               @{account.username}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       ) : (
-                        <select
+                        <Select
                           value={channelAccountId}
                           onChange={(event) => setChannelAccountId(event.target.value)}
                           required
@@ -535,39 +551,41 @@ export function DMSimulatorPage() {
                               {account.display_name}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       )}
-                    </label>
+                    </Field>
 
-                    <label className="form-field form-field--wide">
-                      <span>
-                        Shared Instagram post URL
-                        <span className="dm-simulator-optional">Optional</span>
-                      </span>
-                      <input
+                    <Field
+                      label={
+                        <>
+                          Shared Instagram post URL
+                          <span className="ml-1 text-xs font-normal text-subtle">Optional</span>
+                        </>
+                      }
+                      className="sm:col-span-2"
+                      hint="Simulates a customer DM that references a specific post."
+                    >
+                      <Input
                         value={postUrl}
                         onChange={(event) => setPostUrl(event.target.value)}
                         placeholder="https://www.instagram.com/p/…"
                         inputMode="url"
                         autoComplete="off"
                       />
-                      <span className="dm-simulator-field-hint">
-                        Simulates a customer DM that references a specific post.
-                      </span>
-                    </label>
+                    </Field>
                   </div>
-                </div>
+                </SectionPanel>
 
-                <div className="dm-simulator-panel dm-simulator-panel--compose">
-                  <div className="dm-simulator-panel__header">
-                    <p className="dm-simulator-panel__label">Compose message</p>
-                    <span className="dm-simulator-char-count" aria-live="polite">
+                <SectionPanel
+                  variant="compose"
+                  title="Compose message"
+                  actions={
+                    <span className="text-xs text-muted" aria-live="polite">
                       {messageLength} {messageLength === 1 ? 'character' : 'characters'}
                     </span>
-                  </div>
-
-                  <label className="form-field dm-simulator-compose">
-                    <span className="visually-hidden">Fake customer message</span>
+                  }
+                >
+                  <Field label={<span className="visually-hidden">Fake customer message</span>}>
                     <textarea
                       value={messageText}
                       onChange={(event) => setMessageText(event.target.value)}
@@ -575,26 +593,24 @@ export function DMSimulatorPage() {
                       dir="auto"
                       placeholder="Type what a customer might send in DM…"
                       required
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg"
                     />
-                  </label>
+                  </Field>
 
-                  <div className="form-field dm-simulator-form__examples">
-                    <span>Quick examples</span>
-                    <div className="filter-chips" role="group" aria-label="Example customer messages">
+                  <Field label="Quick examples">
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="Example customer messages">
                       {EXAMPLE_MESSAGES.map((example) => (
-                        <button
+                        <FilterChip
                           key={example.label}
-                          type="button"
-                          className={`filter-chip${messageText === example.text ? ' filter-chip--active' : ''}`}
-                          aria-pressed={messageText === example.text}
+                          active={messageText === example.text}
                           onClick={() => setMessageText(example.text)}
                         >
                           {example.label}
-                        </button>
+                        </FilterChip>
                       ))}
                     </div>
-                  </div>
-                </div>
+                  </Field>
+                </SectionPanel>
               </div>
 
               <SimulatorMessagePreview
@@ -605,73 +621,51 @@ export function DMSimulatorPage() {
             </div>
 
             {runMutation.isPending ? (
-              <p className="loading-state dm-simulator-status" role="status">
-                Running simulation through the orchestrator…
-              </p>
+              <LoadingState label="Running simulation through the orchestrator…" />
             ) : null}
 
             {runMutation.error ? (
-              <p className="form-error dm-simulator-status">
+              <p className="text-sm text-danger" role="alert">
                 {runMutation.error instanceof Error ? runMutation.error.message : 'Simulation failed'}
               </p>
             ) : null}
 
-            <div className="dm-simulator-actions">
-              <div className="button-row dm-simulator-actions__primary">
-                <button className="button button--primary" type="submit" disabled={!canRun}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" disabled={!canRun}>
                   {runMutation.isPending ? 'Running…' : 'Run simulator'}
-                </button>
-                <button className="button button--ghost-dark" type="button" onClick={resetForm}>
+                </Button>
+                <Button type="button" variant="secondary" onClick={resetForm}>
                   Clear form
-                </button>
+                </Button>
               </div>
-              <div className="button-row dm-simulator-actions__secondary">
-                <button
-                  className="button button--ghost-dark"
-                  type="button"
-                  disabled={resetMutation.isPending || !selectedShopId}
-                  onClick={() => setResetDialogOpen(true)}
-                >
-                  Reset simulation data
-                </button>
-              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={resetMutation.isPending || !selectedShopId}
+                onClick={() => setResetDialogOpen(true)}
+              >
+                Reset simulation data
+              </Button>
             </div>
           </form>
         )}
-      </section>
+        </CardBody>
+      </Card>
 
       {runMutation.data ? <SimulationResultPanel result={runMutation.data} /> : null}
 
       {selectedShopId && runsQuery.data && runsQuery.data.length > 0 ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <h2>Recent simulation runs</h2>
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th scope="col">Message</th>
-                  <th scope="col">Intent</th>
-                  <th scope="col">State</th>
-                  <th scope="col">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runsQuery.data.map((run) => (
-                  <tr key={run.conversation_id}>
-                    <td>{run.message_preview ?? '—'}</td>
-                    <td>{run.intent ?? '—'}</td>
-                    <td>{run.next_state ?? '—'}</td>
-                    <td>
-                      <Link className="table-link" to={`/conversations/${run.conversation_id}`}>
-                        Open
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <Card>
+          <CardHeader title="Recent simulation runs" />
+          <CardBody>
+            <DataTable
+              columns={runColumns}
+              rows={runsQuery.data}
+              rowKey={(run) => run.conversation_id}
+            />
+          </CardBody>
+        </Card>
       ) : null}
 
       <ConfirmDialog
@@ -685,6 +679,6 @@ export function DMSimulatorPage() {
       />
       </>
       ) : null}
-    </div>
+    </HubPage>
   );
 }

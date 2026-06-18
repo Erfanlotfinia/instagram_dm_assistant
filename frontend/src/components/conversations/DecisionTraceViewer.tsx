@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 
+import { EmptyState } from '../data';
+import { Badge, type BadgeTone } from '../ui';
 import { apiClient } from '../../services/apiClient';
 import type { AgentDecisionTrace } from '../../types/conversation';
 import { RiskBadge } from './RiskBadge';
 
-type FactTone = 'neutral' | 'success' | 'warning' | 'danger';
+type FactTone = BadgeTone;
 
 function formatTraceTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -24,7 +26,7 @@ function StatusFact({ label, value, tone }: { label: string; value: string; tone
     <div className="context-facts__item">
       <dt>{label}</dt>
       <dd>
-        <span className={`status-pill status-pill--${tone}`}>{value}</span>
+        <Badge tone={tone}>{value}</Badge>
       </dd>
     </div>
   );
@@ -81,14 +83,12 @@ export function DecisionTraceViewer({
       </header>
 
       {error ? (
-        <div role="alert" className="cc-alert cc-alert--error">
+        <div role="alert" className="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger">
           {error}
         </div>
       ) : null}
 
-      {!traces.length && !error ? (
-        <p className="empty-state">No decision traces yet.</p>
-      ) : null}
+      {!traces.length && !error ? <EmptyState title="No decision traces yet" /> : null}
 
       {traces.length ? (
         <div className="decision-trace__layout">

@@ -29,9 +29,9 @@ describe('CustomerProfilePanel', () => {
       />,
     );
 
-    expect(screen.getByText(/Preferred size:/).closest('p')).toHaveTextContent('M');
-    expect(screen.getByText(/Previous successful size:/).closest('p')).toHaveTextContent('M');
-    expect(screen.getByText(/Total paid:/).closest('p')).toHaveTextContent('99.00');
+    expect(screen.getByText('Preferred size').closest('div')).toHaveTextContent('M');
+    expect(screen.getByText('Previous successful size').closest('div')).toHaveTextContent('M');
+    expect(screen.getByText('Total paid').closest('div')).toHaveTextContent('99.00');
     expect(screen.getByText(/Black, Navy/)).toBeInTheDocument();
   });
 });
