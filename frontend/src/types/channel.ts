@@ -49,12 +49,13 @@ export interface ChannelAccountCreate {
   bot_username?: string;
   bot_id?: string;
   webhook_verify_token?: string;
+  settings?: Record<string, unknown>;
+}
+
+export interface ChannelAccountCredentials {
   webhook_secret?: string;
   access_token?: string;
   bot_token?: string;
-  app_secret?: string;
-  default_language_code?: string;
-  settings_json?: Record<string, unknown>;
 }
 
 
