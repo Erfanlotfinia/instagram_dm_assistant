@@ -76,7 +76,7 @@ class ChannelProviderAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def send_message(self, message: NormalizedOutboundMessage) -> ProviderSendResult:
+    async def send_message(self, message: NormalizedOutboundMessage, account: Any | None = None) -> ProviderSendResult:
         raise NotImplementedError
 
     async def send_typing_or_chat_action(

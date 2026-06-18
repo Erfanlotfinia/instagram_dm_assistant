@@ -37,8 +37,7 @@ class StaticTokenAdapter(ChannelProviderAdapter):
         if not self.webhook_secret:
             return False
         return (
-            request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-            == self.webhook_secret
+            request.headers.get("X-Telegram-Bot-Api-Secret-Token") == self.webhook_secret
             or request.headers.get("X-Webhook-Secret") == self.webhook_secret
         )
 
@@ -46,8 +45,18 @@ class StaticTokenAdapter(ChannelProviderAdapter):
 class InstagramProviderAdapter(StaticTokenAdapter):
     provider = ChannelProvider.INSTAGRAM
 
-    def __init__(self, app_secret: str | None = None) -> None:
+    def __init__(
+        self,
+        access_token: str | None = None,
+        app_secret: str | None = None,
+        api_version: str | None = None,
+        api_base_url: str | None = None,
+    ) -> None:
+        settings = get_settings()
+        self.token = access_token
         self.webhook_secret = app_secret
+        self.api_version = api_version or settings.meta_graph_api_version
+        self.api_base_url = (api_base_url or settings.meta_graph_api_base_url).rstrip("/")
 
     async def verify_webhook(self, request: Request) -> bool:
         if not self.webhook_secret:
@@ -56,9 +65,7 @@ class InstagramProviderAdapter(StaticTokenAdapter):
         signature = request.headers.get("X-Hub-Signature-256")
         if not signature or not signature.startswith("sha256="):
             return False
-        digest = hmac.new(
-            self.webhook_secret.encode(), body, hashlib.sha256
-        ).hexdigest()
+        digest = hmac.new(self.webhook_secret.encode(), body, hashlib.sha256).hexdigest()
         return hmac.compare_digest(signature, f"sha256={digest}")
 
     def parse_inbound_update(
@@ -91,14 +98,51 @@ class InstagramProviderAdapter(StaticTokenAdapter):
         return messages
 
     async def send_message(
-        self, message: NormalizedOutboundMessage
+        self, message: NormalizedOutboundMessage, account: Any | None = None
     ) -> ProviderSendResult:
+        if not self.token:
+            return ProviderSendResult(
+                provider=self.provider,
+                success=False,
+                error_code="missing_credentials",
+                error_message="Instagram access token is missing",
+            )
+        if message.message_type != ChannelMessageType.TEXT:
+            return ProviderSendResult(
+                provider=self.provider,
+                success=False,
+                error_code="unsupported_provider_capability",
+                error_message="Instagram outbound currently supports text messages only",
+            )
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.post(
+                    f"{self.api_base_url}/{self.api_version}/me/messages",
+                    headers={"Authorization": f"Bearer {self.token}"},
+                    json={
+                        "recipient": {"id": message.external_chat_id},
+                        "message": {"text": message.text or ""},
+                    },
+                )
+            data = response.json()
+        except httpx.RequestError:
+            return ProviderSendResult(
+                provider=self.provider,
+                success=False,
+                error_code="network_error",
+                error_message="Instagram request failed",
+                retryable=True,
+            )
+        error = data.get("error", {}) if isinstance(data, dict) else {}
+        success = response.is_success and isinstance(data, dict) and bool(data.get("message_id"))
         return ProviderSendResult(
             provider=self.provider,
-            success=False,
-            error_code="not_configured",
-            error_message="Instagram outbound is still handled by InstagramOutboundSender",
-            retryable=False,
+            success=success,
+            external_message_id=data.get("message_id") if success else None,
+            raw_response=data if isinstance(data, dict) else {"status_code": response.status_code},
+            error_code=None if success else str(error.get("code") or response.status_code),
+            error_message=None if success else error.get("message", "Instagram send failed"),
+            retryable=response.status_code == 429 or response.status_code >= 500,
         )
 
     def get_capabilities(self) -> ChannelCapabilities:
@@ -131,9 +175,7 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
         self.verify_token = verify_token
         self.webhook_secret = app_secret or webhook_secret
         self.api_version = api_version or settings.meta_graph_api_version
-        self.api_base_url = (api_base_url or settings.meta_graph_api_base_url).rstrip(
-            "/"
-        )
+        self.api_base_url = (api_base_url or settings.meta_graph_api_base_url).rstrip("/")
 
     async def verify_webhook(self, request: Request) -> bool:
         if not self.webhook_secret:
@@ -142,9 +184,7 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
         signature = request.headers.get("X-Hub-Signature-256")
         if not signature or not signature.startswith("sha256="):
             return False
-        digest = hmac.new(
-            self.webhook_secret.encode(), body, hashlib.sha256
-        ).hexdigest()
+        digest = hmac.new(self.webhook_secret.encode(), body, hashlib.sha256).hexdigest()
         return hmac.compare_digest(signature, f"sha256={digest}")
 
     def parse_inbound_update(
@@ -163,9 +203,7 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
                             provider=self.provider,
                             external_update_id=status_item.get("id"),
                             external_message_id=status_item.get("id") or "status",
-                            external_chat_id=str(
-                                status_item.get("recipient_id") or phone_id or ""
-                            ),
+                            external_chat_id=str(status_item.get("recipient_id") or phone_id or ""),
                             external_user_id=str(status_item.get("recipient_id") or ""),
                             message_type=ChannelMessageType.UNKNOWN,
                             raw_payload={
@@ -197,9 +235,7 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
                     order = msg.get("order") if msg_type == "order" else None
                     if msg_type in {"image", "video", "audio", "voice", "document"}:
                         media_key = (
-                            "audio"
-                            if msg_type == "voice" and "voice" not in msg
-                            else msg_type
+                            "audio" if msg_type == "voice" and "voice" not in msg else msg_type
                         )
                         media = msg.get(media_key, {})
                         caption = media.get("caption")
@@ -213,9 +249,7 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
                     if msg_type == "interactive":
                         interactive = msg.get("interactive", {})
                         reply = (
-                            interactive.get("button_reply")
-                            or interactive.get("list_reply")
-                            or {}
+                            interactive.get("button_reply") or interactive.get("list_reply") or {}
                         )
                         button_id = reply.get("id")
                         button_text = reply.get("title") or reply.get("text")
@@ -236,8 +270,7 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
                             phone=sender,
                             message_type=(
                                 ChannelMessageType(normalized_type)
-                                if normalized_type
-                                in ChannelMessageType._value2member_map_
+                                if normalized_type in ChannelMessageType._value2member_map_
                                 else ChannelMessageType.UNKNOWN
                             ),
                             text=text,
@@ -246,11 +279,7 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
                             button_id=button_id,
                             button_text=button_text,
                             location=location,
-                            contact=(
-                                {"contacts": contact_payload}
-                                if contact_payload
-                                else None
-                            ),
+                            contact=({"contacts": contact_payload} if contact_payload else None),
                             raw_payload={
                                 "message": msg,
                                 "phone_number_id": phone_id,
@@ -267,9 +296,7 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
                     )
         return result
 
-    def _payload_for_message(
-        self, message: NormalizedOutboundMessage
-    ) -> dict[str, Any]:
+    def _payload_for_message(self, message: NormalizedOutboundMessage) -> dict[str, Any]:
         base: dict[str, Any] = {
             "messaging_product": "whatsapp",
             "to": message.external_chat_id,
@@ -286,9 +313,7 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
                 }
             )
             if message.template_params:
-                base["template"]["components"] = message.template_params.get(
-                    "components", []
-                )
+                base["template"]["components"] = message.template_params.get("components", [])
             return base
         if message.buttons:
             base.update(
@@ -331,7 +356,7 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
         return base
 
     async def send_message(
-        self, message: NormalizedOutboundMessage
+        self, message: NormalizedOutboundMessage, account: Any | None = None
     ) -> ProviderSendResult:
         if not self.token or not self.phone_number_id:
             return ProviderSendResult(
@@ -370,19 +395,13 @@ class WhatsAppProviderAdapter(StaticTokenAdapter):
             provider=self.provider,
             success=response.is_success,
             external_message_id=(
-                ((data.get("messages") or [{}])[0]).get("id")
-                if isinstance(data, dict)
-                else None
+                ((data.get("messages") or [{}])[0]).get("id") if isinstance(data, dict) else None
             ),
             raw_response=data if isinstance(data, dict) else {"text": response.text},
             error_code=(
-                None
-                if response.is_success
-                else str(error.get("code") or response.status_code)
+                None if response.is_success else str(error.get("code") or response.status_code)
             ),
-            error_message=(
-                None if response.is_success else error.get("message", response.text)
-            ),
+            error_message=(None if response.is_success else error.get("message", response.text)),
             retryable=retryable,
         )
 
@@ -433,15 +452,9 @@ class TelegramProviderAdapter(StaticTokenAdapter):
             return []
         user = callback.get("from") if callback else msg.get("from", {})
         chat = msg.get("chat", {})
-        text = (
-            callback.get("data")
-            if callback
-            else (msg.get("text") or msg.get("caption"))
-        )
+        text = callback.get("data") if callback else (msg.get("text") or msg.get("caption"))
         media_items: list[MediaItem] = []
-        msg_type = (
-            ChannelMessageType.TEXT if msg.get("text") else ChannelMessageType.UNKNOWN
-        )
+        msg_type = ChannelMessageType.TEXT if msg.get("text") else ChannelMessageType.UNKNOWN
         for key, ctype in [
             ("photo", ChannelMessageType.IMAGE),
             ("video", ChannelMessageType.VIDEO),
@@ -467,9 +480,7 @@ class TelegramProviderAdapter(StaticTokenAdapter):
             msg_type = ChannelMessageType.LOCATION
         if msg.get("contact"):
             msg_type = ChannelMessageType.CONTACT
-        external_message_id = str(
-            callback.get("id") if callback else msg.get("message_id")
-        )
+        external_message_id = str(callback.get("id") if callback else msg.get("message_id"))
         raw_payload = {
             **payload,
             "is_edited_message": bool(edited),
@@ -484,13 +495,9 @@ class TelegramProviderAdapter(StaticTokenAdapter):
                 external_chat_id=str(chat.get("id")),
                 external_user_id=str(user.get("id")),
                 username=user.get("username"),
-                display_name=" ".join(
-                    filter(None, [user.get("first_name"), user.get("last_name")])
-                )
+                display_name=" ".join(filter(None, [user.get("first_name"), user.get("last_name")]))
                 or None,
-                message_type=(
-                    ChannelMessageType.BUTTON_CALLBACK if callback else msg_type
-                ),
+                message_type=(ChannelMessageType.BUTTON_CALLBACK if callback else msg_type),
                 text=text,
                 caption=msg.get("caption"),
                 media_items=media_items,
@@ -508,9 +515,7 @@ class TelegramProviderAdapter(StaticTokenAdapter):
     def _method_url(self, method: str) -> str:
         return f"{self.api_base}/bot{self.token}/{method}"
 
-    async def _post_method(
-        self, method: str, payload: dict[str, Any]
-    ) -> ProviderSendResult:
+    async def _post_method(self, method: str, payload: dict[str, Any]) -> ProviderSendResult:
         if not self.token:
             return ProviderSendResult(
                 provider=self.provider,
@@ -534,8 +539,7 @@ class TelegramProviderAdapter(StaticTokenAdapter):
             response.status_code == 429
             or response.status_code >= 500
             or (
-                isinstance(data, dict)
-                and data.get("parameters", {}).get("retry_after") is not None
+                isinstance(data, dict) and data.get("parameters", {}).get("retry_after") is not None
             )
         )
         ok = response.is_success and isinstance(data, dict) and data.get("ok", False)
@@ -572,11 +576,10 @@ class TelegramProviderAdapter(StaticTokenAdapter):
         )
 
     async def send_message(
-        self, message: NormalizedOutboundMessage
+        self, message: NormalizedOutboundMessage, account: Any | None = None
     ) -> ProviderSendResult:
-        if (
-            message.message_type == ChannelMessageType.BUTTON_CALLBACK
-            and message.metadata.get("callback_query_id")
+        if message.message_type == ChannelMessageType.BUTTON_CALLBACK and message.metadata.get(
+            "callback_query_id"
         ):
             return await self._post_method(
                 "answerCallbackQuery",
@@ -724,17 +727,13 @@ class RubikaProviderAdapter(TelegramProviderAdapter):
             or update.get("sender_id")
             or ""
         )
-        user_id = str(
-            update.get("sender_id") or update.get("from", {}).get("id") or chat_id
-        )
+        user_id = str(update.get("sender_id") or update.get("from", {}).get("id") or chat_id)
         if not chat_id:
             return []
         return [
             NormalizedInboundMessage(
                 provider=self.provider,
-                external_update_id=str(
-                    update.get("update_id") or update.get("message_id")
-                ),
+                external_update_id=str(update.get("update_id") or update.get("message_id")),
                 external_message_id=str(update.get("message_id") or update.get("id")),
                 external_chat_id=chat_id,
                 external_user_id=user_id,
@@ -753,7 +752,7 @@ class RubikaProviderAdapter(TelegramProviderAdapter):
         ]
 
     async def send_message(
-        self, message: NormalizedOutboundMessage
+        self, message: NormalizedOutboundMessage, account: Any | None = None
     ) -> ProviderSendResult:
         payload: dict[str, Any] = {
             "chat_id": message.external_chat_id,

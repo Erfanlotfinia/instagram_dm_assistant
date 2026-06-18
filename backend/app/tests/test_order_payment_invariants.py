@@ -29,7 +29,7 @@ def test_send_payment_link_requires_customer_confirmation(
     assert "Customer confirmation" in response.json()["detail"]
 
 
-@patch("app.services.instagram_send_service.InstagramSendService.send_text_message")
+@patch("app.services.channel_outbound_service.ChannelOutboundService.send_text_message")
 def test_send_payment_link_admin_override(
     mock_send, client, auth_headers, db_session, demo_shop, admin_user
 ) -> None:
@@ -73,7 +73,7 @@ def test_mark_paid_without_reservation_fails(client, auth_headers, db_session, d
     assert "reservation" in response.json()["detail"].lower()
 
 
-@patch("app.services.instagram_send_service.InstagramSendService.send_text_message")
+@patch("app.services.channel_outbound_service.ChannelOutboundService.send_text_message")
 def test_mark_paid_idempotent(mock_send, client, auth_headers, db_session, demo_shop, admin_user) -> None:
     data = seed_order_flow_data(db_session, demo_shop)
     order = seed_draft_order(

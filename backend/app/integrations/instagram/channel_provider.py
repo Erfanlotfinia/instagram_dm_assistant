@@ -56,7 +56,7 @@ class InstagramChannelProvider:
         return messages
 
     def send_message(self, message: OutboundMessage) -> str | None:
-        raise NotImplementedError("Use InstagramSendService for authenticated production sends.")
+        raise NotImplementedError("Use ChannelOutboundService for authenticated production sends.")
 
     def _extract_shared_post_url(self, message: dict[str, Any]) -> str | None:
         for attachment in message.get("attachments") or []:
