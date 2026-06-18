@@ -2,6 +2,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ValidationError
 
+from app.domain.enums import ChannelProvider
+
 
 class InvalidJobPayloadError(Exception):
     """Raised when a job payload cannot be processed and should not be retried."""
@@ -11,7 +13,9 @@ class MessageReceivedJob(BaseModel):
     message_id: UUID
     conversation_id: UUID
     shop_id: UUID
-    instagram_account_id: UUID
+    instagram_account_id: UUID | None = None
+    channel_provider: ChannelProvider | None = None
+    channel_account_id: UUID | None = None
     customer_id: UUID
     webhook_event_id: UUID | None = None
 

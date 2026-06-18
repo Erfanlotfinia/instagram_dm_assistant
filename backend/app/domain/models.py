@@ -254,11 +254,12 @@ class ChannelContactIdentity(Base, TimestampMixin):
     provider: Mapped[ChannelProvider] = mapped_column(pg_enum(ChannelProvider, name="channel_provider"), nullable=False, index=True)
     channel_account_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("channel_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     external_user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    external_chat_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    raw_profile_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    customer_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
+    raw_profile_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    customer_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
 
 
 class ChannelConversation(Base, TimestampMixin):
@@ -336,17 +337,21 @@ class WhatsAppMessageTemplate(Base, TimestampMixin):
 
 class Customer(Base, TimestampMixin):
     __tablename__ = "customers"
-    __table_args__ = (
-        UniqueConstraint("shop_id", "instagram_user_id", name="uq_customers_shop_instagram_user"),
-    )
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     shop_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    instagram_user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    primary_channel_provider: Mapped[ChannelProvider | None] = mapped_column(
+        pg_enum(ChannelProvider, name="channel_provider"), nullable=True, index=True
+    )
+    primary_external_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    # Legacy profile fields remain nullable during the compatibility window.
+    instagram_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     city: Mapped[str | None] = mapped_column(String(128), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     postal_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -358,6 +363,9 @@ class Customer(Base, TimestampMixin):
     preferences: Mapped[CustomerPreferences | None] = relationship(
         back_populates="customer", cascade="all, delete-orphan", uselist=False
     )
+    channel_identities: Mapped[list[ChannelContactIdentity]] = relationship(
+        cascade="all, delete-orphan"
+    )
 
 
 class Conversation(Base, TimestampMixin):
@@ -367,13 +375,18 @@ class Conversation(Base, TimestampMixin):
     shop_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    instagram_account_id: Mapped[UUID] = mapped_column(
+    instagram_account_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("instagram_accounts.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
+    channel_account_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("channel_accounts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     channel_provider: Mapped[str] = mapped_column(String(32), nullable=False, default="instagram", index=True)
+    external_conversation_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    external_thread_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     channel_conversation_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     channel_customer_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     trigger_rule_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("comment_to_dm_triggers.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -415,7 +428,7 @@ class Conversation(Base, TimestampMixin):
     needs_attention: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
 
     shop: Mapped[Shop] = relationship(back_populates="conversations")
-    instagram_account: Mapped[InstagramAccount] = relationship(back_populates="conversations")
+    instagram_account: Mapped[InstagramAccount | None] = relationship(back_populates="conversations")
     customer: Mapped[Customer] = relationship(back_populates="conversations")
     assigned_operator: Mapped[User | None] = relationship(
         back_populates="assigned_conversations",
@@ -528,6 +541,9 @@ class Message(Base):
     )
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     conversation_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("conversations.id", ondelete="CASCADE"),
@@ -537,6 +553,17 @@ class Message(Base):
     direction: Mapped[MessageDirection] = mapped_column(
         pg_enum(MessageDirection, name="message_direction"), nullable=False
     )
+    customer_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    channel_provider: Mapped[ChannelProvider] = mapped_column(
+        pg_enum(ChannelProvider, name="channel_provider"), nullable=False, index=True
+    )
+    channel_account_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("channel_accounts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    external_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    external_update_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     channel: Mapped[MessageChannel] = mapped_column(
         pg_enum(MessageChannel, name="message_channel"), nullable=False, default=MessageChannel.INSTAGRAM
     )
@@ -545,7 +572,10 @@ class Message(Base):
     raw_channel_payload_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("raw_channel_payloads.id", ondelete="SET NULL"), nullable=True, index=True)
     message_type: Mapped[MessageType] = mapped_column(pg_enum(MessageType, name="message_type"), nullable=False)
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    raw_payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    normalized_payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     is_simulation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
