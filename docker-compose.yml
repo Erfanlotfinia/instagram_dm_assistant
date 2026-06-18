@@ -3,20 +3,58 @@ services:
     build:
       context: ./backend
     command: ["sh", "-c", "alembic upgrade head && python -m app.scripts.ensure_admin && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/instagram_dm_assistant}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
-      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
-      APP_ENV: ${APP_ENV:-local}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-local-development}
-      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-local-dev-token-encryption-key-32b!}
-      INSTAGRAM_WEBHOOK_VERIFY_TOKEN: ${INSTAGRAM_WEBHOOK_VERIFY_TOKEN:-local-instagram-verify-token}
-      ENABLE_REAL_INSTAGRAM_SEND: ${ENABLE_REAL_INSTAGRAM_SEND:-false}
-      CONVERSATION_LOCK_TTL_SECONDS: ${CONVERSATION_LOCK_TTL_SECONDS:-120}
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_APP_USER:?missing}:${POSTGRES_APP_PASSWORD:?missing}@postgres:5432/${POSTGRES_DB:?missing}"
+      REDIS_URL: "redis://redis:6379/0"
+      RABBITMQ_URL: "amqp://${RABBITMQ_DEFAULT_USER:?missing}:${RABBITMQ_DEFAULT_PASS:?missing}@rabbitmq:5672/"
+      QDRANT_URL: "http://qdrant:6333"
+
+      APP_ENV: "${APP_ENV:?missing}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY:?missing}"
+      TOKEN_ENCRYPTION_KEY: "${TOKEN_ENCRYPTION_KEY:?missing}"
+      CORS_ORIGINS: "${CORS_ORIGINS:?missing}"
+
+      LLM_MODE: "${LLM_MODE:-mock}"
+      LLM_PROVIDER: "${LLM_PROVIDER:-gemini}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_API_BASE_URL: "${OPENAI_API_BASE_URL:-}"
+      OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4o-mini}"
+      OPENAI_EMBEDDING_MODEL: "${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-2.5-flash}"
+      GEMINI_EMBEDDING_MODEL: "${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}"
+
+      DEFAULT_MODEL_VERSION: "${DEFAULT_MODEL_VERSION:-gpt-4o-mini}"
+      DEFAULT_PROMPT_VERSION: "${DEFAULT_PROMPT_VERSION:-trust-layer-v1}"
+      DEFAULT_POLICY_VERSION: "${DEFAULT_POLICY_VERSION:-trust-layer-v1}"
+
+      WEBHOOK_SIGNATURE_BYPASS: "${WEBHOOK_SIGNATURE_BYPASS:-false}"
+      INSTAGRAM_WEBHOOK_VERIFY_TOKEN: "${INSTAGRAM_WEBHOOK_VERIFY_TOKEN:?missing}"
+      INSTAGRAM_APP_SECRET: "${INSTAGRAM_APP_SECRET:?missing}"
+      ENABLE_REAL_INSTAGRAM_SEND: "${ENABLE_REAL_INSTAGRAM_SEND:-false}"
+
+      CONVERSATION_LOCK_TTL_SECONDS: "${CONVERSATION_LOCK_TTL_SECONDS:-120}"
+      RATE_LIMIT_ENABLED: "${RATE_LIMIT_ENABLED:-true}"
+      RATE_LIMIT_LOGIN_PER_MINUTE: "${RATE_LIMIT_LOGIN_PER_MINUTE:-5}"
+      RATE_LIMIT_WEBHOOK_PER_MINUTE: "${RATE_LIMIT_WEBHOOK_PER_MINUTE:-120}"
+      RATE_LIMIT_OUTBOUND_MESSAGE_PER_MINUTE: "${RATE_LIMIT_OUTBOUND_MESSAGE_PER_MINUTE:-30}"
+
+      RABBITMQ_MAX_RETRIES: "${RABBITMQ_MAX_RETRIES:-3}"
+      RABBITMQ_RETRY_DELAY_MS: "${RABBITMQ_RETRY_DELAY_MS:-30000}"
+      BACKGROUND_JOB_INTERVAL_SECONDS: "${BACKGROUND_JOB_INTERVAL_SECONDS:-60}"
+      EMBEDDING_REFRESH_BATCH_SIZE: "${EMBEDDING_REFRESH_BATCH_SIZE:-50}"
+
+      DEFAULT_ADMIN_EMAIL: "${DEFAULT_ADMIN_EMAIL:?missing}"
+      DEFAULT_ADMIN_PASSWORD: "${DEFAULT_ADMIN_PASSWORD:?missing}"
+      DEFAULT_ADMIN_NAME: "${DEFAULT_ADMIN_NAME:-Platform Admin}"
+
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
     ports:
-      - "${BACKEND_HOST_PORT:-8800}:8000"
+      - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_HOST_PORT:-8000}:8000"
     networks:
       - public
       - private
@@ -30,30 +68,36 @@ services:
       qdrant:
         condition: service_healthy
     healthcheck:
-      test:
-        - CMD-SHELL
-        - python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)\""]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
     volumes:
-      - ./backend/app:/app/app
-      - ./backend/alembic.ini:/app/alembic.ini
-      - ./.env:/app/.env:ro
+      - ./backend/app:/app/app:ro
+      - ./backend/alembic.ini:/app/alembic.ini:ro
 
   worker:
     build:
       context: ./backend
     command: ["python", "-m", "app.workers.main"]
+    restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/instagram_dm_assistant}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
-      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
-      APP_ENV: ${APP_ENV:-local}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      CONVERSATION_LOCK_TTL_SECONDS: ${CONVERSATION_LOCK_TTL_SECONDS:-120}
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_APP_USER:?missing}:${POSTGRES_APP_PASSWORD:?missing}@postgres:5432/${POSTGRES_DB:?missing}"
+      REDIS_URL: "redis://redis:6379/0"
+      RABBITMQ_URL: "amqp://${RABBITMQ_DEFAULT_USER:?missing}:${RABBITMQ_DEFAULT_PASS:?missing}@rabbitmq:5672/"
+      QDRANT_URL: "http://qdrant:6333"
+      APP_ENV: "${APP_ENV:?missing}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY:?missing}"
+      TOKEN_ENCRYPTION_KEY: "${TOKEN_ENCRYPTION_KEY:?missing}"
+      CONVERSATION_LOCK_TTL_SECONDS: "${CONVERSATION_LOCK_TTL_SECONDS:-120}"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
     networks:
       - private
     depends_on:
@@ -65,22 +109,30 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
     volumes:
-      - ./backend/app:/app/app
-      - ./.env:/app/.env:ro
+      - ./backend/app:/app/app:ro
 
   scheduler:
     build:
       context: ./backend
     command: ["python", "-m", "app.workers.scheduler"]
+    restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/instagram_dm_assistant}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
-      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
-      APP_ENV: ${APP_ENV:-local}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      BACKGROUND_JOB_INTERVAL_SECONDS: ${BACKGROUND_JOB_INTERVAL_SECONDS:-60}
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_APP_USER:?missing}:${POSTGRES_APP_PASSWORD:?missing}@postgres:5432/${POSTGRES_DB:?missing}"
+      REDIS_URL: "redis://redis:6379/0"
+      RABBITMQ_URL: "amqp://${RABBITMQ_DEFAULT_USER:?missing}:${RABBITMQ_DEFAULT_PASS:?missing}@rabbitmq:5672/"
+      QDRANT_URL: "http://qdrant:6333"
+      APP_ENV: "${APP_ENV:?missing}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY:?missing}"
+      TOKEN_ENCRYPTION_KEY: "${TOKEN_ENCRYPTION_KEY:?missing}"
+      BACKGROUND_JOB_INTERVAL_SECONDS: "${BACKGROUND_JOB_INTERVAL_SECONDS:-60}"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
     networks:
       - private
     depends_on:
@@ -90,23 +142,29 @@ services:
         condition: service_healthy
       backend:
         condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
     volumes:
-      - ./backend/app:/app/app
-      - ./.env:/app/.env:ro
+      - ./backend/app:/app/app:ro
 
   frontend:
     build:
       context: ./frontend
+    restart: unless-stopped
     environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8800}
-      VITE_LANDING_URL: ${VITE_LANDING_URL:-http://localhost:5174}
+      VITE_API_BASE_URL: "${VITE_API_BASE_URL:?missing}"
+      VITE_LANDING_URL: "${VITE_LANDING_URL:?missing}"
     ports:
-      - "${FRONTEND_HOST_PORT:-5173}:5173"
+      - "${FRONTEND_BIND_IP:-127.0.0.1}:${FRONTEND_HOST_PORT:-5173}:5173"
     networks:
       - public
     depends_on:
       backend:
         condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
@@ -114,43 +172,53 @@ services:
   landing:
     build:
       context: ./landing
+    restart: unless-stopped
     environment:
-      LANDING_PORT: ${LANDING_PORT:-5174}
-      VITE_FRONTEND_URL: ${VITE_FRONTEND_URL:-http://localhost:5173}
+      LANDING_PORT: "${LANDING_PORT:-5174}"
+      VITE_FRONTEND_URL: "${VITE_FRONTEND_URL:?missing}"
     ports:
-      - "${LANDING_HOST_PORT:-5174}:${LANDING_PORT:-5174}"
+      - "${LANDING_BIND_IP:-127.0.0.1}:${LANDING_HOST_PORT:-5174}:${LANDING_PORT:-5174}"
     networks:
       - public
     depends_on:
       frontend:
         condition: service_started
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./landing:/app
       - landing_node_modules:/app/node_modules
 
   postgres:
     image: postgres:18-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: instagram_dm_assistant
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: "${POSTGRES_DB:?missing}"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "${POSTGRES_SUPERUSER_PASSWORD:?missing}"
+      POSTGRES_APP_USER: "${POSTGRES_APP_USER:?missing}"
+      POSTGRES_APP_PASSWORD: "${POSTGRES_APP_PASSWORD:?missing}"
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
     networks:
       - private
     volumes:
       - postgres_data:/var/lib/postgresql
+      - ./docker/postgres/init-app-user.sh:/docker-entrypoint-initdb.d/001-init-app-user.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d instagram_dm_assistant"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
 
   redis:
     image: redis:8.8-alpine
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--protected-mode", "no"]
     networks:
       - private
     volumes:
@@ -161,12 +229,16 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    security_opt:
+      - no-new-privileges:true
 
   rabbitmq:
     image: rabbitmq:4.3.1-management-alpine
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_DEFAULT_USER:?missing}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_DEFAULT_PASS:?missing}"
+      RABBITMQ_DEFAULT_VHOST: "/"
     networks:
       - private
     volumes:
@@ -176,29 +248,34 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
 
   qdrant:
     image: qdrant/qdrant:v1.18
-    ports:
-      - "6333:6333"
-      - "6334:6334"
+    restart: unless-stopped
     networks:
       - private
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/6333"]
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/6333'"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
 
 networks:
   public:
     driver: bridge
   private:
     driver: bridge
+    internal: true
 
 volumes:
   frontend_node_modules:
