@@ -42,7 +42,7 @@ from app.services.auto_send_decision_service import AutoSendDecisionInput, AutoS
 from app.services.decision_trace_service import DecisionTraceService
 from app.services.handoff_service import evaluate_handoff
 from app.services.instagram_product_resolver import InstagramProductResolver
-from app.services.instagram_send_service import InstagramSendService
+from app.services.channel_outbound_service import ChannelOutboundService
 from app.services.llm_extraction_service import LLMExtractionProtocol, LLMExtractionService, mask_sensitive_llm_output
 from app.services.order_service import OrderService
 from app.services.agent_risk_scoring_service import AgentRiskScoringInput, AgentRiskScoringService
@@ -89,7 +89,7 @@ class ConversationOrchestrator:
         self.variants = VariantRepository(db)
         self.product_resolver = InstagramProductResolver(db)
         self.variant_resolver = VariantResolver(db)
-        self.send_service = InstagramSendService(db, self.settings)
+        self.send_service = ChannelOutboundService(db, self.settings)
         self.response_service = ResponseGenerationService()
         self.order_service = OrderService(db, settings=self.settings)
         self.payment_service = PaymentService(db, settings=self.settings)

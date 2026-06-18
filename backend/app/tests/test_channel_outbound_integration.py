@@ -6,10 +6,10 @@ from app.domain.enums import (
     MessageDirection,
 )
 from app.domain.models import ChannelAccount, Conversation, Customer, InstagramAccount
-from app.services.instagram_send_service import InstagramSendService
+from app.services.channel_outbound_service import ChannelOutboundService
 
 
-def test_placeholder_send_stores_outbound_message(db_session, demo_shop) -> None:
+def test_channel_outbound_stores_outbound_message(db_session, demo_shop) -> None:
     account = InstagramAccount(
         shop_id=demo_shop.id,
         ig_user_id="17841400000000001",
@@ -42,7 +42,8 @@ def test_placeholder_send_stores_outbound_message(db_session, demo_shop) -> None
     db_session.add(conversation)
     db_session.commit()
 
-    message = InstagramSendService(db_session).send_text_message(conversation.id, "Thanks!")
+    message = ChannelOutboundService(db_session).send_text_message(conversation.id, "Thanks!")
     assert message.direction == MessageDirection.OUTBOUND
     assert message.text == "Thanks!"
-    assert message.raw_payload["mode"] == "placeholder"
+    assert message.raw_payload["success"] is True
+    assert message.raw_payload["raw_response"]["simulation"] is True

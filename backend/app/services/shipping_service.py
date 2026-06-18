@@ -22,7 +22,7 @@ from app.schemas.order import OrderShipRequest
 from app.services.audit_service import AuditService
 from app.services.conversation_event_service import ConversationEventService
 from app.services.conversation_priority_service import ConversationPriorityService
-from app.services.instagram_send_service import InstagramSendService
+from app.services.channel_outbound_service import ChannelOutboundService
 from app.services.order_service import OrderService
 from app.services.shop_service import ShopService
 
@@ -100,7 +100,7 @@ class ShippingService:
             tracking_text = f"کد رهگیری سفارش شما: {payload.tracking_code}"
             if payload.tracking_url:
                 tracking_text += f"\n{payload.tracking_url}"
-            InstagramSendService(self.db).send_text_message(order.conversation_id, tracking_text)
+            ChannelOutboundService(self.db).send_text_message(order.conversation_id, tracking_text)
             ConversationEventService(self.db).record(
                 order.conversation_id,
                 ConversationEventType.ORDER_SHIPPED,

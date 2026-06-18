@@ -8,7 +8,7 @@ from app.core.config import Settings, get_settings
 from app.db.session import get_db_session
 from app.schemas.order import OrderRead
 from app.schemas.payment import MockPaymentCallbackRequest
-from app.services.instagram_send_service import InstagramSendService
+from app.services.channel_outbound_service import ChannelOutboundService
 from app.services.order_service import OrderService
 from app.services.payment_service import PaymentService
 
@@ -30,7 +30,7 @@ def mock_payment_callback(
     )
 
     if payload.status.value == "paid":
-        send_service = InstagramSendService(db, settings)
+        send_service = ChannelOutboundService(db, settings)
         message = (
             f"پرداخت شما با موفقیت انجام شد.\n"
             f"شماره سفارش: {order.id}\n"
@@ -53,7 +53,7 @@ def mock_payment_page(
     from app.domain.enums import PaymentRecordStatus
 
     order = payment_service.handle_mock_callback(payment_id, PaymentRecordStatus.PAID)
-    send_service = InstagramSendService(db, settings)
+    send_service = ChannelOutboundService(db, settings)
     message = (
         f"پرداخت شما با موفقیت انجام شد.\n"
         f"شماره سفارش: {order.id}\n"

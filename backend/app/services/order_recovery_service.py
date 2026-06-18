@@ -25,7 +25,7 @@ from app.domain.models import (
     User,
 )
 from app.schemas.recovery import RecoveryRuleCreate, RecoveryRuleRead, RecoveryRuleUpdate
-from app.services.instagram_send_service import InstagramSendService
+from app.services.channel_outbound_service import ChannelOutboundService
 from app.services.shop_service import ShopService
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class OrderRecoveryService:
         self.db = db
         self.settings = settings or get_settings()
         self.shop_service = ShopService(db)
-        self.send_service = InstagramSendService(db, self.settings)
+        self.send_service = ChannelOutboundService(db, self.settings)
 
     def list_rules(self, shop_id: UUID, user: User) -> list[RecoveryRuleRead]:
         self.shop_service.get_shop(shop_id, user)

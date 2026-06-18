@@ -6,11 +6,21 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.channels.adapters import BaleProviderAdapter, InstagramProviderAdapter, RubikaProviderAdapter, TelegramProviderAdapter, WhatsAppProviderAdapter
+from app.channels.adapters import (
+    BaleProviderAdapter,
+    InstagramProviderAdapter,
+    RubikaProviderAdapter,
+    TelegramProviderAdapter,
+    WhatsAppProviderAdapter,
+)
 from app.core.security import decrypt_secret, encrypt_secret
 from app.domain.enums import ChannelAccountStatus, ChannelProvider
 from app.domain.models import ChannelAccount
-from app.schemas.channels import ChannelAccountCreate, ChannelAccountCredentials, ChannelAccountUpdate
+from app.schemas.channels import (
+    ChannelAccountCreate,
+    ChannelAccountCredentials,
+    ChannelAccountUpdate,
+)
 from app.services.audit_service import AuditService
 
 
@@ -23,11 +33,36 @@ def adapter_for_provider(provider: ChannelProvider, account: ChannelAccount | No
     bot_token = _decrypt(account.bot_token_encrypted) if account else None
     webhook_secret = _decrypt(account.webhook_secret_encrypted) if account else None
     return {
-        ChannelProvider.INSTAGRAM: InstagramProviderAdapter(webhook_secret),
-        ChannelProvider.WHATSAPP: WhatsAppProviderAdapter(access_token=access_token, phone_number_id=account.phone_number_id if account else None, verify_token=account.webhook_verify_token if account else None, app_secret=webhook_secret),
-        ChannelProvider.TELEGRAM: TelegramProviderAdapter(bot_token=bot_token, webhook_secret=webhook_secret, local_base_url=(account.settings_json or {}).get("local_bot_api_base_url") if account else None),
-        ChannelProvider.BALE: BaleProviderAdapter(bot_token=bot_token, webhook_secret=webhook_secret, local_base_url=(account.settings_json or {}).get("local_bot_api_base_url") if account else None),
-        ChannelProvider.RUBIKA: RubikaProviderAdapter(bot_token=bot_token, webhook_secret=webhook_secret, local_base_url=(account.settings_json or {}).get("local_bot_api_base_url") if account else None),
+        ChannelProvider.INSTAGRAM: InstagramProviderAdapter(
+            access_token=access_token, app_secret=webhook_secret
+        ),
+        ChannelProvider.WHATSAPP: WhatsAppProviderAdapter(
+            access_token=access_token,
+            phone_number_id=account.phone_number_id if account else None,
+            verify_token=account.webhook_verify_token if account else None,
+            app_secret=webhook_secret,
+        ),
+        ChannelProvider.TELEGRAM: TelegramProviderAdapter(
+            bot_token=bot_token,
+            webhook_secret=webhook_secret,
+            local_base_url=(account.settings_json or {}).get("local_bot_api_base_url")
+            if account
+            else None,
+        ),
+        ChannelProvider.BALE: BaleProviderAdapter(
+            bot_token=bot_token,
+            webhook_secret=webhook_secret,
+            local_base_url=(account.settings_json or {}).get("local_bot_api_base_url")
+            if account
+            else None,
+        ),
+        ChannelProvider.RUBIKA: RubikaProviderAdapter(
+            bot_token=bot_token,
+            webhook_secret=webhook_secret,
+            local_base_url=(account.settings_json or {}).get("local_bot_api_base_url")
+            if account
+            else None,
+        ),
     }[provider]
 
 
@@ -36,14 +71,40 @@ class ChannelAccountService:
         self.db = db
 
     def list_for_shop(self, shop_id: UUID) -> list[ChannelAccount]:
-        return list(self.db.scalars(select(ChannelAccount).where(ChannelAccount.shop_id == shop_id).order_by(ChannelAccount.created_at.desc())).all())
+        return list(
+            self.db.scalars(
+                select(ChannelAccount)
+                .where(ChannelAccount.shop_id == shop_id)
+                .order_by(ChannelAccount.created_at.desc())
+            ).all()
+        )
 
     def get(self, shop_id: UUID, account_id: UUID) -> ChannelAccount | None:
-        return self.db.scalar(select(ChannelAccount).where(ChannelAccount.shop_id == shop_id, ChannelAccount.id == account_id))
+        return self.db.scalar(
+            select(ChannelAccount).where(
+                ChannelAccount.shop_id == shop_id, ChannelAccount.id == account_id
+            )
+        )
 
     def create(self, shop_id: UUID, payload: ChannelAccountCreate) -> ChannelAccount:
-        capabilities = adapter_for_provider(payload.provider).get_capabilities().model_dump(mode="json")
-        account = ChannelAccount(shop_id=shop_id, provider=payload.provider, display_name=payload.display_name, external_account_id=payload.external_account_id, phone_number_id=payload.phone_number_id, bot_username=payload.bot_username, bot_id=payload.bot_id, webhook_url=payload.webhook_url, webhook_verify_token=payload.webhook_verify_token, token_expires_at=payload.token_expires_at, scopes_json=payload.scopes, capabilities_json=payload.capabilities or capabilities, settings_json=payload.settings)
+        capabilities = (
+            adapter_for_provider(payload.provider).get_capabilities().model_dump(mode="json")
+        )
+        account = ChannelAccount(
+            shop_id=shop_id,
+            provider=payload.provider,
+            display_name=payload.display_name,
+            external_account_id=payload.external_account_id,
+            phone_number_id=payload.phone_number_id,
+            bot_username=payload.bot_username,
+            bot_id=payload.bot_id,
+            webhook_url=payload.webhook_url,
+            webhook_verify_token=payload.webhook_verify_token,
+            token_expires_at=payload.token_expires_at,
+            scopes_json=payload.scopes,
+            capabilities_json=payload.capabilities or capabilities,
+            settings_json=payload.settings,
+        )
         self.db.add(account)
         self.db.commit()
         self.db.refresh(account)
@@ -63,8 +124,15 @@ class ChannelAccountService:
         self.db.refresh(account)
         return account
 
-    def save_credentials(self, account: ChannelAccount, payload: ChannelAccountCredentials, actor_user_id: UUID) -> ChannelAccount:
-        for raw_name, encrypted_name in (("access_token", "access_token_encrypted"), ("refresh_token", "refresh_token_encrypted"), ("bot_token", "bot_token_encrypted"), ("webhook_secret", "webhook_secret_encrypted")):
+    def save_credentials(
+        self, account: ChannelAccount, payload: ChannelAccountCredentials, actor_user_id: UUID
+    ) -> ChannelAccount:
+        for raw_name, encrypted_name in (
+            ("access_token", "access_token_encrypted"),
+            ("refresh_token", "refresh_token_encrypted"),
+            ("bot_token", "bot_token_encrypted"),
+            ("webhook_secret", "webhook_secret_encrypted"),
+        ):
             value = getattr(payload, raw_name)
             if value is not None:
                 setattr(account, encrypted_name, encrypt_secret(value) if value else None)
@@ -72,8 +140,22 @@ class ChannelAccountService:
             account.webhook_verify_token = payload.webhook_verify_token or None
         if payload.token_expires_at is not None:
             account.token_expires_at = payload.token_expires_at
-        account.status = ChannelAccountStatus.CONNECTED if (account.access_token_encrypted or account.bot_token_encrypted) else ChannelAccountStatus.DRAFT
-        AuditService(self.db).log(action="channel_credentials_updated", entity_type="channel_account", shop_id=account.shop_id, actor_user_id=actor_user_id, entity_id=str(account.id), metadata={"provider": account.provider.value, "credential_fields": sorted(payload.model_fields_set)})
+        account.status = (
+            ChannelAccountStatus.CONNECTED
+            if (account.access_token_encrypted or account.bot_token_encrypted)
+            else ChannelAccountStatus.DRAFT
+        )
+        AuditService(self.db).log(
+            action="channel_credentials_updated",
+            entity_type="channel_account",
+            shop_id=account.shop_id,
+            actor_user_id=actor_user_id,
+            entity_id=str(account.id),
+            metadata={
+                "provider": account.provider.value,
+                "credential_fields": sorted(payload.model_fields_set),
+            },
+        )
         self.db.commit()
         self.db.refresh(account)
         return account
@@ -85,9 +167,7 @@ class ChannelAccountService:
         missing = self._missing_required_credentials(account)
         if missing:
             account.status = ChannelAccountStatus.ERROR
-            account.last_error = (
-                "Missing required channel configuration: " + ", ".join(missing)
-            )
+            account.last_error = "Missing required channel configuration: " + ", ".join(missing)
             account.last_validation_at = datetime.now(UTC)
             self.db.commit()
             self.db.refresh(account)
@@ -108,10 +188,7 @@ class ChannelAccountService:
     @staticmethod
     def _missing_required_credentials(account: ChannelAccount) -> list[str]:
         required = {
-            ChannelProvider.INSTAGRAM: (
-                ("access_token_encrypted", "access_token"),
-                ("webhook_secret_encrypted", "app_secret"),
-            ),
+            ChannelProvider.INSTAGRAM: (("access_token_encrypted", "access_token"),),
             ChannelProvider.WHATSAPP: (
                 ("access_token_encrypted", "access_token"),
                 ("phone_number_id", "phone_number_id"),

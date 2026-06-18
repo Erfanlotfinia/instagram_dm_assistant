@@ -10,7 +10,7 @@ from app.domain.enums import SuggestedReplyGeneratedBy, SuggestedReplyStatus
 from app.domain.models import SuggestedReply, User
 from app.schemas.suggested_reply import SuggestedReplyEditAndSend, SuggestedReplyRead, SuggestedReplyReject
 from app.services.audit_service import AuditService
-from app.services.instagram_send_service import InstagramSendService
+from app.services.channel_outbound_service import ChannelOutboundService
 from app.services.shop_service import ShopService
 
 
@@ -58,7 +58,7 @@ class SuggestedReplyService:
 
     def approve_and_send(self, shop_id: UUID, reply_id: UUID, user: User) -> SuggestedReplyRead:
         reply = self._get_pending(shop_id, reply_id, user)
-        message = InstagramSendService(self.db).send_text_message(reply.conversation_id, reply.suggested_text, commit=False)
+        message = ChannelOutboundService(self.db).send_text_message(reply.conversation_id, reply.suggested_text, commit=False)
         reply.status = SuggestedReplyStatus.SENT
         reply.approved_by_user_id = user.id
         AuditService(self.db).log(action="reply_approved", entity_type="suggested_reply", shop_id=shop_id, actor_user_id=user.id, entity_id=str(reply.id), metadata={"message_id": str(message.id)})
@@ -68,7 +68,7 @@ class SuggestedReplyService:
 
     def edit_and_send(self, shop_id: UUID, reply_id: UUID, payload: SuggestedReplyEditAndSend, user: User) -> SuggestedReplyRead:
         reply = self._get_pending(shop_id, reply_id, user)
-        message = InstagramSendService(self.db).send_text_message(reply.conversation_id, payload.edited_text, commit=False)
+        message = ChannelOutboundService(self.db).send_text_message(reply.conversation_id, payload.edited_text, commit=False)
         reply.status = SuggestedReplyStatus.SENT
         reply.edited_text = payload.edited_text
         reply.approved_by_user_id = user.id

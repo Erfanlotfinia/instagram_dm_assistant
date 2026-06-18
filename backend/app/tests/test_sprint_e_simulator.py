@@ -9,7 +9,7 @@ from app.domain.enums import MessageDirection
 from app.domain.models import Conversation, Message, Order, SuggestedReply
 from app.schemas.simulator import DMSimulatorRequest
 from app.services.dm_simulator_service import DMSimulatorService
-from app.services.instagram_send_service import InstagramSendService
+from app.services.channel_outbound_service import ChannelOutboundService
 from app.tests.fixtures.agent import build_orchestrator, seed_order_flow_data
 
 
@@ -47,7 +47,7 @@ def test_simulator_creates_simulation_records_without_real_send(db_session, demo
         shared_post_url=data["post_url"],
     )
 
-    with patch.object(InstagramSendService, "send_text_message") as send_mock:
+    with patch.object(ChannelOutboundService, "send_text_message") as send_mock:
         result = DMSimulatorService(db_session).run(
             demo_shop.id,
             payload,
