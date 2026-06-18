@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, rate_limit_webhook, require_shop_role
+from app.channels.adapters import InstagramProviderAdapter
 from app.core.config import get_settings
 from app.db.session import get_db_session
 from app.domain.enums import ChannelProvider, UserRole
@@ -145,6 +146,7 @@ async def _verified_webhook_account(
     payload: dict[str, Any],
     request: Request,
     channel_account_id: UUID | None = None,
+    allow_legacy_meta_secret: bool = False,
 ) -> ChannelAccount:
     headers = dict(request.headers)
     candidates = _candidate_webhook_accounts(db, provider, payload, headers, channel_account_id)
@@ -158,6 +160,13 @@ async def _verified_webhook_account(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No channel account configured for this webhook",
         )
+    if allow_legacy_meta_secret and provider == ChannelProvider.INSTAGRAM:
+        settings = get_settings()
+        if settings.webhook_signature_bypass:
+            return candidates[0]
+        if settings.meta_app_secret:
+            if await InstagramProviderAdapter(settings.meta_app_secret).verify_webhook(request):
+                return candidates[0]
     for account in candidates:
         if not account.webhook_secret_encrypted:
             continue
@@ -350,6 +359,7 @@ async def _receive_channel_webhook(
     request: Request,
     db: Session,
     channel_account_id: UUID | None = None,
+    allow_legacy_meta_secret: bool = False,
 ) -> WebhookAckResponse | WebhookIgnoredResponse:
     body = await request.body()
     try:
@@ -358,7 +368,14 @@ async def _receive_channel_webhook(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload"
         ) from exc
-    account = await _verified_webhook_account(db, provider, payload, request, channel_account_id)
+    account = await _verified_webhook_account(
+        db,
+        provider,
+        payload,
+        request,
+        channel_account_id,
+        allow_legacy_meta_secret=allow_legacy_meta_secret,
+    )
     return ChannelWebhookIngestionService(db).handle_payload(
         provider,
         payload,

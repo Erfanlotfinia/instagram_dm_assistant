@@ -2,10 +2,12 @@ import hashlib
 import hmac
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import func, select
 
+from app.core.config import Settings
 from app.core.security import encrypt_secret
 from app.domain.enums import ChannelProvider
 from app.domain.models import (
@@ -143,4 +145,35 @@ def test_instagram_uses_channel_account_without_instagram_account(client, db_ses
     response = _signed_post(client, ChannelProvider.INSTAGRAM, SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD)
     assert response.status_code == 200, response.text
     assert db_session.scalar(select(func.count()).select_from(InstagramAccount)) == 0
+    assert db_session.scalar(select(func.count()).select_from(ChannelMessage)) == 1
+
+
+def test_legacy_instagram_webhook_uses_global_meta_secret(
+    client, db_session, demo_shop
+):
+    account = _account(
+        db_session,
+        demo_shop,
+        ChannelProvider.INSTAGRAM,
+        external_account_id="17841400000000001",
+    )
+    account.webhook_secret_encrypted = None
+    db_session.commit()
+
+    body = json.dumps(SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD, separators=(",", ":")).encode()
+    signature = hmac.new(b"legacy-meta-secret", body, hashlib.sha256).hexdigest()
+    with patch(
+        "app.api.v1.channels.get_settings",
+        return_value=Settings(app_env="test", meta_app_secret="legacy-meta-secret"),
+    ):
+        response = client.post(
+            "/api/v1/webhooks/instagram",
+            content=body,
+            headers={
+                "content-type": "application/json",
+                "X-Hub-Signature-256": f"sha256={signature}",
+            },
+        )
+
+    assert response.status_code == 200, response.text
     assert db_session.scalar(select(func.count()).select_from(ChannelMessage)) == 1

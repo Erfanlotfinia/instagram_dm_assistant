@@ -44,7 +44,12 @@ async def receive_instagram_webhook_compat(
     db: Annotated[Session, Depends(get_db_session)],
     _: Annotated[None, Depends(rate_limit_webhook)],
 ) -> WebhookAckResponse | WebhookIgnoredResponse:
-    return await _receive_channel_webhook(ChannelProvider.INSTAGRAM, request, db)
+    return await _receive_channel_webhook(
+        ChannelProvider.INSTAGRAM,
+        request,
+        db,
+        allow_legacy_meta_secret=True,
+    )
 
 
 @router.post(
@@ -57,4 +62,9 @@ async def receive_meta_webhook_compat(
     db: Annotated[Session, Depends(get_db_session)],
     _: Annotated[None, Depends(rate_limit_webhook)],
 ) -> WebhookAckResponse | WebhookIgnoredResponse:
-    return await _receive_channel_webhook(ChannelProvider.INSTAGRAM, request, db)
+    return await _receive_channel_webhook(
+        ChannelProvider.INSTAGRAM,
+        request,
+        db,
+        allow_legacy_meta_secret=True,
+    )
