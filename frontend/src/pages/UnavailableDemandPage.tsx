@@ -247,8 +247,8 @@ export function UnavailableDemandPage() {
     >
       <Card>
         <CardBody className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-          <Link className={ghostLinkClass} to="/fashion-dictionary">
-            Manage color &amp; size aliases
+          <Link className={ghostLinkClass} to="/catalog/attributes">
+            Manage attribute aliases
           </Link>
           <span className="text-subtle" aria-hidden="true">
             ·
@@ -394,7 +394,7 @@ export function UnavailableDemandPage() {
                   setPage(1);
                   setSearch(value);
                 }}
-                searchPlaceholder="Color, size, product, reason…"
+                searchPlaceholder="Attribute, product, reason…"
               >
                 <Field label="Reason" className="min-w-[10rem]">
                   <Select
@@ -428,7 +428,7 @@ export function UnavailableDemandPage() {
                       <div className="flex flex-wrap justify-center gap-2">
                         <Link
                           className="inline-flex h-8 items-center rounded-lg px-3 text-xs font-medium text-muted hover:bg-surface-sunken hover:text-fg"
-                          to="/fashion-dictionary"
+                          to="/catalog/attributes"
                         >
                           Add aliases
                         </Link>

@@ -6,15 +6,93 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.models import ColorAlias, ProductSizeChart, SizeAlias, UnavailableDemandLog, User
-from app.services.fashion_normalization import clean_fashion_text
+from app.domain.models import (
+    AttributeAlias,
+    CatalogAttributeDefinition,
+    ColorAlias,
+    ProductSizeChart,
+    SizeAlias,
+    UnavailableDemandLog,
+    User,
+)
+from app.services.fashion_normalization import clean_fashion_text as clean_attribute_text
 from app.services.shop_service import ShopService
 
 
-class FashionAliasService:
+class AttributeDictionaryService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.shop_service = ShopService(db)
+
+    def list_attribute_aliases(self, shop_id: UUID, user: User) -> list[dict]:
+        self.shop_service.get_shop(shop_id, user)
+        rows = self.db.execute(
+            select(AttributeAlias, CatalogAttributeDefinition.slug)
+            .join(CatalogAttributeDefinition, CatalogAttributeDefinition.id == AttributeAlias.attribute_definition_id)
+            .where((AttributeAlias.shop_id == shop_id) | (AttributeAlias.shop_id.is_(None)))
+            .order_by(CatalogAttributeDefinition.slug, AttributeAlias.raw_value)
+        ).all()
+        return [
+            {
+                "id": alias.id,
+                "shop_id": alias.shop_id,
+                "attribute_definition_id": alias.attribute_definition_id,
+                "attribute_slug": slug,
+                "raw_value": alias.raw_value,
+                "normalized_value": alias.normalized_value,
+                "language": alias.language or "und",
+                "is_active": alias.is_active,
+            }
+            for alias, slug in rows
+        ]
+
+    def create_attribute_alias(
+        self,
+        shop_id: UUID,
+        attribute_slug: str,
+        raw_value: str,
+        normalized_value: str,
+        language: str | None,
+        user: User,
+    ) -> dict:
+        self.shop_service.get_shop(shop_id, user)
+        slug = attribute_slug.strip().lower().replace(" ", "_")
+        definition = self.db.scalar(
+            select(CatalogAttributeDefinition).where(
+                CatalogAttributeDefinition.shop_id == shop_id,
+                CatalogAttributeDefinition.category_id.is_(None),
+                CatalogAttributeDefinition.slug == slug,
+            )
+        )
+        if definition is None:
+            definition = CatalogAttributeDefinition(
+                shop_id=shop_id,
+                name=slug.replace("_", " ").title(),
+                slug=slug,
+                is_variant_defining=slug in {"color", "size"},
+            )
+            self.db.add(definition)
+            self.db.flush()
+        alias = AttributeAlias(
+            shop_id=shop_id,
+            attribute_definition_id=definition.id,
+            raw_value=clean_attribute_text(raw_value) or raw_value.strip().casefold(),
+            normalized_value=normalized_value.strip(),
+            language=language or "und",
+        )
+        self.db.add(alias)
+        self.db.commit()
+        self.db.refresh(alias)
+        return {
+            "id": alias.id,
+            "shop_id": alias.shop_id,
+            "attribute_definition_id": alias.attribute_definition_id,
+            "attribute_slug": slug,
+            "raw_value": alias.raw_value,
+            "normalized_value": alias.normalized_value,
+            "language": alias.language or "und",
+            "is_active": alias.is_active,
+        }
 
     def list_color_aliases(self, shop_id: UUID, user: User) -> list[ColorAlias]:
         self.shop_service.get_shop(shop_id, user)
@@ -22,7 +100,7 @@ class FashionAliasService:
 
     def create_color_alias(self, shop_id: UUID, raw_value: str, normalized_value: str, language: str | None, user: User) -> ColorAlias:
         self.shop_service.get_shop(shop_id, user)
-        alias = ColorAlias(shop_id=shop_id, raw_value=clean_fashion_text(raw_value) or raw_value.strip().casefold(), normalized_value=normalized_value.strip().casefold(), language=language or "und")
+        alias = ColorAlias(shop_id=shop_id, raw_value=clean_attribute_text(raw_value) or raw_value.strip().casefold(), normalized_value=normalized_value.strip().casefold(), language=language or "und")
         self.db.add(alias); self.db.commit(); self.db.refresh(alias); return alias
 
     def update_color_alias(self, shop_id: UUID, alias_id: UUID, user: User, **changes) -> ColorAlias:
@@ -31,7 +109,7 @@ class FashionAliasService:
             value = changes.get(field)
             if value is not None:
                 if field == "raw_value":
-                    value = clean_fashion_text(value) or value.strip().casefold()
+                    value = clean_attribute_text(value) or value.strip().casefold()
                 elif field == "normalized_value":
                     value = value.strip().casefold()
                 setattr(alias, field, value)
@@ -47,7 +125,7 @@ class FashionAliasService:
 
     def create_size_alias(self, shop_id: UUID, raw_value: str, normalized_value: str, category: str | None, user: User) -> SizeAlias:
         self.shop_service.get_shop(shop_id, user)
-        alias = SizeAlias(shop_id=shop_id, raw_value=clean_fashion_text(raw_value) or raw_value.strip().casefold(), normalized_value=normalized_value.strip().upper(), category=category)
+        alias = SizeAlias(shop_id=shop_id, raw_value=clean_attribute_text(raw_value) or raw_value.strip().casefold(), normalized_value=normalized_value.strip().upper(), category=category)
         self.db.add(alias); self.db.commit(); self.db.refresh(alias); return alias
 
     def update_size_alias(self, shop_id: UUID, alias_id: UUID, user: User, **changes) -> SizeAlias:
@@ -56,7 +134,7 @@ class FashionAliasService:
             value = changes.get(field)
             if value is not None:
                 if field == "raw_value":
-                    value = clean_fashion_text(value) or value.strip().casefold()
+                    value = clean_attribute_text(value) or value.strip().casefold()
                 elif field == "normalized_value":
                     value = value.strip().upper()
                 setattr(alias, field, value)

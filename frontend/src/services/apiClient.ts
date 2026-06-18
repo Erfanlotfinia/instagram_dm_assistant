@@ -51,7 +51,7 @@ import type {
 } from '../types/trust';
 import type { FailedJobListResponse, HealthResponse, ReadinessResponse } from '../types/health';
 import type { LoginRequest, TokenResponse, User } from '../types/auth';
-import type { ColorAlias, SizeAlias, UnavailableDemandLog, VariantResolverResult } from '../types/fashion';
+import type { AttributeAlias, ColorAlias, SizeAlias, UnavailableDemandLog, VariantResolverResult } from '../types/fashion';
 import type { InstagramAccount, InstagramAccountCreate } from '../types/instagramAccount';
 import type {
   Order,
@@ -500,6 +500,16 @@ export const apiClient = {
   getCustomerPreferences: (shopId: string, customerId: string) =>
     request<CustomerPreferences>(`/api/v1/shops/${shopId}/customers/${customerId}/preferences`),
 
+  listAttributeAliases: (shopId: string) =>
+    request<AttributeAlias[]>(`/api/v1/shops/${shopId}/attribute-aliases`),
+  createAttributeAlias: (
+    shopId: string,
+    payload: Pick<AttributeAlias, 'attribute_slug' | 'raw_value' | 'normalized_value' | 'language'>,
+  ) =>
+    request<AttributeAlias>(`/api/v1/shops/${shopId}/attribute-aliases`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   listColorAliases: (shopId: string) => request<ColorAlias[]>(`/api/v1/shops/${shopId}/color-aliases`),
   createColorAlias: (shopId: string, payload: Pick<ColorAlias, 'raw_value' | 'normalized_value' | 'language'>) =>
     request<ColorAlias>(`/api/v1/shops/${shopId}/color-aliases`, { method: 'POST', body: JSON.stringify(payload) }),

@@ -36,3 +36,13 @@ def test_frontend_competitive_pages_render_core_labels():
     assert "SuggestedReplyPanel" in conversation
     assert "Approve and send" in suggested_reply_panel
     assert "Risk" in orders
+
+
+def test_attribute_dictionary_route_replaces_fashion_dictionary():
+    routes = (REPO_ROOT / "frontend/src/routes/AppRoutes.tsx").read_text(encoding="utf-8")
+    page = (REPO_ROOT / "frontend/src/pages/AttributeDictionaryPage.tsx").read_text(encoding="utf-8")
+
+    assert 'path="attributes" element={<AttributeDictionaryPage />}' in routes
+    assert "/fashion-dictionary" not in routes
+    assert 'title="Attribute dictionary"' in page
+    assert "Fashion Dictionary" not in page

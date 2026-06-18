@@ -11,7 +11,7 @@ from app.api.v1.customers import router as customers_router
 from app.api.v1.decision_traces import router as decision_traces_router
 from app.api.v1.failed_jobs import router as failed_jobs_router
 from app.api.v1.failed_jobs_platform import router as failed_jobs_platform_router
-from app.api.v1.fashion import router as fashion_router
+from app.api.v1.catalog_attributes import router as catalog_attributes_router
 from app.api.v1.health import router as health_router
 from app.api.v1.jobs import router as jobs_router
 from app.api.v1.order_correctness import router as order_correctness_router
@@ -65,7 +65,7 @@ router.include_router(traces_router)
 router.include_router(scenarios_router)
 router.include_router(social_admin_router)
 
-router.include_router(fashion_router)
+router.include_router(catalog_attributes_router)
 router.include_router(failed_jobs_platform_router)
 router.include_router(failed_jobs_router)
 router.include_router(simulator_router)
