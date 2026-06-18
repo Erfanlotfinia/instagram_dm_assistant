@@ -37,7 +37,7 @@ class InstagramSendService:
             raw_payload={"mode": "placeholder"},
         )
 
-        if self.settings.enable_real_instagram_send:
+        if self.settings.enable_real_provider_send:
             logger.warning("Real Instagram send is enabled but API integration is not implemented yet")
             message.raw_payload = {"mode": "real_send_not_implemented", "text": text}
         else:

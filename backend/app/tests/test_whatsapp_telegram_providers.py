@@ -299,7 +299,7 @@ def test_telegram_default_webhook_url_includes_channel_account_id(
     from app.core.config import get_settings
 
     settings = get_settings()
-    monkeypatch.setattr(settings, "api_public_base_url", "https://example.test")
+    monkeypatch.setattr(settings, "public_api_base_url", "https://example.test")
 
     account_id = UUID("11111111-1111-1111-1111-111111111111")
 

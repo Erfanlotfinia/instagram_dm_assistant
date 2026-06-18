@@ -11,7 +11,7 @@ def _resolve_test_database_url() -> str:
 
     source = os.getenv(
         "DATABASE_URL",
-        "postgresql+psycopg://postgres:postgres@localhost:5432/instagram_dm_assistant",
+        "postgresql+psycopg://postgres:postgres@localhost:5432/modira",
     )
     parsed = urlparse(source)
     hostname = parsed.hostname or "localhost"
@@ -22,7 +22,7 @@ def _resolve_test_database_url() -> str:
     password = parsed.password or "postgres"
     port = parsed.port or 5432
     netloc = f"{username}:{password}@{hostname}:{port}"
-    return urlunparse(parsed._replace(netloc=netloc, path="/instagram_dm_assistant_test"))
+    return urlunparse(parsed._replace(netloc=netloc, path="/modira_test"))
 
 
 TEST_DATABASE_URL = _resolve_test_database_url()

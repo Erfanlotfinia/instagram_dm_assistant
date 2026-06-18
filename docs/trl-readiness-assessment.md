@@ -1,4 +1,4 @@
-# TRL Readiness Assessment — Instagram-first Fashion Order OS
+# TRL Readiness Assessment — AI Social Media Admin OS
 
 Date assessed: 2026-06-08
 

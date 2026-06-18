@@ -19,7 +19,7 @@ def test_webhook_rejects_invalid_signature(client, demo_shop, db_session) -> Non
     from app.core.config import get_settings
 
     settings = get_settings()
-    if not settings.instagram_app_secret:
+    if not settings.meta_app_secret:
         return
 
     response = client.post(

@@ -202,7 +202,7 @@ Common backend variables:
 - `JWT_SECRET_KEY` — at least 32 random bytes recommended in production.
 - `TOKEN_ENCRYPTION_KEY` — secret used to derive the Fernet key for provider credential encryption.
 - Provider webhook secrets and tokens — Meta/Instagram, WhatsApp, Telegram, Bale, and Rubika credentials. Tokens are encrypted at rest and must never be returned raw by APIs.
-- `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` / `INSTAGRAM_APP_SECRET` — Meta webhook verification and signature validation for Instagram/Meta channels.
+- `WEBHOOK_INTERNAL_SECRET` / `META_APP_SECRET` — Meta webhook verification and signature validation for Instagram/Meta channels.
 
 Frontend uses `VITE_API_BASE_URL` to target the backend from the browser.
 

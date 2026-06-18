@@ -1,4 +1,4 @@
-# TRL Evidence Matrix — Instagram Fashion Order Agent
+# TRL Evidence Matrix — Modira
 
 **Assessment date:** 2026-06-09  
 **Legend:** Status = `Present` (in-repo evidence), `Partial` (implemented but evidence incomplete), `Missing` (not evidenced)

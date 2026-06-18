@@ -1,4 +1,4 @@
-# TRL 6 Pilot Plan — Instagram Fashion Order Agent
+# TRL 6 Pilot Plan — Modira
 
 **Version:** 1.0  
 **Date:** 2026-06-09  
@@ -8,7 +8,7 @@
 
 ## Pilot objective
 
-Demonstrate the Instagram Fashion Order Agent under **constrained real-world operations** for one fashion shop: accurate variant resolution, safe automation with human oversight, measurable conversion metrics, and proven rollback via emergency stop — without unacceptable customer harm or inventory/payment errors.
+Demonstrate the Modira under **constrained real-world operations** for one fashion shop: accurate variant resolution, safe automation with human oversight, measurable conversion metrics, and proven rollback via emergency stop — without unacceptable customer harm or inventory/payment errors.
 
 **Success means:** completing the pilot window with no unresolved critical incidents, TRL validation thresholds met at start, and daily metrics within agreed bounds.
 

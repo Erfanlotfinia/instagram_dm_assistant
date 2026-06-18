@@ -23,7 +23,7 @@ Postgres / Redis / RabbitMQ / Qdrant (private network)
    - `APP_ENV=production`
    - Strong `JWT_SECRET_KEY` and `TOKEN_ENCRYPTION_KEY`
    - `CORS_ORIGINS` limited to your admin domain
-   - `INSTAGRAM_APP_SECRET` for webhook signature verification
+   - `META_APP_SECRET` for webhook signature verification
    - Real `OPENAI_API_KEY`
 
 2. Run database migrations:
@@ -52,7 +52,7 @@ Postgres / Redis / RabbitMQ / Qdrant (private network)
 ## Production checklist
 
 - [ ] Secrets stored in a vault, not in git
-- [ ] `ENABLE_REAL_INSTAGRAM_SEND=true` only when Graph API tokens are valid
+- [ ] `ENABLE_REAL_PROVIDER_SEND=true` only when Graph API tokens are valid
 - [ ] Rate limiting enabled (`RATE_LIMIT_ENABLED=true`)
 - [ ] Log aggregation configured (JSON stdout → Loki/Datadog/CloudWatch)
 - [ ] Prometheus scraping `/api/v1/metrics`
@@ -65,7 +65,7 @@ The API validates production settings at startup. When `APP_ENV=production`, dep
 
 - a non-default `JWT_SECRET_KEY` with at least 32 characters;
 - a non-default `TOKEN_ENCRYPTION_KEY` with at least 32 characters;
-- `INSTAGRAM_APP_SECRET` so Meta webhook signatures are verified;
+- `META_APP_SECRET` so Meta webhook signatures are verified;
 - explicit HTTPS `CORS_ORIGINS` with no wildcard.
 
 Deployments that do not meet these requirements fail fast instead of accepting unsafe traffic.

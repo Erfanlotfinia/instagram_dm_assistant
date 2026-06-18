@@ -29,7 +29,7 @@ vi.mock('../services/apiClient', () => ({
         {
           id: 'job-1',
           shop_id: null,
-          queue_name: 'instagram.message.received.dlq',
+          queue_name: 'channel.message.received.dlq',
           job_type: 'message_received',
           payload: {},
           error_message: 'demo: Worker payload failed JSON schema validation',
@@ -43,7 +43,7 @@ vi.mock('../services/apiClient', () => ({
         {
           id: 'job-2',
           shop_id: 's1',
-          queue_name: 'instagram.message.received',
+          queue_name: 'channel.message.received',
           job_type: 'message_received',
           payload: {},
           error_message: 'demo: ConversationOrchestrator timed out waiting for OpenAI response',

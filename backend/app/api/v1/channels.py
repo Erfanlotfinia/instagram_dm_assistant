@@ -33,7 +33,7 @@ router = APIRouter(tags=["channels"])
 
 def _default_telegram_webhook_url(channel_account_id: UUID) -> str:
     return (
-        f"{get_settings().api_public_base_url}"
+        f"{get_settings().public_api_base_url}"
         f"/api/v1/channels/telegram/{channel_account_id}/webhook"
     )
 

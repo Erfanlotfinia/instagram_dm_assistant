@@ -42,7 +42,7 @@ def test_operator_cannot_list_failed_jobs(client, operator_headers, demo_shop, d
     db_session.add(
         FailedJob(
             shop_id=demo_shop.id,
-            queue_name="instagram.message.received",
+            queue_name="channel.message.received",
             job_type="message_received",
             payload={"shop_id": str(demo_shop.id), "access_token": "secret-token"},
             error_message="boom",
@@ -60,7 +60,7 @@ def test_admin_sees_redacted_payload(client, auth_headers, demo_shop, db_session
     db_session.add(
         FailedJob(
             shop_id=demo_shop.id,
-            queue_name="instagram.message.received",
+            queue_name="channel.message.received",
             job_type="message_received",
             payload={
                 "shop_id": str(demo_shop.id),
@@ -93,7 +93,7 @@ def test_cross_shop_failed_job_not_visible(client, auth_headers, db_session, dem
     db_session.flush()
     job = FailedJob(
         shop_id=other_shop.id,
-        queue_name="instagram.message.received",
+        queue_name="channel.message.received",
         job_type="message_received",
         payload={"shop_id": str(other_shop.id)},
         error_message="other",

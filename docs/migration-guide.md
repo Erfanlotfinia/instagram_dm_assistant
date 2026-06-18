@@ -14,7 +14,7 @@ Use a database URL that resolves from your shell rather than the Compose hostnam
 
 ```bash
 cd backend
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/instagram_dm_assistant alembic upgrade head
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/modira alembic upgrade head
 ```
 
 ## Validation checklist

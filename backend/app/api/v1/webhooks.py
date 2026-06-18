@@ -21,12 +21,12 @@ def _enforce_webhook_signature(
 ) -> None:
     if not settings.requires_webhook_signature:
         return
-    if not settings.instagram_app_secret:
+    if not settings.meta_app_secret:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Webhook signature verification is not configured",
         )
-    if not verify_meta_signature(body, signature_header, settings.instagram_app_secret):
+    if not verify_meta_signature(body, signature_header, settings.meta_app_secret):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid webhook signature",
@@ -40,7 +40,7 @@ def verify_instagram_webhook(
     hub_verify_token: Annotated[str | None, Query(alias="hub.verify_token")] = None,
     hub_challenge: Annotated[str | None, Query(alias="hub.challenge")] = None,
 ) -> Response:
-    if hub_mode == "subscribe" and hub_verify_token == settings.instagram_webhook_verify_token:
+    if hub_mode == "subscribe" and hub_verify_token == settings.webhook_internal_secret:
         return Response(content=hub_challenge or "", media_type="text/plain")
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verification failed")
 

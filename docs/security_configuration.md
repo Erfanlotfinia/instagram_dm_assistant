@@ -7,8 +7,8 @@ See also [environment-variables.md](environment-variables.md) and [meta-webhook-
 - `APP_ENV=production` or `staging`
 - `JWT_SECRET_KEY` — 32+ characters, non-default
 - `TOKEN_ENCRYPTION_KEY` — 32+ characters, non-default
-- `INSTAGRAM_APP_SECRET` — Meta app secret for webhook signature verification
-- `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` — non-default verify token
+- `META_APP_SECRET` — Meta app secret for webhook signature verification
+- `WEBHOOK_INTERNAL_SECRET` — non-default verify token
 - `CORS_ORIGINS` — explicit HTTPS origins; never `*` with credentials
 - `WEBHOOK_SIGNATURE_BYPASS=false`
 - `OPENAI_API_KEY` — required when `LLM_MODE=live`
