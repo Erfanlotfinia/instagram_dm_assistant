@@ -140,13 +140,36 @@ class ChannelAccountCreate(BaseModel):
     phone_number_id: str | None = None
     bot_username: str | None = None
     bot_id: str | None = None
+    webhook_url: str | None = None
     webhook_verify_token: str | None = None
-    webhook_secret: str | None = None
+    token_expires_at: datetime | None = None
+    scopes: list[str] | None = None
+    capabilities: dict[str, Any] | None = None
+    settings: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChannelAccountUpdate(BaseModel):
+    display_name: str | None = None
+    external_account_id: str | None = None
+    phone_number_id: str | None = None
+    bot_username: str | None = None
+    bot_id: str | None = None
+    webhook_url: str | None = None
+    webhook_verify_token: str | None = None
+    token_expires_at: datetime | None = None
+    scopes: list[str] | None = None
+    capabilities: dict[str, Any] | None = None
+    settings: dict[str, Any] | None = None
+    status: ChannelAccountStatus | None = None
+
+
+class ChannelAccountCredentials(BaseModel):
     access_token: str | None = None
-    app_secret: str | None = None
+    refresh_token: str | None = None
     bot_token: str | None = None
-    default_language_code: str | None = None
-    settings_json: dict[str, Any] = Field(default_factory=dict)
+    webhook_secret: str | None = None
+    webhook_verify_token: str | None = None
+    token_expires_at: datetime | None = None
 
 
 class ChannelAccountRead(BaseModel):
@@ -158,13 +181,27 @@ class ChannelAccountRead(BaseModel):
     phone_number_id: str | None
     bot_username: str | None
     bot_id: str | None
+    webhook_url: str | None
     status: ChannelAccountStatus
-    capabilities_json: dict[str, Any]
-    settings_json: dict[str, Any]
+    capabilities: dict[str, Any] = Field(validation_alias="capabilities_json")
+    settings: dict[str, Any] = Field(validation_alias="settings_json")
+    token_configured: bool = False
+    bot_token_configured: bool = False
+    webhook_secret_configured: bool = False
+    last_validation_at: datetime | None
+    last_error: str | None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_account(cls, account: Any) -> "ChannelAccountRead":
+        response = cls.model_validate(account)
+        response.token_configured = bool(account.access_token_encrypted)
+        response.bot_token_configured = bool(account.bot_token_encrypted)
+        response.webhook_secret_configured = bool(account.webhook_secret_encrypted)
+        return response
 
 
 class WebhookTestResponse(BaseModel):

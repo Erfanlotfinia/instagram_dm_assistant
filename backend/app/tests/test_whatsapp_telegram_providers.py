@@ -317,9 +317,9 @@ def test_telegram_webhook_account_resolution_uses_secret_header() -> None:
         def __init__(self) -> None:
             self.statement = None
 
-        def scalar(self, statement):
+        def scalars(self, statement):
             self.statement = statement
-            return None
+            return []
 
     db = FakeDb()
     request = Request(
@@ -334,8 +334,8 @@ def test_telegram_webhook_account_resolution_uses_secret_header() -> None:
     assert _resolve_telegram_webhook_account(db, request) is None
     compiled = str(db.statement.compile(compile_kwargs={"literal_binds": True}))
 
-    assert "channel_accounts.webhook_secret = 'secret-for-account-2'" in compiled
-    assert "LIMIT" not in compiled.upper()
+    assert "channel_accounts.webhook_secret_encrypted IS NOT NULL" in compiled
+    assert "secret-for-account-2" not in compiled
 
 
 def test_telegram_webhook_account_resolution_without_secret_skips_lookup() -> None:
@@ -343,7 +343,7 @@ def test_telegram_webhook_account_resolution_without_secret_skips_lookup() -> No
     from starlette.requests import Request
 
     class FakeDb:
-        def scalar(self, statement):
+        def scalars(self, statement):
             raise AssertionError(
                 "Telegram account lookup should not run without a secret"
             )

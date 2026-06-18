@@ -230,13 +230,19 @@ class ChannelAccount(Base, TimestampMixin):
     phone_number_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     bot_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     bot_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     webhook_verify_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    webhook_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
-    encrypted_access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
-    encrypted_bot_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    webhook_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    access_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refresh_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bot_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    scopes_json: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     status: Mapped[ChannelAccountStatus] = mapped_column(pg_enum(ChannelAccountStatus, name="channel_account_status"), nullable=False, default=ChannelAccountStatus.DRAFT, index=True)
     capabilities_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     settings_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    last_validation_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class ChannelContactIdentity(Base, TimestampMixin):
