@@ -13,3 +13,9 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 .cursor/
+# Local env/backups
+.env
+.env.*
+*.bak
+*.bak.*
+docker-compose.yml.bak*
