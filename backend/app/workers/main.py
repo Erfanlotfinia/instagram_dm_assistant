@@ -11,7 +11,12 @@ from app.core.logging import configure_logging
 from app.core.metrics import PROCESSED_MESSAGES, QUEUE_LAG
 from app.integrations.rabbitmq import RETRY_COUNT_HEADER, RabbitMQPublisher, setup_message_queues
 from app.services.failed_job_service import FailedJobService, format_traceback
-from app.workers.message_consumer import ConversationLockedError, InvalidJobPayloadError, handle_delivery, parse_delivery_body
+from app.workers.message_consumer import (
+    ConversationLockedError,
+    InvalidJobPayloadError,
+    handle_delivery,
+    parse_delivery_body,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +32,6 @@ class WorkerApp:
 
     def start(self) -> None:
         queue_names = [self.settings.rabbitmq_queue_message_received]
-        legacy_queue_name = self.settings.rabbitmq_legacy_queue_message_received
-        if legacy_queue_name not in queue_names:
-            queue_names.append(legacy_queue_name)
         parameters = pika.URLParameters(self.settings.rabbitmq_url)
         self._connection = pika.BlockingConnection(parameters)
         self._channel = self._connection.channel()
@@ -88,7 +90,11 @@ class WorkerApp:
         except ConversationLockedError:
             channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
         except InvalidJobPayloadError as exc:
-            logger.error("Worker received non-retryable payload retry_count=%s: %s", retry_count, exc)
+            logger.error(
+                "Worker received non-retryable payload retry_count=%s: %s",
+                retry_count,
+                exc,
+            )
             channel.basic_ack(delivery_tag=method.delivery_tag)
             payload = self._payload_from_body(body)
             self._publisher.publish_to_dlq(payload, retry_count)

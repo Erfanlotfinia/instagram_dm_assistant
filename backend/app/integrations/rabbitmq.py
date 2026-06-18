@@ -30,21 +30,10 @@ def setup_message_queues(channel: BlockingChannel, settings: Settings | None = N
         settings.rabbitmq_retry_delay_ms,
     )
 
-    legacy_main_queue = settings.rabbitmq_legacy_queue_message_received
-    if legacy_main_queue != settings.rabbitmq_queue_message_received:
-        _declare_message_queue_topology(
-            channel,
-            legacy_main_queue,
-            settings.rabbitmq_legacy_queue_retry,
-            settings.rabbitmq_legacy_queue_dlq,
-            settings.rabbitmq_retry_delay_ms,
-        )
-
     setup_order_correctness_queues(channel, settings)
     logger.info(
-        "RabbitMQ queues declared main=%s legacy_main=%s",
+        "RabbitMQ queues declared main=%s",
         settings.rabbitmq_queue_message_received,
-        legacy_main_queue,
     )
 
 
