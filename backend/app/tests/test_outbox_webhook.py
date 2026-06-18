@@ -20,7 +20,7 @@ def test_webhook_creates_outbox_event(db_session, demo_shop) -> None:
     events = db_session.scalars(select(OutboxEvent)).all()
     assert len(events) == 1
     assert events[0].status.value == "pending"
-    assert events[0].payload["_queue_name"] == "instagram.message.received"
+    assert events[0].payload["_queue_name"] == "channel.message.received"
 
 
 def test_outbox_publisher_publishes_after_commit(db_session, demo_shop) -> None:

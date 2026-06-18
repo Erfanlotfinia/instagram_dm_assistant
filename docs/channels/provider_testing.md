@@ -1,6 +1,6 @@
 # provider testing
 
-This document is part of the multi-channel Fashion Order OS release package.
+This document is part of the Modira AI Social Media Admin OS release package.
 
 ## Scope
 

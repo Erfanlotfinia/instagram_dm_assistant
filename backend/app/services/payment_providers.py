@@ -29,7 +29,7 @@ class MockPaymentProvider(PaymentProviderBase):
             status=PaymentRecordStatus.PENDING,
         )
         self.payments.create(payment)
-        base_url = self.settings.api_public_base_url.rstrip("/")
+        base_url = self.settings.public_api_base_url.rstrip("/")
         payment.payment_url = f"{base_url}/api/v1/payments/mock/pay/{payment.id}"
         payment.provider_reference = f"mock-{payment.id}"
         return payment

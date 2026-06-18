@@ -1,6 +1,6 @@
 # Channel architecture
 
-The Fashion Order OS now treats messaging channels as adapters around one commerce engine. Instagram, WhatsApp Cloud API, Telegram Bot API, Bale Bot API and Rubika Bot API normalize inbound provider payloads into `NormalizedInboundMessage` and send outbound replies through `NormalizedOutboundMessage`.
+Modira now treats messaging channels as adapters around one commerce engine. Instagram, WhatsApp Cloud API, Telegram Bot API, Bale Bot API and Rubika Bot API normalize inbound provider payloads into `NormalizedInboundMessage` and send outbound replies through `NormalizedOutboundMessage`.
 
 ## Flow
 

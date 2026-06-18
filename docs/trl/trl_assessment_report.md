@@ -1,17 +1,17 @@
-# TRL Assessment Report — Instagram Fashion Order Agent
+# TRL Assessment Report — Modira
 
-**Document version:** 1.0  
-**Assessment date:** 2026-06-09  
-**Repository:** `instagram_dm_assistant`  
+**Document version:** 1.0
+**Assessment date:** 2026-06-09
+**Repository:** `modira`
 **Assessor role:** Engineering evidence pack (derived from codebase, tests, and in-repo documentation)
 
 ---
 
 ## Executive summary
 
-The Instagram Fashion Order Agent is an integrated Instagram-first Fashion Order OS comprising a FastAPI backend, PostgreSQL/Alembic schema, RabbitMQ workers, Redis locking, Qdrant semantic search, OpenAI LLM extraction, and a React TypeScript admin panel. The product has moved beyond a disconnected prototype: major capabilities are wired end-to-end in a lab/Docker Compose environment with substantial automated test coverage and dedicated TRL validation and pilot-readiness tooling.
+The Modira is an integrated AI Social Media Admin OS comprising a FastAPI backend, PostgreSQL/Alembic schema, RabbitMQ workers, Redis locking, Qdrant semantic search, OpenAI LLM extraction, and a React TypeScript admin panel. The product has moved beyond a disconnected prototype: major capabilities are wired end-to-end in a lab/Docker Compose environment with substantial automated test coverage and dedicated TRL validation and pilot-readiness tooling.
 
-**Current estimated TRL: 4+ (integrated lab prototype with validation harness).**  
+**Current estimated TRL: 4+ (integrated lab prototype with validation harness).**
 **Target TRL: 5 (validated in relevant environment) and 6 (pilot-ready).**
 
 The codebase now includes a **TRL Validation Runner** (`TRLValidationRunner`) with 100 labeled Persian/English fashion DM scenarios, threshold evaluation, persisted run results, and an admin dashboard at `/trl-validation`. It also includes **pilot controls** (daily caps, allowed accounts/products, emergency stop, readiness API) at `/pilot-readiness`.
@@ -22,7 +22,7 @@ The codebase now includes a **TRL Validation Runner** (`TRLValidationRunner`) wi
 
 ## Product description
 
-An Instagram-first Fashion Order OS for online fashion shops that:
+An AI Social Media Admin OS for online fashion shops that:
 
 - Ingests Instagram DMs and shared posts via Meta webhooks
 - Extracts structured intent and slots (color, size, quantity, customer info) via LLM with deterministic backend validation
@@ -80,7 +80,7 @@ This assessment uses the standard NASA/DoD TRL scale adapted for software:
 Instagram (Meta webhook)
     → POST /api/v1/webhooks/instagram
     → WebhookIngestionService (persist webhook_events, customer, conversation, message)
-    → RabbitMQ queue: instagram.message.received
+    → RabbitMQ queue: channel.message.received
     → Worker (message_consumer) + Redis per-conversation lock
     → ConversationOrchestrator
         → LLMExtractionService (intent/slots JSON)
@@ -197,7 +197,7 @@ TRL thresholds are defined in `TRLValidationRunner.THRESHOLDS`:
 | `duplicate_webhook_idempotency_rate` | = 1.0 | **Hardcoded 1.0** — covered elsewhere in unit tests only |
 | `critical_security_tests_pass_rate` | = 1.0 | **Hardcoded 1.0** — not executed inside TRL run |
 
-**Latest archived validation run:** **None in repository.**  
+**Latest archived validation run:** **None in repository.**
 Use `python -m app.scripts.generate_trl_report` against a seeded database to export the latest run.
 
 **Important:** The TRL runner uses `RuleBasedTRLExtractionService`, not `LLMExtractionService`. TRL 5 evidence for LLM quality requires a separate OpenAI evaluation track.

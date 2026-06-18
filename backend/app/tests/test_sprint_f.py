@@ -114,7 +114,7 @@ def test_analytics_shop_isolation(client, auth_headers, db_session, demo_shop, a
 def test_failed_jobs_list_includes_unscoped_jobs(client, auth_headers, db_session, demo_shop) -> None:
     scoped = FailedJob(
         shop_id=demo_shop.id,
-        queue_name="instagram.message.received",
+        queue_name="channel.message.received",
         job_type="message_received",
         payload={"shop_id": str(demo_shop.id)},
         error_message="shop scoped",
@@ -123,7 +123,7 @@ def test_failed_jobs_list_includes_unscoped_jobs(client, auth_headers, db_sessio
     )
     unscoped = FailedJob(
         shop_id=None,
-        queue_name="instagram.message.received.dlq",
+        queue_name="channel.message.received.dlq",
         job_type="message_received",
         payload={"raw": "payload"},
         error_message="orphan",
@@ -159,7 +159,7 @@ def test_failed_jobs_list_retry_ignore(client, auth_headers, db_session, demo_sh
     conversation_id = uuid4()
     job = FailedJob(
         shop_id=demo_shop.id,
-        queue_name="instagram.message.received",
+        queue_name="channel.message.received",
         job_type="message_received",
         payload={
             "shop_id": str(demo_shop.id),
@@ -202,7 +202,7 @@ def test_failed_jobs_list_retry_ignore(client, auth_headers, db_session, demo_sh
 
     job2 = FailedJob(
         shop_id=demo_shop.id,
-        queue_name="instagram.message.received",
+        queue_name="channel.message.received",
         job_type="message_received",
         payload={"shop_id": str(demo_shop.id)},
         error_message="still failing",
@@ -232,7 +232,7 @@ def test_failed_jobs_list_retry_ignore(client, auth_headers, db_session, demo_sh
 def test_failed_jobs_retry_rejects_malformed_payload(client, auth_headers, db_session, demo_shop) -> None:
     job = FailedJob(
         shop_id=demo_shop.id,
-        queue_name="instagram.message.received.dlq",
+        queue_name="channel.message.received.dlq",
         job_type="message_received",
         payload={"raw": "malformed-worker-payload", "retry_count": 3},
         error_message="Invalid message_received job payload",

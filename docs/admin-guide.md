@@ -28,7 +28,7 @@ Admins configure shops, catalog, Instagram integration, and agent behavior.
 ## Security responsibilities
 
 - Rotate `JWT_SECRET_KEY` and `TOKEN_ENCRYPTION_KEY` on compromise.
-- Keep `INSTAGRAM_APP_SECRET` confidential.
+- Keep `META_APP_SECRET` confidential.
 - Review audit logs for login and admin actions.
 - Limit production CORS origins to the admin domain.
 
@@ -36,4 +36,4 @@ Admins configure shops, catalog, Instagram integration, and agent behavior.
 
 - `/api/v1/ready` — dependency health
 - `/api/v1/metrics` — Prometheus counters (messages, orders, handoffs, queue lag)
-- RabbitMQ DLQ `instagram.message.received.dlq` — failed jobs
+- RabbitMQ DLQ `channel.message.received.dlq` — failed jobs

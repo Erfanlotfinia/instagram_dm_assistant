@@ -1,8 +1,8 @@
-# TRL 6 Pilot Test Script — Instagram Fashion Order Agent
+# TRL 6 Pilot Test Script — Modira
 
 ## Purpose
 
-This script prepares and executes a constrained TRL 6 pilot for an Instagram-first Fashion Order OS in realistic shop operations. The pilot validates production-like traffic, operator handoff, order creation, payment flow, monitoring, and rollback under real operational constraints.
+This script prepares and executes a constrained TRL 6 pilot for an AI Social Media Admin OS in realistic shop operations. The pilot validates production-like traffic, operator handoff, order creation, payment flow, monitoring, and rollback under real operational constraints.
 
 ## Pre-pilot checklist
 
