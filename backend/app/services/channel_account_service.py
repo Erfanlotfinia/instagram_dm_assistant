@@ -82,6 +82,16 @@ class ChannelAccountService:
         return _decrypt(account.access_token_encrypted)
 
     async def validate(self, account: ChannelAccount) -> ChannelAccount:
+        missing = self._missing_required_credentials(account)
+        if missing:
+            account.status = ChannelAccountStatus.ERROR
+            account.last_error = (
+                "Missing required channel configuration: " + ", ".join(missing)
+            )
+            account.last_validation_at = datetime.now(UTC)
+            self.db.commit()
+            self.db.refresh(account)
+            return account
         try:
             valid = await adapter_for_provider(account.provider, account).validate_credentials()
             account.status = ChannelAccountStatus.CONNECTED if valid else ChannelAccountStatus.ERROR
@@ -94,3 +104,21 @@ class ChannelAccountService:
         self.db.commit()
         self.db.refresh(account)
         return account
+
+    @staticmethod
+    def _missing_required_credentials(account: ChannelAccount) -> list[str]:
+        required = {
+            ChannelProvider.INSTAGRAM: (
+                ("access_token_encrypted", "access_token"),
+                ("webhook_secret_encrypted", "app_secret"),
+            ),
+            ChannelProvider.WHATSAPP: (
+                ("access_token_encrypted", "access_token"),
+                ("phone_number_id", "phone_number_id"),
+                ("webhook_secret_encrypted", "app_secret"),
+            ),
+            ChannelProvider.TELEGRAM: (("bot_token_encrypted", "bot_token"),),
+            ChannelProvider.BALE: (("bot_token_encrypted", "bot_token"),),
+            ChannelProvider.RUBIKA: (("bot_token_encrypted", "bot_token"),),
+        }[account.provider]
+        return [label for attribute, label in required if not getattr(account, attribute)]

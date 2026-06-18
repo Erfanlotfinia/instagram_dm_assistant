@@ -23,7 +23,7 @@ import type {
   RecoveryRuleUpdate,
 } from '../types/sprintD';
 import type { DashboardMetrics, DashboardTrends } from '../types/dashboard';
-import type { ChannelAccount, ChannelAccountCreate, TelegramWebhookInfo } from '../types/channel';
+import type { ChannelAccount, ChannelAccountCreate, ChannelAccountCredentials, TelegramWebhookInfo } from '../types/channel';
 import type { AgentPerformanceMetrics, AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PaginatedLostDemand, PaginatedOperatorPerformance, PostPerformanceRow, ResponseTimeAnalytics, SimulatorRunSummary, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
 import type { SemanticSearchResponse } from '../types/semanticSearch';
 import type { CatalogImportJob, CatalogImportRequest, CatalogProductListResponse, CatalogReindexRequest, ProductAliasesPatchRequest, ProductNormalized } from '../types/catalog';
@@ -197,6 +197,8 @@ export const apiClient = {
   listChannelAccounts: (shopId: string) => request<ChannelAccount[]>(`/api/v1/shops/${shopId}/channels`),
   createChannelAccount: (shopId: string, payload: ChannelAccountCreate) =>
     request<ChannelAccount>(`/api/v1/shops/${shopId}/channels`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateChannelCredentials: (shopId: string, channelAccountId: string, payload: ChannelAccountCredentials) =>
+    request<ChannelAccount>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/credentials`, { method: 'POST', body: JSON.stringify(payload) }),
   testChannelWebhook: (shopId: string, channelAccountId: string) =>
     request<{ status: string }>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/webhook-test`, { method: 'POST', body: JSON.stringify({}) }),
 

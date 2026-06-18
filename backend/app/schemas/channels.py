@@ -183,8 +183,8 @@ class ChannelAccountRead(BaseModel):
     bot_id: str | None
     webhook_url: str | None
     status: ChannelAccountStatus
-    capabilities: dict[str, Any] = Field(validation_alias="capabilities_json")
-    settings: dict[str, Any] = Field(validation_alias="settings_json")
+    capabilities_json: dict[str, Any]
+    settings_json: dict[str, Any]
     token_configured: bool = False
     bot_token_configured: bool = False
     webhook_secret_configured: bool = False

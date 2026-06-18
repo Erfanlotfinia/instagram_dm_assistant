@@ -19,6 +19,10 @@ def _create_channel(client, auth_headers, shop_id):
 
 def test_channel_create_and_credentials_are_write_only(client, auth_headers, demo_shop, db_session):
     channel = _create_channel(client, auth_headers, demo_shop.id)
+    assert "capabilities_json" in channel
+    assert "settings_json" in channel
+    assert "capabilities" not in channel
+    assert "settings" not in channel
     assert channel["token_configured"] is False
     assert channel["bot_token_configured"] is False
 
@@ -40,6 +44,18 @@ def test_channel_create_and_credentials_are_write_only(client, auth_headers, dem
     account = db_session.get(ChannelAccount, UUID(channel["id"]))
     assert account.bot_token_encrypted != raw_token
     assert decrypt_secret(account.bot_token_encrypted) == raw_token
+
+
+def test_validation_rejects_missing_provider_credentials(client, auth_headers, demo_shop):
+    channel = _create_channel(client, auth_headers, demo_shop.id)
+    response = client.post(
+        f"/api/v1/shops/{demo_shop.id}/channels/{channel['id']}/validate",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "error"
+    assert body["last_error"] == "Missing required channel configuration: bot_token"
 
 
 def test_cross_shop_channel_access_is_blocked(client, auth_headers, demo_shop, db_session):

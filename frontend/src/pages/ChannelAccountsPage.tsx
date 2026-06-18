@@ -63,7 +63,7 @@ export function ChannelAccountsPage() {
     if (!selectedShopId) return;
     setError(null);
     try {
-      await apiClient.createChannelAccount(selectedShopId, {
+      const account = await apiClient.createChannelAccount(selectedShopId, {
         provider,
         display_name: displayName,
         external_account_id: externalAccountId || undefined,
@@ -71,15 +71,15 @@ export function ChannelAccountsPage() {
         bot_username: botUsername || undefined,
         bot_id: botId || undefined,
         webhook_verify_token: webhookVerifyToken || undefined,
+        settings: {
+          ...(provider === 'telegram' ? { allowed_updates_json: ['message', 'callback_query'], use_local_bot_api: false } : {}),
+          ...(provider === 'whatsapp' ? { message_template_namespace: null, default_language_code: defaultLanguageCode } : {}),
+        },
+      });
+      await apiClient.updateChannelCredentials(selectedShopId, account.id, {
         webhook_secret: webhookSecret || undefined,
         access_token: accessToken || undefined,
         bot_token: botToken || undefined,
-        app_secret: provider === 'whatsapp' ? webhookSecret || undefined : undefined,
-        default_language_code: provider === 'whatsapp' ? defaultLanguageCode : undefined,
-        settings_json: {
-          ...(provider === 'telegram' ? { allowed_updates_json: ['message', 'callback_query'], use_local_bot_api: false } : {}),
-          ...(provider === 'whatsapp' ? { message_template_namespace: null } : {}),
-        },
       });
       setDisplayName('');
       setExternalAccountId('');
