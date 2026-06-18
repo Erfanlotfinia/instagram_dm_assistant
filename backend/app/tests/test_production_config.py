@@ -29,6 +29,14 @@ def test_production_rejects_default_token_encryption_key(monkeypatch) -> None:
         Settings()
 
 
+def test_production_rejects_missing_token_encryption_key(monkeypatch) -> None:
+    production_env(monkeypatch)
+    monkeypatch.delenv("TOKEN_ENCRYPTION_KEY")
+
+    with pytest.raises(ValueError, match="TOKEN_ENCRYPTION_KEY"):
+        Settings()
+
+
 def test_production_rejects_wildcard_cors(monkeypatch) -> None:
     production_env(monkeypatch)
     monkeypatch.setenv("CORS_ORIGINS", '["*"]')

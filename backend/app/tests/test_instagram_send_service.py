@@ -1,7 +1,11 @@
-from app.domain.enums import MessageDirection
-from app.domain.models import Conversation, Customer, InstagramAccount
 from app.core.security import encrypt_secret
-from app.domain.enums import InstagramAccountStatus
+from app.domain.enums import (
+    ChannelAccountStatus,
+    ChannelProvider,
+    InstagramAccountStatus,
+    MessageDirection,
+)
+from app.domain.models import ChannelAccount, Conversation, Customer, InstagramAccount
 from app.services.instagram_send_service import InstagramSendService
 
 
@@ -14,12 +18,25 @@ def test_placeholder_send_stores_outbound_message(db_session, demo_shop) -> None
         status=InstagramAccountStatus.CONNECTED,
     )
     customer = Customer(shop_id=demo_shop.id, instagram_user_id="cust-1")
-    db_session.add_all([account, customer])
+    db_session.add(account)
+    db_session.flush()
+    channel_account = ChannelAccount(
+        shop_id=demo_shop.id,
+        provider=ChannelProvider.INSTAGRAM,
+        display_name=account.username,
+        external_account_id=account.ig_user_id,
+        status=ChannelAccountStatus.CONNECTED,
+        settings_json={"legacy_instagram_account_id": str(account.id)},
+    )
+    db_session.add_all([account, channel_account, customer])
     db_session.flush()
 
     conversation = Conversation(
         shop_id=demo_shop.id,
         instagram_account_id=account.id,
+        channel_account_id=channel_account.id,
+        channel_provider=ChannelProvider.INSTAGRAM.value,
+        external_conversation_id=customer.instagram_user_id,
         customer_id=customer.id,
     )
     db_session.add(conversation)

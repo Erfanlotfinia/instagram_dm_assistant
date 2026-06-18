@@ -9,6 +9,13 @@ SENSITIVE_KEYS = frozenset(
         "password_hash",
         "access_token",
         "access_token_encrypted",
+        "refresh_token",
+        "refresh_token_encrypted",
+        "bot_token",
+        "bot_token_encrypted",
+        "webhook_secret",
+        "webhook_secret_encrypted",
+        "webhook_verify_token",
         "token",
         "authorization",
         "secret",
@@ -24,7 +31,7 @@ SENSITIVE_KEYS = frozenset(
     }
 )
 
-BEARER_PATTERN = re.compile(r"Bearer\s+[A-Za-z0-9\-._~+/]+=*", re.IGNORECASE)
+BEARER_PATTERN = re.compile(r"Bearer\s+\S+", re.IGNORECASE)
 JWT_PATTERN = re.compile(r"eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+")
 
 

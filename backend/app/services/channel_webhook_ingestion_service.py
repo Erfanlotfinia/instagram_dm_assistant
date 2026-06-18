@@ -41,6 +41,8 @@ from app.domain.models import (
 from app.schemas.channels import NormalizedInboundMessage
 from app.schemas.queue_events import MessageReceivedJob
 from app.schemas.webhook import WebhookAckResponse, WebhookIgnoredResponse
+from app.repositories.conversation_repository import ConversationRepository
+from app.repositories.customer_repository import CustomerRepository
 
 logger = logging.getLogger(__name__)
 
@@ -184,76 +186,27 @@ class ChannelWebhookIngestionService:
             )
         ):
             return None
-        customer = self.db.scalar(
-            select(Customer).where(
-                Customer.shop_id == account.shop_id,
-                Customer.instagram_user_id == normalized.external_user_id,
-            )
+        customer = CustomerRepository(self.db).create_customer_from_channel_identity(
+            shop_id=account.shop_id,
+            provider=account.provider,
+            channel_account_id=account.id,
+            external_user_id=normalized.external_user_id,
+            external_chat_id=normalized.external_chat_id,
+            username=normalized.username,
+            display_name=normalized.display_name,
+            phone=normalized.phone,
+            raw_profile_json=mask_pii(normalized.raw_payload),
         )
-        if customer is None:
-            customer = Customer(
-                shop_id=account.shop_id,
-                instagram_user_id=normalized.external_user_id,
-                full_name=normalized.display_name,
-                phone=normalized.phone,
-            )
-            self.db.add(customer)
-            self.db.flush()
-        identity = self.db.scalar(
-            select(ChannelContactIdentity).where(
-                ChannelContactIdentity.shop_id == account.shop_id,
-                ChannelContactIdentity.provider == account.provider,
-                ChannelContactIdentity.channel_account_id == account.id,
-                ChannelContactIdentity.external_user_id == normalized.external_user_id,
-            )
+        conversation = ConversationRepository(
+            self.db
+        ).get_or_create_conversation_by_channel(
+            shop_id=account.shop_id,
+            customer_id=customer.id,
+            provider=account.provider,
+            channel_account_id=account.id,
+            external_conversation_id=normalized.external_chat_id,
         )
-        if identity is None:
-            identity = ChannelContactIdentity(
-                shop_id=account.shop_id,
-                provider=account.provider,
-                channel_account_id=account.id,
-                external_user_id=normalized.external_user_id,
-                username=normalized.username,
-                phone=normalized.phone,
-                display_name=normalized.display_name,
-                raw_profile_json=mask_pii(normalized.raw_payload),
-                customer_id=customer.id,
-            )
-            self.db.add(identity)
-        conversation = self.db.scalar(
-            select(Conversation).where(
-                Conversation.shop_id == account.shop_id,
-                Conversation.customer_id == customer.id,
-                Conversation.channel_provider == account.provider.value,
-                Conversation.channel_conversation_id == normalized.external_chat_id,
-                Conversation.state == ConversationState.OPEN,
-            )
-        )
-        if conversation is None:
-            instagram_account_id = account.settings_json.get(
-                "legacy_instagram_account_id"
-            ) or self.db.scalar(
-                select(Conversation.instagram_account_id)
-                .where(Conversation.shop_id == account.shop_id)
-                .limit(1)
-            )
-            if instagram_account_id is None:
-                logger.warning(
-                    "No legacy Instagram account for channel conversation bridge shop=%s",
-                    account.shop_id,
-                )
-                return None
-            conversation = Conversation(
-                shop_id=account.shop_id,
-                instagram_account_id=instagram_account_id,
-                customer_id=customer.id,
-                state=ConversationState.OPEN,
-                channel_provider=account.provider.value,
-                channel_conversation_id=normalized.external_chat_id,
-                channel_customer_id=normalized.external_user_id,
-            )
-            self.db.add(conversation)
-            self.db.flush()
+        conversation.channel_customer_id = normalized.external_user_id
         channel_conversation = self.db.scalar(
             select(ChannelConversation).where(
                 ChannelConversation.provider == account.provider,
@@ -296,8 +249,14 @@ class ChannelWebhookIngestionService:
             or normalized.button_text
         )
         internal_message = Message(
+            shop_id=account.shop_id,
             conversation_id=conversation.id,
+            customer_id=customer.id,
             direction=MessageDirection.INBOUND,
+            channel_provider=account.provider,
+            channel_account_id=account.id,
+            external_message_id=normalized.external_message_id,
+            external_update_id=normalized.external_update_id,
             channel=MessageChannel(account.provider.value),
             instagram_message_id=(
                 normalized.external_message_id
@@ -307,7 +266,10 @@ class ChannelWebhookIngestionService:
             channel_message_id=normalized.external_message_id,
             message_type=internal_type,
             text=text,
+            content=text,
             raw_payload=mask_pii(normalized.raw_payload),
+            raw_payload_json=mask_pii(normalized.raw_payload),
+            normalized_payload_json=normalized.model_dump(mode="json"),
         )
         self.db.add(internal_message)
         self.db.flush()
@@ -346,6 +308,8 @@ class ChannelWebhookIngestionService:
             conversation_id=conversation.id,
             shop_id=account.shop_id,
             instagram_account_id=conversation.instagram_account_id,
+            channel_provider=account.provider,
+            channel_account_id=account.id,
             customer_id=customer.id,
             webhook_event_id=None,
         )

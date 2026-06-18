@@ -5,8 +5,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import encrypt_secret
-from app.domain.enums import InstagramAccountStatus
-from app.domain.models import InstagramAccount, User
+from app.domain.enums import ChannelAccountStatus, ChannelProvider, InstagramAccountStatus
+from app.domain.models import ChannelAccount, InstagramAccount, User
 from app.repositories.instagram_account_repository import InstagramAccountRepository
 from app.schemas.instagram_account import InstagramAccountCreate, InstagramAccountRead
 from app.services.shop_service import ShopService
@@ -39,6 +39,25 @@ class InstagramAccountService:
             token_expires_at=payload.token_expires_at,
             webhook_enabled=payload.webhook_enabled,
             status=InstagramAccountStatus.CONNECTED,
+        )
+        self.db.add(account)
+        self.db.flush()
+        self.db.add(
+            ChannelAccount(
+                shop_id=shop_id,
+                provider=ChannelProvider.INSTAGRAM,
+                display_name=payload.username,
+                external_account_id=payload.ig_user_id,
+                bot_username=payload.username,
+                access_token_encrypted=account.access_token_encrypted,
+                status=ChannelAccountStatus.CONNECTED,
+                capabilities_json={
+                    "supports_webhook": True,
+                    "supports_text": True,
+                    "supports_images": True,
+                },
+                settings_json={"legacy_instagram_account_id": str(account.id)},
+            )
         )
         try:
             created = self.accounts.create(account)

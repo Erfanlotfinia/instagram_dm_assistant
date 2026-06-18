@@ -15,7 +15,9 @@ from app.domain.enums import ChannelProvider, UserRole
 from app.domain.models import ChannelAccount, ShopMember, User
 from app.schemas.channels import (
     ChannelAccountCreate,
+    ChannelAccountCredentials,
     ChannelAccountRead,
+    ChannelAccountUpdate,
     WebhookTestResponse,
 )
 from app.schemas.webhook import WebhookAckResponse, WebhookIgnoredResponse
@@ -88,11 +90,20 @@ def _resolve_telegram_webhook_account(
     secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
     if not secret:
         return None
-    return db.scalar(
+    accounts = db.scalars(
         select(ChannelAccount).where(
             ChannelAccount.provider == ChannelProvider.TELEGRAM,
-            ChannelAccount.webhook_secret == secret,
+            ChannelAccount.webhook_secret_encrypted.is_not(None),
         )
+    )
+    return next(
+        (
+            account
+            for account in accounts
+            if adapter_for_provider(ChannelProvider.TELEGRAM, account).webhook_secret
+            == secret
+        ),
+        None,
     )
 
 
@@ -124,7 +135,8 @@ def _candidate_webhook_accounts(
         ) or _header_value(headers, "X-Webhook-Secret")
         if not secret:
             return []
-        stmt = stmt.where(ChannelAccount.webhook_secret == secret)
+        # Encrypted webhook secrets cannot be queried directly; candidates are
+        # compared after decryption by the provider adapter below.
     return list(db.scalars(stmt).all())
 
 
@@ -150,7 +162,7 @@ async def _verified_webhook_account(
             detail="No channel account configured for this webhook",
         )
     for account in candidates:
-        if not account.webhook_secret:
+        if not account.webhook_secret_encrypted:
             continue
         if await adapter_for_provider(provider, account).verify_webhook(request):
             return account
@@ -168,7 +180,7 @@ def list_channel_accounts(
 ) -> list[ChannelAccountRead]:
     ShopService(db).get_shop(shop_id, current_user)
     return [
-        ChannelAccountRead.model_validate(account)
+        ChannelAccountRead.from_account(account)
         for account in ChannelAccountService(db).list_for_shop(shop_id)
     ]
 
@@ -184,9 +196,81 @@ def create_channel_account(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> ChannelAccountRead:
     ShopService(db).get_shop(shop_id, current_user)
-    return ChannelAccountRead.model_validate(
+    return ChannelAccountRead.from_account(
         ChannelAccountService(db).create(shop_id, payload)
     )
+
+
+@router.get(
+    "/shops/{shop_id}/channels/{channel_account_id}",
+    response_model=ChannelAccountRead,
+)
+def get_channel_account(
+    shop_id: UUID,
+    channel_account_id: UUID,
+    _membership: Annotated[ShopMember, Depends(require_shop_role(UserRole.OPERATOR))],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ChannelAccountRead:
+    account = ChannelAccountService(db).get(shop_id, channel_account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Channel account not found")
+    return ChannelAccountRead.from_account(account)
+
+
+@router.patch(
+    "/shops/{shop_id}/channels/{channel_account_id}",
+    response_model=ChannelAccountRead,
+)
+def update_channel_account(
+    shop_id: UUID,
+    channel_account_id: UUID,
+    payload: ChannelAccountUpdate,
+    _membership: Annotated[ShopMember, Depends(require_shop_role(UserRole.ADMIN))],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ChannelAccountRead:
+    service = ChannelAccountService(db)
+    account = service.get(shop_id, channel_account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Channel account not found")
+    return ChannelAccountRead.from_account(service.update(account, payload))
+
+
+@router.post(
+    "/shops/{shop_id}/channels/{channel_account_id}/credentials",
+    response_model=ChannelAccountRead,
+)
+def update_channel_credentials(
+    shop_id: UUID,
+    channel_account_id: UUID,
+    payload: ChannelAccountCredentials,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _membership: Annotated[ShopMember, Depends(require_shop_role(UserRole.ADMIN))],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ChannelAccountRead:
+    service = ChannelAccountService(db)
+    account = service.get(shop_id, channel_account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Channel account not found")
+    return ChannelAccountRead.from_account(
+        service.save_credentials(account, payload, current_user.id)
+    )
+
+
+@router.post(
+    "/shops/{shop_id}/channels/{channel_account_id}/validate",
+    response_model=ChannelAccountRead,
+)
+async def validate_channel_credentials(
+    shop_id: UUID,
+    channel_account_id: UUID,
+    _membership: Annotated[ShopMember, Depends(require_shop_role(UserRole.ADMIN))],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ChannelAccountRead:
+    service = ChannelAccountService(db)
+    account = service.get(shop_id, channel_account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Channel account not found")
+    return ChannelAccountRead.from_account(await service.validate(account))
 
 
 @router.post(
@@ -315,7 +399,7 @@ async def set_telegram_webhook(
         ChannelProvider.TELEGRAM, account
     ).configure_webhook(
         payload.get("url") or _default_telegram_webhook_url(account.id),
-        account.webhook_secret,
+        adapter_for_provider(ChannelProvider.TELEGRAM, account).webhook_secret,
     )
 
 

@@ -16,6 +16,7 @@ vi.mock('../services/apiClient', () => ({
     listShops: vi.fn().mockResolvedValue([{ id: 's1', name: 'Demo Shop', slug: 'demo', status: 'active', default_currency: 'USD', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }]),
     listChannelAccounts: mocks.listChannelAccounts,
     createChannelAccount: vi.fn(),
+    updateChannelCredentials: vi.fn(),
     testChannelWebhook: vi.fn(),
   },
 }));
