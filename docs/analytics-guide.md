@@ -6,7 +6,7 @@ Analytics endpoints are shop-scoped and support date ranges.
 
 - Funnel analytics: inbound → resolved product → resolved variant → draft/order/payment.
 - Post revenue: paid orders and revenue by Instagram post.
-- Lost/unavailable demand: unresolved or unavailable color/size/variant demand.
+- Unavailable product demand, unavailable attribute demand, and missing variant demand.
 - Operator and agent performance: handoff, response, and automation metrics.
 
 ## Interpretation rules

@@ -18,7 +18,7 @@ import {
   ConversationIntelligencePage,
   DMSimulatorPage,
   FailedJobsPage,
-  FashionDictionaryPage,
+  AttributeDictionaryPage,
   HandoffQueuePage,
   InboxPage,
   InstagramProductMappingPage,
@@ -96,7 +96,7 @@ export function AppRoutes() {
           <Route path="mapping" element={<InstagramProductMappingPage />} />
           <Route path="copilot" element={<CatalogCopilotPage />} />
           <Route path="resolver" element={<VariantResolverPage />} />
-          <Route path="attributes" element={<FashionDictionaryPage />} />
+          <Route path="attributes" element={<AttributeDictionaryPage />} />
           <Route path="search" element={<SemanticSearchPage />} />
         </Route>
 
@@ -153,7 +153,6 @@ export function AppRoutes() {
         <Route path="/catalog-copilot" element={<LegacyRedirect to="/catalog/copilot" />} />
         <Route path="/variant-resolver" element={<LegacyRedirect to="/catalog/resolver" />} />
         <Route path="/product-resolver" element={<LegacyRedirect to="/catalog/resolver" />} />
-        <Route path="/fashion-dictionary" element={<LegacyRedirect to="/catalog/attributes" />} />
         <Route path="/semantic-search" element={<LegacyRedirect to="/catalog/search" />} />
         <Route path="/automation-rules" element={<LegacyRedirect to="/automation/rules" />} />
         <Route path="/scenario-coverage" element={<LegacyRedirect to="/automation/coverage" />} />

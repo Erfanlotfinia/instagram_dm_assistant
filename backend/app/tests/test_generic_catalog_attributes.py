@@ -243,3 +243,37 @@ def test_generic_variant_resolver_supports_books_media_format(db_session, demo_s
 
     assert result.matched is True
     assert result.normalized_attributes["format"] == "paperback"
+
+
+def test_attribute_normalizer_supports_default_color_and_size_rules(db_session, demo_shop):
+    color = AttributeNormalizer(db_session).normalize(
+        shop_id=demo_shop.id, category_id=None, attribute_slug="color", raw_value="black"
+    )
+    size = AttributeNormalizer(db_session).normalize(
+        shop_id=demo_shop.id, category_id=None, attribute_slug="size", raw_value="L"
+    )
+
+    assert color.normalized_value == "black"
+    assert size.normalized_value == "l"
+
+
+def test_attribute_normalizer_supports_warranty_alias(db_session, demo_shop):
+    result = AttributeNormalizer(db_session).normalize(
+        shop_id=demo_shop.id, category_id=None, attribute_slug="warranty", raw_value="گارانتی دار"
+    )
+
+    assert result.normalized_value == "with_warranty"
+
+
+def test_attribute_normalizer_supports_shade_alias(db_session, demo_shop):
+    shade = CatalogAttributeDefinition(shop_id=demo_shop.id, name="Shade", slug="shade")
+    db_session.add(shade)
+    db_session.flush()
+    db_session.add(AttributeAlias(shop_id=demo_shop.id, attribute_definition_id=shade.id, raw_value="شماره ۲", normalized_value="shade_2", language="fa"))
+    db_session.commit()
+
+    result = AttributeNormalizer(db_session).normalize(
+        shop_id=demo_shop.id, category_id=None, attribute_slug="shade", raw_value="شماره ۲"
+    )
+
+    assert result.normalized_value == "shade_2"

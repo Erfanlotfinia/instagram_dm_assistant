@@ -16,6 +16,17 @@ export interface SizeAlias {
   is_active: boolean;
 }
 
+export interface AttributeAlias {
+  id: string;
+  shop_id?: string | null;
+  attribute_definition_id: string;
+  attribute_slug: string;
+  raw_value: string;
+  normalized_value: string;
+  language: string;
+  is_active: boolean;
+}
+
 export interface VariantAlternative {
   variant_id: string;
   sku: string;
