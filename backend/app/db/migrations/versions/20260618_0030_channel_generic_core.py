@@ -120,7 +120,7 @@ def upgrade() -> None:
         """
         INSERT INTO channel_accounts (
             id, shop_id, provider, display_name, external_account_id, bot_username,
-            encrypted_access_token, status, capabilities_json, settings_json,
+            access_token_encrypted, status, capabilities_json, settings_json,
             created_at, updated_at
         )
         SELECT gen_random_uuid(), ia.shop_id, 'instagram'::channel_provider,

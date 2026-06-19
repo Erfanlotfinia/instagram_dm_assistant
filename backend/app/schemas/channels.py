@@ -188,6 +188,7 @@ class ChannelAccountRead(BaseModel):
     token_configured: bool = False
     bot_token_configured: bool = False
     webhook_secret_configured: bool = False
+    webhook_verify_token_configured: bool = False
     last_validation_at: datetime | None
     last_error: str | None
     created_at: datetime
@@ -201,6 +202,7 @@ class ChannelAccountRead(BaseModel):
         response.token_configured = bool(account.access_token_encrypted)
         response.bot_token_configured = bool(account.bot_token_encrypted)
         response.webhook_secret_configured = bool(account.webhook_secret_encrypted)
+        response.webhook_verify_token_configured = bool(account.webhook_verify_token)
         return response
 
 
