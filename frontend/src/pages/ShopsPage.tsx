@@ -1,6 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useEffect, useState } from 'react';
 
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Card, CardBody, CardHeader, Field, Input } from '../components/ui';
+import { DataTable } from '../components/data';
+import type { Column } from '../components/data';
 import { queryKeys } from '../lib/queryClient';
 import { apiClient } from '../services/apiClient';
 import type { Shop } from '../types/shop';
@@ -12,6 +16,7 @@ export function ShopsPage() {
   const [slug, setSlug] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   async function loadShops() {
     const data = await apiClient.listShops();
@@ -19,7 +24,9 @@ export function ShopsPage() {
   }
 
   useEffect(() => {
-    loadShops().catch(() => setShops([]));
+    loadShops()
+      .catch(() => setShops([]))
+      .finally(() => setLoading(false));
   }, []);
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -28,10 +35,7 @@ export function ShopsPage() {
     setIsSubmitting(true);
 
     try {
-      await apiClient.createShop({
-        name,
-        slug: slug || undefined,
-      });
+      await apiClient.createShop({ name, slug: slug || undefined });
       setName('');
       setSlug('');
       await loadShops();
@@ -43,54 +47,43 @@ export function ShopsPage() {
     }
   }
 
+  const columns: Column<Shop>[] = [
+    { key: 'name', header: 'Name', render: (shop) => <span className="font-medium">{shop.name}</span> },
+    { key: 'slug', header: 'Slug', render: (shop) => <span className="font-mono text-xs text-muted">{shop.slug}</span> },
+    { key: 'status', header: 'Status', render: (shop) => <Badge tone="neutral">{shop.status}</Badge> },
+    { key: 'currency', header: 'Currency', align: 'right', render: (shop) => shop.default_currency },
+  ];
+
   return (
-    <div className="page-stack">
-      <section className="dashboard-card">
-        <p className="dashboard-card__eyebrow">Shops</p>
-        <h1>Your shops</h1>
-        <p>Manage the shops you belong to and create new storefronts.</p>
+    <HubPage eyebrow="System" title="Shops" description="Manage storefronts and create new shops.">
+      <Card>
+        <CardHeader title="Create shop" />
+        <CardBody>
+          <form className="flex flex-wrap items-end gap-3" onSubmit={handleCreate}>
+            <Field label="Name">
+              <Input value={name} onChange={(event) => setName(event.target.value)} required />
+            </Field>
+            <Field label="Slug (optional)">
+              <Input value={slug} onChange={(event) => setSlug(event.target.value)} />
+            </Field>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Creating…' : 'Create shop'}
+            </Button>
+          </form>
+          {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
+        </CardBody>
+      </Card>
 
-        <form className="inline-form" onSubmit={handleCreate}>
-          <label className="form-field">
-            <span>Name</span>
-            <input value={name} onChange={(event) => setName(event.target.value)} required />
-          </label>
-          <label className="form-field">
-            <span>Slug (optional)</span>
-            <input value={slug} onChange={(event) => setSlug(event.target.value)} />
-          </label>
-          <button className="button button--primary" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Creating...' : 'Create shop'}
-          </button>
-        </form>
-        {error ? <p className="form-error">{error}</p> : null}
-      </section>
-
-      <section className="dashboard-card">
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Slug</th>
-                <th>Status</th>
-                <th>Currency</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shops.map((shop) => (
-                <tr key={shop.id}>
-                  <td>{shop.name}</td>
-                  <td>{shop.slug}</td>
-                  <td>{shop.status}</td>
-                  <td>{shop.default_currency}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {shops.length === 0 ? <p className="empty-state">No shops yet.</p> : null}
-        </div>
-      </section>
-    </div>
+      <Card>
+        <CardHeader title="Your shops" description={`${shops.length} shops you belong to.`} />
+        <DataTable
+          columns={columns}
+          rows={shops}
+          rowKey={(shop) => shop.id}
+          isLoading={loading}
+          emptyTitle="No shops yet"
+        />
+      </Card>
+    </HubPage>
   );
 }

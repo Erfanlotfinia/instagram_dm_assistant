@@ -3,7 +3,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { ShopSelector } from '../components/ShopSelector';
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Card, CardBody, CardHeader, Field, Input } from '../components/ui';
+import { EmptyState } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { apiClient } from '../services/apiClient';
@@ -14,6 +16,9 @@ const MODES = [
   { id: 'copilot', label: 'Copilot', detail: 'Operator approval required for writes' },
   { id: 'autonomous_low_risk', label: 'Autonomous low-risk', detail: 'Writes only when all policies pass' },
 ] as const;
+
+const ghostLinkClass =
+  'inline-flex h-10 items-center rounded-lg px-4 text-sm font-medium text-muted transition-colors hover:bg-surface-sunken hover:text-fg';
 
 export function PilotControlCenterPage() {
   const { selectedShop, selectedShopId } = useShop();
@@ -57,81 +62,103 @@ export function PilotControlCenterPage() {
   const settings = settingsQuery.data;
   const currentMode = settings?.operating_mode ?? 'copilot';
 
-  if (!selectedShop) {
-    return (
-      <section className="dashboard-card dashboard-card--wide">
-        <h1>Pilot Control Center</h1>
-        <ShopSelector />
-      </section>
-    );
-  }
-
   return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Trust layer</p>
-        <h1>Pilot Control Center</h1>
-        <p>Control operating mode, category/campaign overrides, and emergency stop for the selected shop.</p>
-        <ShopSelector />
-      </section>
+    <HubPage
+      eyebrow="Trust layer"
+      title="Pilot Control Center"
+      description="Control operating mode, category/campaign overrides, and emergency stop for the selected shop."
+    >
+      {!selectedShop ? (
+        <Card>
+          <CardBody>
+            <EmptyState title="Select a shop" description="Use the shop switcher in the top bar." />
+          </CardBody>
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <CardHeader
+              title="Operating mode"
+              description={`Current shop: ${selectedShop.name}`}
+              actions={
+                settings?.emergency_stop_enabled ? (
+                  <Badge tone="danger">Emergency stop active</Badge>
+                ) : (
+                  <Badge tone="neutral">{currentMode}</Badge>
+                )
+              }
+            />
+            <CardBody className="flex flex-col gap-4">
+              <Field label="Reason for mode change">
+                <Input value={modeReason} onChange={(e) => setModeReason(e.target.value)} placeholder="Optional" />
+              </Field>
 
-      <section className="dashboard-card dashboard-card--wide pilot-safeguards">
-        <div className="section-header">
-          <h2>Operating mode</h2>
-          <span
-            className={
-              settings?.emergency_stop_enabled
-                ? 'priority-badge priority-badge--urgent'
-                : 'priority-badge priority-badge--medium'
-            }
-          >
-            {settings?.emergency_stop_enabled ? 'Emergency stop active' : currentMode}
-          </span>
-        </div>
-        <label className="form-field">
-          <span>Reason for mode change</span>
-          <input value={modeReason} onChange={(e) => setModeReason(e.target.value)} placeholder="Optional" />
-        </label>
-        <div className="filter-chips" role="group" aria-label="Operating mode">
-          {MODES.map((mode) => (
-            <button
-              key={mode.id}
-              type="button"
-              className={`filter-chip${currentMode === mode.id ? ' filter-chip--active' : ''}`}
-              disabled={modeMutation.isPending}
-              onClick={() => modeMutation.mutate(mode.id)}
-            >
-              {mode.label}
-            </button>
-          ))}
-        </div>
-        <ul className="checklist">
-          {MODES.map((mode) => (
-            <li key={mode.id}>
-              <strong>{mode.label}</strong> — {mode.detail}
-            </li>
-          ))}
-        </ul>
-        <div className="button-row pilot-safeguards__actions">
-          <button
-            className="button button--danger"
-            type="button"
-            onClick={() => setStopDialogOpen(true)}
-            disabled={stopMutation.isPending || settings?.emergency_stop_enabled}
-          >
-            Emergency stop
-          </button>
-          <Link className="button button--ghost-dark" to="/incidents">
-            View incidents
-          </Link>
-        </div>
-        {scopePreview ? (
-          <div className="alert alert--warning">
-            Last stop affected {scopePreview.active_conversation_count} active conversation(s),{' '}
-            {scopePreview.simulation_conversation_count} simulation conversation(s).
-          </div>
-        ) : null}
-      </section>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Operating mode">
+                {MODES.map((mode) => (
+                  <Button
+                    key={mode.id}
+                    type="button"
+                    size="sm"
+                    variant={currentMode === mode.id ? 'primary' : 'secondary'}
+                    disabled={modeMutation.isPending}
+                    onClick={() => modeMutation.mutate(mode.id)}
+                  >
+                    {mode.label}
+                  </Button>
+                ))}
+              </div>
+
+              <ul className="list-inside list-disc space-y-1 text-sm text-muted">
+                {MODES.map((mode) => (
+                  <li key={mode.id}>
+                    <strong className="text-fg">{mode.label}</strong> — {mode.detail}
+                  </li>
+                ))}
+              </ul>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="danger"
+                  onClick={() => setStopDialogOpen(true)}
+                  disabled={stopMutation.isPending || settings?.emergency_stop_enabled}
+                >
+                  Emergency stop
+                </Button>
+                <Link className={ghostLinkClass} to="/incidents">
+                  View incidents
+                </Link>
+              </div>
+
+              {scopePreview ? (
+                <div className="rounded-lg border border-warning/30 bg-warning-soft/30 px-4 py-3 text-sm text-fg" role="note">
+                  Last stop affected {scopePreview.active_conversation_count} active conversation(s),{' '}
+                  {scopePreview.simulation_conversation_count} simulation conversation(s).
+                </div>
+              ) : null}
+            </CardBody>
+          </Card>
+
+          {stopDialogOpen ? (
+            <Card>
+              <CardHeader
+                title="Scope preview"
+                description="Active conversations will remain open but automation will not write orders or send messages."
+              />
+              <CardBody>
+                <Field label="Reason">
+                  <textarea
+                    value={stopReason}
+                    onChange={(e) => setStopReason(e.target.value)}
+                    rows={3}
+                    className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-accent focus:outline-none"
+                  />
+                </Field>
+              </CardBody>
+            </Card>
+          ) : null}
+        </>
+      )}
 
       <ConfirmDialog
         open={stopDialogOpen}
@@ -142,18 +169,6 @@ export function PilotControlCenterPage() {
         onCancel={() => setStopDialogOpen(false)}
         isLoading={stopMutation.isPending}
       />
-      {stopDialogOpen ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <h3>Scope preview</h3>
-          <p className="dashboard-card__subtitle">
-            Active conversations will remain open but automation will not write orders or send messages.
-          </p>
-          <label className="form-field">
-            <span>Reason</span>
-            <textarea value={stopReason} onChange={(e) => setStopReason(e.target.value)} rows={3} />
-          </label>
-        </section>
-      ) : null}
-    </div>
+    </HubPage>
   );
 }

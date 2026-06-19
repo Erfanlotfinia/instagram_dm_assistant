@@ -1,3 +1,5 @@
+import { Badge, type BadgeTone } from '../ui';
+
 interface RiskBadgeProps {
   level?: string | null;
   score?: number | null;
@@ -10,14 +12,21 @@ const LABELS: Record<string, string> = {
   critical: 'Critical risk',
 };
 
+const TONES: Record<string, BadgeTone> = {
+  low: 'success',
+  medium: 'warning',
+  high: 'danger',
+  critical: 'danger',
+};
+
 export function RiskBadge({ level, score }: RiskBadgeProps) {
-  // Avoid surfacing an "unknown" badge as visual noise before risk is scored.
   if (!level || !LABELS[level]) {
     return null;
   }
   return (
-    <span className={`status-pill status-pill--${level}`} aria-label={`Risk level ${level}`}>
-      {LABELS[level]}{typeof score === 'number' ? ` · ${Math.round(score * 100)}%` : ''}
-    </span>
+    <Badge tone={TONES[level] ?? 'neutral'} aria-label={`Risk level ${level}`}>
+      {LABELS[level]}
+      {typeof score === 'number' ? ` · ${Math.round(score * 100)}%` : ''}
+    </Badge>
   );
 }

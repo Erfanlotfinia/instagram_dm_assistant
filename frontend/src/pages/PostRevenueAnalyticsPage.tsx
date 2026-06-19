@@ -1,8 +1,21 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { ShopSelector } from '../components/ShopSelector';
+import { HubPage } from '../components/shell/HubPage';
+import { Card, CardHeader } from '../components/ui';
+import { DataTable } from '../components/data';
+import type { Column } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
 import { apiClient } from '../services/apiClient';
+
+interface PostRevenueRow {
+  instagram_post_url: string;
+  conversations: number;
+  draft_orders: number;
+  paid_orders: number;
+  revenue: string | number;
+  conversion_rate: number;
+  abandoned_rate: number;
+}
 
 export function PostRevenueAnalyticsPage() {
   const { selectedShopId } = useShop();
@@ -13,56 +26,53 @@ export function PostRevenueAnalyticsPage() {
     enabled: Boolean(selectedShopId),
   });
 
-  return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Post attribution</p>
-        <h1>Post revenue analytics</h1>
-        <p>Conversations, draft orders, paid orders, revenue, conversion, and abandonment by Instagram post.</p>
-        <ShopSelector />
-      </section>
+  const columns: Column<PostRevenueRow>[] = [
+    {
+      key: 'post',
+      header: 'Post',
+      render: (row) => (
+        <a href={row.instagram_post_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+          {row.instagram_post_url}
+        </a>
+      ),
+    },
+    { key: 'conversations', header: 'Conversations', align: 'right', render: (row) => row.conversations },
+    { key: 'drafts', header: 'Draft orders', align: 'right', className: 'hidden sm:table-cell', render: (row) => row.draft_orders },
+    { key: 'paid', header: 'Paid', align: 'right', render: (row) => row.paid_orders },
+    { key: 'revenue', header: 'Revenue', align: 'right', render: (row) => <span className="tabular-nums font-medium">{row.revenue}</span> },
+    {
+      key: 'conversion',
+      header: 'Conversion',
+      align: 'right',
+      className: 'hidden md:table-cell',
+      render: (row) => <span className="tabular-nums">{(row.conversion_rate * 100).toFixed(1)}%</span>,
+    },
+    {
+      key: 'abandoned',
+      header: 'Abandoned',
+      align: 'right',
+      className: 'hidden lg:table-cell',
+      render: (row) => <span className="tabular-nums">{(row.abandoned_rate * 100).toFixed(1)}%</span>,
+    },
+  ];
 
-      <section className="dashboard-card dashboard-card--wide">
-        <h2>Performance by post</h2>
-        {revenue.isLoading ? <p className="loading-state">Loading post revenue...</p> : null}
-        {revenue.error ? (
-          <p className="form-error">
-            {revenue.error instanceof Error ? revenue.error.message : 'Failed to load analytics'}
-          </p>
-        ) : null}
-        {!revenue.isLoading && (revenue.data?.length ?? 0) === 0 ? (
-          <p className="empty-state">No post-attributed conversations yet.</p>
-        ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Post</th>
-                  <th>Conversations</th>
-                  <th>Draft orders</th>
-                  <th>Paid orders</th>
-                  <th>Revenue</th>
-                  <th>Conversion</th>
-                  <th>Abandoned</th>
-                </tr>
-              </thead>
-              <tbody>
-                {revenue.data?.map((row) => (
-                  <tr key={row.instagram_post_url}>
-                    <td>{row.instagram_post_url}</td>
-                    <td>{row.conversations}</td>
-                    <td>{row.draft_orders}</td>
-                    <td>{row.paid_orders}</td>
-                    <td>{row.revenue}</td>
-                    <td>{(row.conversion_rate * 100).toFixed(1)}%</td>
-                    <td>{(row.abandoned_rate * 100).toFixed(1)}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </div>
+  return (
+    <HubPage
+      eyebrow="Analytics"
+      title="Post revenue"
+      description="Conversations, orders, revenue, conversion, and abandonment by Instagram post."
+    >
+      <Card>
+        <CardHeader title="Performance by post" />
+        <DataTable
+          columns={columns}
+          rows={revenue.data ?? []}
+          rowKey={(row) => row.instagram_post_url}
+          isLoading={revenue.isLoading}
+          error={revenue.error instanceof Error ? revenue.error.message : null}
+          emptyTitle="No post-attributed conversations yet"
+        />
+      </Card>
+    </HubPage>
   );
 }

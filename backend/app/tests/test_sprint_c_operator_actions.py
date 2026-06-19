@@ -40,7 +40,7 @@ def test_assign_conversation(client, auth_headers, db_session, demo_shop, admin_
     assert body["assigned_operator_id"] == str(admin_user.id)
 
 
-@patch("app.services.instagram_send_service.InstagramSendService.send_text_message")
+@patch("app.services.channel_outbound_service.ChannelOutboundService.send_text_message")
 def test_manual_message_creates_audit_and_event(
     mock_send, client, auth_headers, db_session, demo_shop, admin_user
 ) -> None:
@@ -97,7 +97,7 @@ def test_customer_profile_patch(client, auth_headers, db_session, demo_shop) -> 
     assert body["phone"] == "09120000000"
 
 
-@patch("app.services.instagram_send_service.InstagramSendService.send_text_message")
+@patch("app.services.channel_outbound_service.ChannelOutboundService.send_text_message")
 def test_send_payment_link(mock_send, client, auth_headers, db_session, demo_shop, admin_user) -> None:
     from datetime import UTC, datetime
     from app.domain.models import Message

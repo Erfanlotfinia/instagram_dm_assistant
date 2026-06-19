@@ -3,7 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { filterBySearch, Pagination, paginateItems } from '../components/Pagination';
-import { ShopSelector } from '../components/ShopSelector';
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Card, CardBody, CardHeader, Field, Select } from '../components/ui';
+import { DataTable, EmptyState, FilterBar, KpiCard, LoadingState } from '../components/data';
+import type { Column } from '../components/data';
+import type { BadgeTone } from '../components/ui';
+import { cn } from '../lib/cn';
 import { useShop } from '../contexts/ShopContext';
 import { queryKeys } from '../lib/queryClient';
 import { demandReasonTone, formatMismatchReason } from '../lib/variantResolver';
@@ -12,7 +17,7 @@ import type { UnavailableDemandLog } from '../types/fashion';
 
 const PAGE_SIZE = 12;
 
-type ReasonTone = 'success' | 'warning' | 'danger' | 'neutral';
+const ghostLinkClass = 'text-sm font-medium text-accent hover:underline';
 
 function formatMoney(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) {
@@ -25,12 +30,8 @@ function formatMoney(value: number | null | undefined): string {
 }
 
 function ReasonBadge({ reason }: { reason: string }) {
-  const tone = demandReasonTone(reason) as ReasonTone;
-  return (
-    <span className={`order-status-badge order-status-badge--${tone}`}>
-      {formatMismatchReason(reason)}
-    </span>
-  );
+  const tone = demandReasonTone(reason) as BadgeTone;
+  return <Badge tone={tone}>{formatMismatchReason(reason)}</Badge>;
 }
 
 function SlotValue({
@@ -41,20 +42,20 @@ function SlotValue({
   normalized?: string | null;
 }) {
   if (!raw && !normalized) {
-    return <span className="demand-slot demand-slot--empty">—</span>;
+    return <span className="text-subtle">—</span>;
   }
 
   if (!raw || raw === normalized) {
-    return <span className="demand-slot__normalized">{normalized ?? raw}</span>;
+    return <span className="text-fg">{normalized ?? raw}</span>;
   }
 
   return (
-    <span className="demand-slot">
-      <span className="demand-slot__raw">{raw}</span>
-      <span className="demand-slot__arrow" aria-hidden="true">
+    <span className="inline-flex flex-wrap items-center gap-1 text-sm">
+      <span className="text-muted">{raw}</span>
+      <span className="text-subtle" aria-hidden="true">
         →
       </span>
-      <span className="demand-slot__normalized">{normalized ?? '?'}</span>
+      <span className="text-fg">{normalized ?? '?'}</span>
     </span>
   );
 }
@@ -76,6 +77,15 @@ function buildSearchText(
     .filter(Boolean)
     .join(' ');
 }
+
+const REASON_BAR_CLASS: Record<BadgeTone, string> = {
+  neutral: 'bg-muted',
+  accent: 'bg-accent',
+  success: 'bg-success',
+  warning: 'bg-warning',
+  danger: 'bg-danger',
+  info: 'bg-info',
+};
 
 export function UnavailableDemandPage() {
   const { selectedShop, selectedShopId } = useShop();
@@ -169,293 +179,291 @@ export function UnavailableDemandPage() {
 
   const isLoading = demandQuery.isLoading || productsQuery.isLoading;
 
-  return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Insights</p>
-        <h1>Unavailable demand</h1>
-        <p>
-          Every request the resolver could not fulfill — wrong variant, missing alias, or out of
-          stock. Use this log to restock, add dictionary aliases, or fix catalog gaps.
-        </p>
-        <ShopSelector />
+  const logColumns: Column<UnavailableDemandLog>[] = [
+    {
+      key: 'reason',
+      header: 'Reason',
+      render: (row) => <ReasonBadge reason={row.reason} />,
+    },
+    {
+      key: 'product',
+      header: 'Product',
+      render: (row) => {
+        const productName = row.product_id ? productNames.get(row.product_id) : undefined;
+        if (row.product_id && productName) {
+          return (
+            <Link
+              className="font-medium text-accent hover:underline"
+              to={`/catalog/products/${row.product_id}?shopId=${selectedShopId}`}
+            >
+              {productName}
+            </Link>
+          );
+        }
+        if (row.product_id) {
+          return (
+            <span className="font-mono text-xs text-muted" title={row.product_id}>
+              Unknown product
+            </span>
+          );
+        }
+        return '—';
+      },
+    },
+    {
+      key: 'color',
+      header: 'Color',
+      render: (row) => (
+        <SlotValue raw={row.requested_color_raw} normalized={row.requested_color_normalized} />
+      ),
+    },
+    {
+      key: 'size',
+      header: 'Size',
+      render: (row) => (
+        <SlotValue raw={row.requested_size_raw} normalized={row.requested_size_normalized} />
+      ),
+    },
+    {
+      key: 'qty',
+      header: 'Qty',
+      render: (row) => row.requested_quantity,
+    },
+    {
+      key: 'lost',
+      header: 'Est. lost',
+      align: 'right',
+      render: (row) => (
+        <span className="tabular-nums">{formatMoney(row.estimated_lost_revenue ?? null)}</span>
+      ),
+    },
+  ];
 
-        <div className="demand-actions">
-          <Link className="table-link" to="/fashion-dictionary">
-            Manage color &amp; size aliases
+  return (
+    <HubPage
+      eyebrow="Insights"
+      title="Unavailable demand"
+      description="Every request the resolver could not fulfill — wrong variant, missing alias, or out of stock. Use this log to restock, add dictionary aliases, or fix catalog gaps."
+    >
+      <Card>
+        <CardBody className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <Link className={ghostLinkClass} to="/catalog/attributes">
+            Manage attribute aliases
           </Link>
-          <span className="demand-actions__sep" aria-hidden="true">
+          <span className="text-subtle" aria-hidden="true">
             ·
           </span>
-          <Link className="table-link" to="/variant-resolver">
+          <Link className={ghostLinkClass} to="/variant-resolver">
             Test resolver
           </Link>
-          <span className="demand-actions__sep" aria-hidden="true">
+          <span className="text-subtle" aria-hidden="true">
             ·
           </span>
-          <Link className="table-link" to="/analytics">
+          <Link className={ghostLinkClass} to="/analytics">
             View aggregated analytics
           </Link>
-        </div>
-      </section>
+        </CardBody>
+      </Card>
 
       {!selectedShopId ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="empty-state">Select a shop to review unavailable demand.</p>
-        </section>
+        <Card>
+          <CardBody>
+            <EmptyState title="Select a shop" description="Use the shop switcher in the top bar." />
+          </CardBody>
+        </Card>
       ) : isLoading ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="loading-state">Loading demand logs…</p>
-        </section>
+        <Card>
+          <CardBody>
+            <LoadingState label="Loading demand logs…" />
+          </CardBody>
+        </Card>
       ) : demandQuery.error ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="form-error">
-            {demandQuery.error instanceof Error
-              ? demandQuery.error.message
-              : 'Failed to load unavailable demand'}
-          </p>
-        </section>
+        <Card>
+          <CardBody>
+            <p className="text-sm text-danger">
+              {demandQuery.error instanceof Error
+                ? demandQuery.error.message
+                : 'Failed to load unavailable demand'}
+            </p>
+          </CardBody>
+        </Card>
       ) : (
         <>
-          <section className="dashboard-card dashboard-card--wide demand-summary-card">
-            <div className="section-header section-header--stacked">
-              <div>
-                <h2>Summary</h2>
-                <p className="dashboard-card__subtitle">
-                  {selectedShop?.name ?? 'Shop'} — missed demand captured by the variant resolver
-                </p>
-              </div>
-            </div>
-
-            {summary.totalRequests === 0 ? (
-              <p className="empty-state">No unavailable demand logged for this shop yet.</p>
-            ) : (
-              <div className="demand-summary">
-                <article className="demand-summary-hero">
-                  <div className="demand-summary-hero__top">
-                    <div>
-                      <p className="demand-summary-hero__label">Estimated lost revenue</p>
-                      <p className="demand-summary-hero__value">{formatMoney(summary.totalLostRevenue)}</p>
-                    </div>
-                    <div className="demand-summary-pills" aria-label="Demand totals">
-                      <span className="demand-summary-pill">
-                        <strong>{summary.totalRequests}</strong> requests
-                      </span>
-                      <span className="demand-summary-pill">
-                        <strong>{summary.totalQuantity}</strong> units
-                      </span>
-                      <span className="demand-summary-pill">
-                        <strong>{summary.productsAffected}</strong> products
-                      </span>
-                    </div>
+          <Card>
+            <CardHeader
+              title="Summary"
+              description={`${selectedShop?.name ?? 'Shop'} — missed demand captured by the variant resolver`}
+            />
+            <CardBody>
+              {summary.totalRequests === 0 ? (
+                <EmptyState title="No unavailable demand logged for this shop yet." />
+              ) : (
+                <div className="flex flex-col gap-6">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <KpiCard label="Estimated lost revenue" value={formatMoney(summary.totalLostRevenue)} tone="danger" />
+                    <KpiCard label="Requests" value={summary.totalRequests.toLocaleString()} />
+                    <KpiCard label="Units requested" value={summary.totalQuantity.toLocaleString()} />
+                    <KpiCard label="Products affected" value={summary.productsAffected.toLocaleString()} />
                   </div>
-                  <p className="demand-summary-hero__lead">
-                    Revenue the shop missed when the resolver could not match a fulfillable variant.
-                    Click a reason below to filter the request log.
+
+                  <p className="text-sm text-muted">
+                    Revenue the shop missed when the resolver could not match a fulfillable variant. Click a reason
+                    below to filter the request log.
                   </p>
-                </article>
 
-                <div className="demand-summary-reasons">
-                  <div className="demand-summary-reasons__header">
-                    <p className="demand-summary-reasons__title">Breakdown by reason</p>
-                    {reasonFilter ? (
-                      <button
-                        className="demand-summary-reasons__clear"
-                        type="button"
-                        onClick={() => {
-                          setPage(1);
-                          setReasonFilter('');
-                        }}
-                      >
-                        Clear filter
-                      </button>
-                    ) : null}
-                  </div>
+                  <div>
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-fg">Breakdown by reason</p>
+                      {reasonFilter ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setPage(1);
+                            setReasonFilter('');
+                          }}
+                        >
+                          Clear filter
+                        </Button>
+                      ) : null}
+                    </div>
 
-                  <ul className="demand-reason-list">
-                    {summary.reasonBreakdown.map((item) => {
-                      const isActive = reasonFilter === item.reason;
-                      const sharePercent = Math.round(item.share * 100);
+                    <ul className="flex flex-col gap-2">
+                      {summary.reasonBreakdown.map((item) => {
+                        const isActive = reasonFilter === item.reason;
+                        const sharePercent = Math.round(item.share * 100);
+                        const tone = demandReasonTone(item.reason) as BadgeTone;
 
-                      return (
-                        <li key={item.reason}>
-                          <button
-                            type="button"
-                            className={`demand-reason-row${isActive ? ' demand-reason-row--active' : ''}`}
-                            aria-pressed={isActive}
-                            onClick={() => {
-                              setPage(1);
-                              setReasonFilter((current) =>
-                                current === item.reason ? '' : item.reason,
-                              );
-                            }}
-                          >
-                            <span className="demand-reason-row__top">
-                              <ReasonBadge reason={item.reason} />
-                              <span className="demand-reason-row__stats">
-                                <span className="demand-reason-row__count">
-                                  {item.count} request{item.count === 1 ? '' : 's'}
-                                </span>
-                                <span className="demand-reason-row__revenue">
-                                  {formatMoney(item.revenue)}
+                        return (
+                          <li key={item.reason}>
+                            <button
+                              type="button"
+                              className={cn(
+                                'w-full rounded-lg border px-4 py-3 text-left transition-colors',
+                                isActive
+                                  ? 'border-accent bg-accent-soft/30'
+                                  : 'border-border bg-surface hover:bg-surface-sunken',
+                              )}
+                              aria-pressed={isActive}
+                              onClick={() => {
+                                setPage(1);
+                                setReasonFilter((current) => (current === item.reason ? '' : item.reason));
+                              }}
+                            >
+                              <span className="flex flex-wrap items-center justify-between gap-2">
+                                <ReasonBadge reason={item.reason} />
+                                <span className="flex flex-wrap items-center gap-3 text-sm text-muted">
+                                  <span>
+                                    {item.count} request{item.count === 1 ? '' : 's'}
+                                  </span>
+                                  <span className="tabular-nums">{formatMoney(item.revenue)}</span>
                                 </span>
                               </span>
-                            </span>
-                            <span className="demand-reason-row__bar" aria-hidden="true">
-                              <span
-                                className={`demand-reason-row__fill demand-reason-row__fill--${demandReasonTone(item.reason)}`}
-                                style={{ width: `${Math.max(sharePercent, 8)}%` }}
-                              />
-                            </span>
-                            <span className="demand-reason-row__share">{sharePercent}% of requests</span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                              <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-surface-sunken" aria-hidden="true">
+                                <span
+                                  className={cn('block h-full rounded-full', REASON_BAR_CLASS[tone])}
+                                  style={{ width: `${Math.max(sharePercent, 8)}%` }}
+                                />
+                              </span>
+                              <span className="mt-1 block text-xs text-subtle">{sharePercent}% of requests</span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 </div>
-              </div>
-            )}
-          </section>
+              )}
+            </CardBody>
+          </Card>
 
-          <section className="dashboard-card dashboard-card--wide">
-            <div className="section-header section-header--stacked">
-              <div>
-                <h2>Request log</h2>
-                <p className="dashboard-card__subtitle">
-                  {reasonFilter
-                    ? `Showing ${formatMismatchReason(reasonFilter).toLowerCase()} requests only.`
-                    : 'Raw customer input and normalized values captured at resolution time.'}
-                </p>
-              </div>
-            </div>
-
-            <div className="filter-grid demand-filters">
-              <label className="form-field form-field--wide">
-                <span>Search</span>
-                <input
-                  type="search"
-                  placeholder="Color, size, product, reason…"
-                  value={search}
-                  onChange={(event) => {
-                    setPage(1);
-                    setSearch(event.target.value);
-                  }}
-                />
-              </label>
-              <label className="form-field">
-                <span>Reason</span>
-                <select
-                  value={reasonFilter}
-                  onChange={(event) => {
-                    setPage(1);
-                    setReasonFilter(event.target.value);
-                  }}
-                >
-                  <option value="">All reasons</option>
-                  {reasonOptions.map((reason) => (
-                    <option key={reason} value={reason}>
-                      {formatMismatchReason(reason)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+          <Card>
+            <CardHeader
+              title="Request log"
+              description={
+                reasonFilter
+                  ? `Showing ${formatMismatchReason(reasonFilter).toLowerCase()} requests only.`
+                  : 'Raw customer input and normalized values captured at resolution time.'
+              }
+            />
+            <div className="border-b border-border px-5 py-3">
+              <FilterBar
+                search={search}
+                onSearch={(value) => {
+                  setPage(1);
+                  setSearch(value);
+                }}
+                searchPlaceholder="Attribute, product, reason…"
+              >
+                <Field label="Reason" className="min-w-[10rem]">
+                  <Select
+                    value={reasonFilter}
+                    onChange={(event) => {
+                      setPage(1);
+                      setReasonFilter(event.target.value);
+                    }}
+                  >
+                    <option value="">All reasons</option>
+                    {reasonOptions.map((reason) => (
+                      <option key={reason} value={reason}>
+                        {formatMismatchReason(reason)}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </FilterBar>
             </div>
 
             {filteredRows.length === 0 ? (
-              <div className="demand-empty">
-                <p className="empty-state">
-                  {summary.totalRequests === 0
-                    ? 'No unavailable demand logged yet. Requests appear when the variant resolver fails to match stock.'
-                    : 'No requests match your filters.'}
-                </p>
-                {summary.totalRequests === 0 ? (
-                  <div className="button-row">
-                    <Link className="button button--ghost-dark" to="/fashion-dictionary">
-                      Add aliases
-                    </Link>
-                    <Link className="button button--primary" to="/variant-resolver">
-                      Run resolver test
-                    </Link>
-                  </div>
-                ) : (
-                  <button
-                    className="button button--ghost-dark"
-                    type="button"
-                    onClick={() => {
-                      setSearch('');
-                      setReasonFilter('');
-                      setPage(1);
-                    }}
-                  >
-                    Clear filters
-                  </button>
-                )}
-              </div>
+              <CardBody>
+                <EmptyState
+                  title={
+                    summary.totalRequests === 0
+                      ? 'No unavailable demand logged yet. Requests appear when the variant resolver fails to match stock.'
+                      : 'No requests match your filters.'
+                  }
+                  action={
+                    summary.totalRequests === 0 ? (
+                      <div className="flex flex-wrap justify-center gap-2">
+                        <Link
+                          className="inline-flex h-8 items-center rounded-lg px-3 text-xs font-medium text-muted hover:bg-surface-sunken hover:text-fg"
+                          to="/catalog/attributes"
+                        >
+                          Add aliases
+                        </Link>
+                        <Link
+                          className="inline-flex h-8 items-center rounded-lg bg-accent px-3 text-xs font-medium text-accent-fg hover:opacity-90"
+                          to="/variant-resolver"
+                        >
+                          Run resolver test
+                        </Link>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSearch('');
+                          setReasonFilter('');
+                          setPage(1);
+                        }}
+                      >
+                        Clear filters
+                      </Button>
+                    )
+                  }
+                />
+              </CardBody>
             ) : (
               <>
-                <div className="table-wrap">
-                  <table className="data-table demand-table">
-                    <thead>
-                      <tr>
-                        <th>Reason</th>
-                        <th>Product</th>
-                        <th>Color</th>
-                        <th>Size</th>
-                        <th>Qty</th>
-                        <th>Est. lost</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pageRows.map((row) => {
-                        const productName = row.product_id
-                          ? productNames.get(row.product_id)
-                          : undefined;
-
-                        return (
-                          <tr key={row.id}>
-                            <td>
-                              <ReasonBadge reason={row.reason} />
-                            </td>
-                            <td>
-                              {row.product_id && productName ? (
-                                <Link
-                                  className="table-link"
-                                  to={`/products/${row.product_id}?shopId=${selectedShopId}`}
-                                >
-                                  {productName}
-                                </Link>
-                              ) : row.product_id ? (
-                                <span className="demand-product-id" title={row.product_id}>
-                                  Unknown product
-                                </span>
-                              ) : (
-                                '—'
-                              )}
-                            </td>
-                            <td>
-                              <SlotValue
-                                raw={row.requested_color_raw}
-                                normalized={row.requested_color_normalized}
-                              />
-                            </td>
-                            <td>
-                              <SlotValue
-                                raw={row.requested_size_raw}
-                                normalized={row.requested_size_normalized}
-                              />
-                            </td>
-                            <td>{row.requested_quantity}</td>
-                            <td className="demand-table__money">
-                              {formatMoney(row.estimated_lost_revenue ?? null)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
+                <DataTable
+                  columns={logColumns}
+                  rows={pageRows}
+                  rowKey={(row) => row.id}
+                  emptyTitle="No requests match your filters."
+                />
                 <Pagination
                   page={page}
                   pageSize={PAGE_SIZE}
@@ -464,9 +472,9 @@ export function UnavailableDemandPage() {
                 />
               </>
             )}
-          </section>
+          </Card>
         </>
       )}
-    </div>
+    </HubPage>
   );
 }

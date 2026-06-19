@@ -3,10 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { filterBySearch, Pagination, paginateItems } from '../components/Pagination';
-import { ShopSelector } from '../components/ShopSelector';
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Card, Field, Select } from '../components/ui';
+import { DataTable, FilterBar } from '../components/data';
+import type { Column } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
 import { queryKeys } from '../lib/queryClient';
 import { apiClient } from '../services/apiClient';
+import type { Order } from '../types/order';
 import {
   ORDER_STATUS_OPTIONS,
   PAYMENT_STATUS_OPTIONS,
@@ -17,6 +21,13 @@ import {
 } from '../types/orderEnums';
 
 const PAGE_SIZE = 15;
+
+function statusTone(status: string): 'neutral' | 'success' | 'warning' | 'danger' | 'info' {
+  if (['paid', 'delivered', 'shipped'].includes(status)) return 'success';
+  if (['payment_pending', 'pending', 'preparing'].includes(status)) return 'warning';
+  if (['failed', 'cancelled', 'expired'].includes(status)) return 'danger';
+  return 'neutral';
+}
 
 export function OrdersPage() {
   const { selectedShopId } = useShop();
@@ -44,175 +55,148 @@ export function OrdersPage() {
 
   const filteredOrders = useMemo(() => {
     const orders = ordersQuery.data ?? [];
-    return filterBySearch(
-      orders,
-      (order) => `${order.customer_name} ${order.id} ${order.phone ?? ''}`,
-      search,
-    );
+    return filterBySearch(orders, (order) => `${order.customer_name} ${order.id} ${order.phone ?? ''}`, search);
   }, [ordersQuery.data, search]);
 
-  const pageItems = useMemo(
-    () => paginateItems(filteredOrders, page, PAGE_SIZE),
-    [filteredOrders, page],
-  );
+  const pageItems = useMemo(() => paginateItems(filteredOrders, page, PAGE_SIZE), [filteredOrders, page]);
+
+  const columns: Column<Order>[] = [
+    {
+      key: 'order',
+      header: 'Order',
+      render: (order) => (
+        <Link className="font-mono text-sm text-accent hover:underline" to={`/orders/${order.id}?shopId=${selectedShopId}`}>
+          {order.id.slice(0, 8)}
+        </Link>
+      ),
+    },
+    { key: 'customer', header: 'Customer', render: (order) => order.customer_name },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (order) => <Badge tone={statusTone(order.status)}>{order.status.replace(/_/g, ' ')}</Badge>,
+    },
+    {
+      key: 'payment',
+      header: 'Payment',
+      className: 'hidden md:table-cell',
+      render: (order) => <Badge tone={statusTone(order.payment_status)}>{order.payment_status}</Badge>,
+    },
+    {
+      key: 'shipping',
+      header: 'Shipping',
+      className: 'hidden lg:table-cell',
+      render: (order) => order.shipping_status.replace(/_/g, ' '),
+    },
+    {
+      key: 'total',
+      header: 'Total',
+      align: 'right',
+      render: (order) => (
+        <span className="tabular-nums font-medium">
+          {order.total_amount} {order.currency}
+        </span>
+      ),
+    },
+    {
+      key: 'conversation',
+      header: 'Chat',
+      align: 'right',
+      render: (order) => (
+        <Link className="text-xs text-accent hover:underline" to={`/inbox/${order.conversation_id}?shopId=${selectedShopId}`}>
+          View
+        </Link>
+      ),
+    },
+    {
+      key: 'created',
+      header: 'Created',
+      className: 'hidden sm:table-cell',
+      align: 'right',
+      render: (order) => (
+        <time className="text-xs text-subtle" dateTime={order.created_at}>
+          {new Date(order.created_at).toLocaleDateString()}
+        </time>
+      ),
+    },
+  ];
 
   return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Fulfillment</p>
-        <h1>Orders</h1>
-        <p>Track draft orders, payments, and shipping.</p>
-        <ShopSelector />
-
-        <div className="filter-grid">
-          <label className="form-field">
-            <span>Search</span>
-            <input
-              type="search"
-              placeholder="Customer, phone, order ID"
-              value={search}
-              onChange={(event) => {
-                setPage(1);
-                setSearch(event.target.value);
-              }}
-            />
-          </label>
-          <label className="form-field">
-            <span>Status</span>
-            <select
-              value={statusFilter}
-              onChange={(event) => {
-                setPage(1);
-                setStatusFilter(event.target.value as OrderStatus | '');
-              }}
-            >
-              <option value="">All</option>
-              {ORDER_STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="form-field">
-            <span>Payment</span>
-            <select
-              value={paymentStatusFilter}
-              onChange={(event) => {
-                setPage(1);
-                setPaymentStatusFilter(event.target.value as OrderPaymentStatus | '');
-              }}
-            >
-              <option value="">All</option>
-              {PAYMENT_STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="form-field">
-            <span>Shipping</span>
-            <select
-              value={shippingStatusFilter}
-              onChange={(event) => {
-                setPage(1);
-                setShippingStatusFilter(event.target.value as OrderShippingStatus | '');
-              }}
-            >
-              <option value="">All</option>
-              {SHIPPING_STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="form-field">
-            <span>From</span>
-            <input
-              type="date"
-              value={createdFrom}
-              onChange={(event) => {
-                setPage(1);
-                setCreatedFrom(event.target.value);
-              }}
-            />
-          </label>
-          <label className="form-field">
-            <span>To</span>
-            <input
-              type="date"
-              value={createdTo}
-              onChange={(event) => {
-                setPage(1);
-                setCreatedTo(event.target.value);
-              }}
-            />
-          </label>
-        </div>
-      </section>
-
-      <section className="dashboard-card dashboard-card--wide">
-        {ordersQuery.isLoading ? <p className="loading-state">Loading orders...</p> : null}
-        {ordersQuery.error ? (
-          <p className="form-error">
-            {ordersQuery.error instanceof Error ? ordersQuery.error.message : 'Failed to load orders'}
-          </p>
-        ) : null}
-
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Customer</th>
-                <th>Status</th>
-                <th className="col-hide-md">Risk</th>
-                <th className="col-hide-md">Approval</th>
-                <th className="col-hide-sm">Payment</th>
-                <th className="col-hide-md">Shipping</th>
-                <th>Total</th>
-                <th className="col-hide-sm">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageItems.map((order) => (
-                <tr key={order.id}>
-                  <td>
-                    <Link
-                      className="table-link"
-                      to={`/orders/${order.id}?shopId=${selectedShopId}`}
-                    >
-                      {order.id.slice(0, 8)}
-                    </Link>
-                  </td>
-                  <td>{order.customer_name}</td>
-                  <td>{order.status}</td>
-                  <td className="col-hide-md">{order.risk_flags?.length ? order.risk_flags.join(', ') : '—'}</td>
-                  <td className="col-hide-md">{order.approval_source ?? 'auto-approved'}</td>
-                  <td className="col-hide-sm">{order.payment_status}{order.payment_callback_status ? ` · ${order.payment_callback_status}` : ''}</td>
-                  <td className="col-hide-md">{order.shipping_status}</td>
-                  <td>
-                    {order.total_amount} {order.currency}
-                  </td>
-                  <td className="col-hide-sm">{new Date(order.created_at).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredOrders.length === 0 && !ordersQuery.isLoading ? (
-            <p className="empty-state">No orders match your filters.</p>
-          ) : null}
+    <HubPage
+      eyebrow="Fulfillment"
+      title="Orders"
+      description="Track draft orders, payments, shipping, and linked conversations."
+    >
+      <Card>
+        <div className="flex flex-col gap-4 border-b border-border px-5 py-4">
+          <FilterBar
+            search={search}
+            onSearch={(value) => { setPage(1); setSearch(value); }}
+            searchPlaceholder="Customer, phone, order ID…"
+          />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <Field label="Status">
+              <Select
+                value={statusFilter}
+                onChange={(event) => { setPage(1); setStatusFilter(event.target.value as OrderStatus | ''); }}
+              >
+                <option value="">All</option>
+                {ORDER_STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Payment">
+              <Select
+                value={paymentStatusFilter}
+                onChange={(event) => { setPage(1); setPaymentStatusFilter(event.target.value as OrderPaymentStatus | ''); }}
+              >
+                <option value="">All</option>
+                {PAYMENT_STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Shipping">
+              <Select
+                value={shippingStatusFilter}
+                onChange={(event) => { setPage(1); setShippingStatusFilter(event.target.value as OrderShippingStatus | ''); }}
+              >
+                <option value="">All</option>
+                {SHIPPING_STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="From">
+              <input
+                type="date"
+                value={createdFrom}
+                onChange={(event) => { setPage(1); setCreatedFrom(event.target.value); }}
+                className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm text-fg focus:border-accent focus:outline-none"
+              />
+            </Field>
+            <Field label="To">
+              <input
+                type="date"
+                value={createdTo}
+                onChange={(event) => { setPage(1); setCreatedTo(event.target.value); }}
+                className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm text-fg focus:border-accent focus:outline-none"
+              />
+            </Field>
+          </div>
         </div>
 
-        <Pagination
-          page={page}
-          pageSize={PAGE_SIZE}
-          totalItems={filteredOrders.length}
-          onPageChange={setPage}
+        <DataTable
+          columns={columns}
+          rows={pageItems}
+          rowKey={(order) => order.id}
+          isLoading={ordersQuery.isLoading}
+          error={ordersQuery.error instanceof Error ? ordersQuery.error.message : null}
+          emptyTitle="No orders match your filters"
         />
-      </section>
-    </div>
+        <Pagination page={page} pageSize={PAGE_SIZE} totalItems={filteredOrders.length} onPageChange={setPage} />
+      </Card>
+    </HubPage>
   );
 }

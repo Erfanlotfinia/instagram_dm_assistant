@@ -1,3 +1,4 @@
+import { Badge } from '../ui';
 import type { ResolveVariantResponse, ResolverTrace } from '../../types/resolve';
 
 export function WhyThisVariantPanel({
@@ -10,37 +11,39 @@ export function WhyThisVariantPanel({
   const top = result.candidates[0];
   if (!top) return null;
   return (
-    <div className="cc-why">
-      <h3 className="cc-subhead">Why this variant?</h3>
-      <p className="cc-why__rationale">{top.rationale}</p>
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-sunken p-4">
+      <h3 className="text-sm font-semibold text-fg">Why this variant?</h3>
+      <p className="text-sm leading-relaxed text-muted">{top.rationale}</p>
       {top.rules_fired.length > 0 ? (
-        <div className="cc-why__row">
-          <span className="cc-why__key">Rules fired</span>
-          <span className="cc-why__tags">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">Rules fired</span>
+          <span className="flex flex-wrap gap-1.5">
             {top.rules_fired.map((rule) => (
-              <span key={rule} className="cc-tag cc-tag--rule">
+              <Badge key={rule} tone="accent">
                 {rule}
-              </span>
+              </Badge>
             ))}
           </span>
         </div>
       ) : null}
       {top.matched_aliases.length > 0 ? (
-        <div className="cc-why__row">
-          <span className="cc-why__key">Matched aliases</span>
-          <span className="cc-why__tags">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted">Matched aliases</span>
+          <span className="flex flex-wrap gap-1.5">
             {top.matched_aliases.map((alias) => (
-              <span key={alias} className="cc-tag">
+              <Badge key={alias} tone="neutral">
                 {alias}
-              </span>
+              </Badge>
             ))}
           </span>
         </div>
       ) : null}
       {trace?.qdrant_query_metadata && Object.keys(trace.qdrant_query_metadata).length > 0 ? (
-        <details className="cc-why__meta">
-          <summary>Retrieval metadata</summary>
-          <pre className="cc-json">{JSON.stringify(trace.qdrant_query_metadata, null, 2)}</pre>
+        <details className="rounded-lg border border-border bg-surface p-3">
+          <summary className="cursor-pointer text-sm font-medium text-fg">Retrieval metadata</summary>
+          <pre className="mt-2 overflow-x-auto text-xs text-subtle">
+            {JSON.stringify(trace.qdrant_query_metadata, null, 2)}
+          </pre>
         </details>
       ) : null}
     </div>

@@ -2,7 +2,9 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
-import { ShopSelector } from '../components/ShopSelector';
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Card, CardBody, CardHeader, Field, Input } from '../components/ui';
+import { EmptyState, KpiCard, LoadingState } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { apiClient } from '../services/apiClient';
@@ -16,49 +18,17 @@ type ThresholdKey =
   | 'address_confidence_threshold';
 
 const THRESHOLD_FIELDS: Array<{ key: ThresholdKey; label: string; hint: string }> = [
-  {
-    key: 'intent_confidence_threshold',
-    label: 'Intent confidence',
-    hint: 'Minimum confidence before acting on detected customer intent.',
-  },
-  {
-    key: 'slot_confidence_threshold',
-    label: 'Slot extraction confidence',
-    hint: 'Minimum confidence for size, color, quantity, and address slots.',
-  },
-  {
-    key: 'product_confidence_threshold',
-    label: 'Product resolution confidence',
-    hint: 'Minimum confidence before selecting a catalog product from DM context.',
-  },
-  {
-    key: 'variant_confidence_threshold',
-    label: 'Variant resolution confidence',
-    hint: 'Minimum confidence before locking a size/color variant.',
-  },
-  {
-    key: 'address_confidence_threshold',
-    label: 'Address confidence',
-    hint: 'Minimum confidence before using extracted shipping details.',
-  },
+  { key: 'intent_confidence_threshold', label: 'Intent confidence', hint: 'Minimum confidence before acting on detected customer intent.' },
+  { key: 'slot_confidence_threshold', label: 'Slot extraction confidence', hint: 'Minimum confidence for size, color, quantity, and address slots.' },
+  { key: 'product_confidence_threshold', label: 'Product resolution confidence', hint: 'Minimum confidence before selecting a catalog product from DM context.' },
+  { key: 'variant_confidence_threshold', label: 'Variant resolution confidence', hint: 'Minimum confidence before locking a size/color variant.' },
+  { key: 'address_confidence_threshold', label: 'Address confidence', hint: 'Minimum confidence before using extracted shipping details.' },
 ];
 
 const POLICY_FIELDS = [
-  {
-    key: 'preview_required_for_high_value_order' as const,
-    label: 'Preview high-value orders',
-    hint: 'Require operator approval before progressing high-value draft orders.',
-  },
-  {
-    key: 'handoff_for_high_risk' as const,
-    label: 'Handoff on high risk',
-    hint: 'Escalate to a human when the risk scorer flags a high-risk decision.',
-  },
-  {
-    key: 'handoff_for_low_variant_confidence' as const,
-    label: 'Handoff on low variant confidence',
-    hint: 'Escalate when variant resolution falls below the configured threshold.',
-  },
+  { key: 'preview_required_for_high_value_order' as const, label: 'Preview high-value orders', hint: 'Require operator approval before progressing high-value draft orders.' },
+  { key: 'handoff_for_high_risk' as const, label: 'Handoff on high risk', hint: 'Escalate to a human when the risk scorer flags a high-risk decision.' },
+  { key: 'handoff_for_low_variant_confidence' as const, label: 'Handoff on low variant confidence', hint: 'Escalate when variant resolution falls below the configured threshold.' },
 ];
 
 type RiskFormState = Omit<AgentRiskSettings, 'shop_id'>;
@@ -77,15 +47,6 @@ const DEFAULT_FORM: RiskFormState = {
 
 function toPercent(value: number) {
   return `${Math.round(value * 100)}%`;
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <article className="stat-card">
-      <p className="stat-card__label">{label}</p>
-      <p className="stat-card__value">{value}</p>
-    </article>
-  );
 }
 
 function settingsToForm(settings: AgentRiskSettings): RiskFormState {
@@ -119,9 +80,7 @@ export function RiskSettingsPage() {
   });
 
   useEffect(() => {
-    if (settingsQuery.data) {
-      setForm(settingsToForm(settingsQuery.data));
-    }
+    if (settingsQuery.data) setForm(settingsToForm(settingsQuery.data));
   }, [settingsQuery.data]);
 
   const saveMutation = useMutation({
@@ -144,23 +103,18 @@ export function RiskSettingsPage() {
   }
 
   function resetForm() {
-    if (settingsQuery.data) {
-      setForm(settingsToForm(settingsQuery.data));
-      return;
-    }
-    setForm(DEFAULT_FORM);
+    if (settingsQuery.data) setForm(settingsToForm(settingsQuery.data));
+    else setForm(DEFAULT_FORM);
   }
 
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!selectedShopId) return;
-
     const validationError = validateForm(form);
     if (validationError) {
       showToast(validationError, 'error');
       return;
     }
-
     saveMutation.mutate();
   }
 
@@ -170,164 +124,140 @@ export function RiskSettingsPage() {
   ].filter(Boolean);
 
   return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Deterministic safety gates</p>
-        <h1>Risk Settings</h1>
-        <p>
-          Configure confidence thresholds and handoff rules that decide when the agent may act
-          autonomously, require preview, or escalate to an operator.
-        </p>
-        <ShopSelector />
-      </section>
-
+    <HubPage
+      eyebrow="Automation"
+      title="Risk settings"
+      description="Configure confidence thresholds and handoff rules for autonomous agent decisions."
+    >
       {!selectedShop ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="empty-state">Select a shop to configure risk settings.</p>
-        </section>
+        <Card>
+          <CardBody>
+            <EmptyState title="Select a shop" description="Use the shop switcher in the top bar." />
+          </CardBody>
+        </Card>
       ) : null}
 
       {selectedShopId && settingsQuery.isLoading ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="loading-state">Loading risk settings…</p>
-        </section>
+        <Card>
+          <CardBody>
+            <LoadingState label="Loading risk settings…" />
+          </CardBody>
+        </Card>
       ) : null}
 
       {settingsQuery.error ? (
-        <div role="alert" className="alert alert--error">
-          {settingsQuery.error instanceof Error ? settingsQuery.error.message : 'Failed to load risk settings'}
-        </div>
+        <Card>
+          <CardBody>
+            <p className="text-sm text-danger" role="alert">
+              {settingsQuery.error instanceof Error ? settingsQuery.error.message : 'Failed to load risk settings'}
+            </p>
+          </CardBody>
+        </Card>
       ) : null}
 
       {selectedShopId && settingsQuery.data ? (
-        <form className="agent-studio-form" onSubmit={submit} aria-label="Risk settings form">
-          <section className="dashboard-card dashboard-card--wide">
-            <div className="section-header section-header--stacked">
-              <div>
-                <h2>Current policy snapshot</h2>
-                <p className="dashboard-card__subtitle">
-                  Quick view of the thresholds and safeguards that will apply to the next DM decision.
-                </p>
+        <form className="flex flex-col gap-5" onSubmit={submit} aria-label="Risk settings form">
+          <Card>
+            <CardHeader
+              title="Current policy snapshot"
+              description="Quick view of thresholds and safeguards for the next DM decision."
+              actions={<Badge tone="warning">Safety policy</Badge>}
+            />
+            <CardBody className="flex flex-col gap-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <KpiCard label="Intent threshold" value={toPercent(form.intent_confidence_threshold)} />
+                <KpiCard label="Product threshold" value={toPercent(form.product_confidence_threshold)} />
+                <KpiCard label="Variant threshold" value={toPercent(form.variant_confidence_threshold)} />
+                <KpiCard
+                  label="High-value preview"
+                  value={form.preview_required_for_high_value_order ? 'Required' : 'Not required'}
+                />
               </div>
-              <span className="priority-badge priority-badge--medium">Safety policy</span>
-            </div>
+              <p className="text-sm text-muted">
+                Handoff triggers: {activeHandoffs.length ? activeHandoffs.join(', ') : 'None configured'}
+                {form.high_value_order_threshold > 0
+                  ? ` · High-value threshold: ${form.high_value_order_threshold.toLocaleString()}`
+                  : ''}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link to="/system/rollout?view=trl">
+                  <Button type="button" variant="secondary" size="sm">Review TRL validation</Button>
+                </Link>
+                <Link to="/system/rollout?view=readiness">
+                  <Button type="button" variant="secondary" size="sm">Review pilot readiness</Button>
+                </Link>
+              </div>
+            </CardBody>
+          </Card>
 
-            <div className="stats-grid">
-              <MetricCard label="Intent threshold" value={toPercent(form.intent_confidence_threshold)} />
-              <MetricCard label="Product threshold" value={toPercent(form.product_confidence_threshold)} />
-              <MetricCard label="Variant threshold" value={toPercent(form.variant_confidence_threshold)} />
-              <MetricCard
-                label="High-value preview"
-                value={form.preview_required_for_high_value_order ? 'Required' : 'Not required'}
-              />
-            </div>
+          <Card>
+            <CardHeader title="Confidence thresholds" description="Minimum model confidence required before each order-flow step." />
+            <CardBody>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {THRESHOLD_FIELDS.map((field) => (
+                  <Field key={field.key} label={field.label}>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={form[field.key]}
+                      onChange={(e) => updateField(field.key, Number(e.target.value))}
+                    />
+                    <span className="text-xs text-muted">{field.hint}</span>
+                  </Field>
+                ))}
+              </div>
+            </CardBody>
+          </Card>
 
-            <p className="risk-settings-summary">
-              Handoff triggers: {activeHandoffs.length ? activeHandoffs.join(', ') : 'None configured'}
-              {form.high_value_order_threshold > 0
-                ? ` · High-value threshold: ${form.high_value_order_threshold.toLocaleString()}`
-                : ''}
-            </p>
-
-            <div className="button-row risk-settings-links">
-              <Link className="button button--ghost-dark" to="/trl-validation">
-                Review TRL validation
-              </Link>
-              <Link className="button button--ghost-dark" to="/pilot-readiness">
-                Review pilot readiness
-              </Link>
-            </div>
-          </section>
-
-          <section className="dashboard-card dashboard-card--wide">
-            <h2>Confidence thresholds</h2>
-            <p className="dashboard-card__subtitle">
-              Minimum model confidence required before the agent acts on each step of the order flow.
-            </p>
-
-            <div className="filter-grid">
-              {THRESHOLD_FIELDS.map((field) => (
-                <label key={field.key} className="form-field">
-                  <span>{field.label}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={form[field.key]}
-                    onChange={(event) => updateField(field.key, Number(event.target.value))}
-                  />
-                  <span className="risk-settings-field-hint">{field.hint}</span>
-                </label>
-              ))}
-            </div>
-          </section>
-
-          <section className="dashboard-card dashboard-card--wide">
-            <h2>High-value orders</h2>
-            <p className="dashboard-card__subtitle">
-              Orders above this amount follow stricter preview and handoff rules.
-            </p>
-
-            <div className="filter-grid">
-              <label className="form-field">
-                <span>High-value order threshold</span>
-                <input
+          <Card>
+            <CardHeader title="High-value orders" description="Orders above this amount follow stricter preview and handoff rules." />
+            <CardBody>
+              <Field label="High-value order threshold">
+                <Input
                   type="number"
                   min="0"
                   step="1"
                   value={form.high_value_order_threshold}
-                  onChange={(event) => updateField('high_value_order_threshold', Number(event.target.value))}
+                  onChange={(e) => updateField('high_value_order_threshold', Number(e.target.value))}
                 />
-                <span className="risk-settings-field-hint">
-                  Use your shop currency. Set to 0 to disable high-value detection.
-                </span>
-              </label>
-            </div>
-          </section>
+                <span className="text-xs text-muted">Use your shop currency. Set to 0 to disable high-value detection.</span>
+              </Field>
+            </CardBody>
+          </Card>
 
-          <section className="dashboard-card dashboard-card--wide">
-            <h2>Handoff &amp; preview policy</h2>
-            <p className="dashboard-card__subtitle">
-              Decide when the agent must stop and route the conversation to an operator.
-            </p>
-
-            <div className="agent-safety-grid">
-              {POLICY_FIELDS.map((field) => (
-                <label key={field.key} className="form-field form-field--checkbox risk-settings-policy">
-                  <input
-                    type="checkbox"
-                    checked={form[field.key]}
-                    onChange={(event) => updateField(field.key, event.target.checked)}
-                  />
-                  <span>
-                    <strong>{field.label}</strong>
-                    <span className="risk-settings-field-hint">{field.hint}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            <div className="button-row risk-settings-actions">
-              <button
-                className="button button--primary"
-                type="submit"
-                disabled={saveMutation.isPending || !isDirty}
-              >
-                {saveMutation.isPending ? 'Saving…' : 'Save risk settings'}
-              </button>
-              <button
-                className="button button--ghost-dark"
-                type="button"
-                onClick={resetForm}
-                disabled={saveMutation.isPending || !isDirty}
-              >
-                Reset changes
-              </button>
-            </div>
-          </section>
+          <Card>
+            <CardHeader title="Handoff & preview policy" description="When the agent must stop and route to an operator." />
+            <CardBody className="flex flex-col gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {POLICY_FIELDS.map((field) => (
+                  <label key={field.key} className="flex gap-3 rounded-lg border border-border p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 rounded border-border"
+                      checked={form[field.key]}
+                      onChange={(e) => updateField(field.key, e.target.checked)}
+                    />
+                    <span>
+                      <strong className="text-fg">{field.label}</strong>
+                      <span className="mt-0.5 block text-xs text-muted">{field.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" disabled={saveMutation.isPending || !isDirty}>
+                  {saveMutation.isPending ? 'Saving…' : 'Save risk settings'}
+                </Button>
+                <Button type="button" variant="secondary" onClick={resetForm} disabled={saveMutation.isPending || !isDirty}>
+                  Reset changes
+                </Button>
+              </div>
+            </CardBody>
+          </Card>
         </form>
       ) : null}
-    </div>
+    </HubPage>
   );
 }

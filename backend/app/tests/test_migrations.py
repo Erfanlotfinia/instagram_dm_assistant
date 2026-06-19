@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, inspect
 
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql+psycopg://postgres:postgres@localhost:5432/instagram_dm_assistant_test",
+    "postgresql+psycopg://postgres:postgres@localhost:5432/modira_test",
 )
 
 EXPECTED_TABLES = {

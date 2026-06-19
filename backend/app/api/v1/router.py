@@ -11,7 +11,7 @@ from app.api.v1.customers import router as customers_router
 from app.api.v1.decision_traces import router as decision_traces_router
 from app.api.v1.failed_jobs import router as failed_jobs_router
 from app.api.v1.failed_jobs_platform import router as failed_jobs_platform_router
-from app.api.v1.fashion import router as fashion_router
+from app.api.v1.catalog_attributes import router as catalog_attributes_router
 from app.api.v1.health import router as health_router
 from app.api.v1.jobs import router as jobs_router
 from app.api.v1.order_correctness import router as order_correctness_router
@@ -28,6 +28,7 @@ from app.api.v1.social_admin import router as social_admin_router
 from app.api.v1.traces import router as traces_router
 from app.api.v1.upsells import router as upsells_router
 from app.api.v1.products import router as products_router
+from app.api.v1.realtime import router as realtime_router
 from app.api.v1.shops import router as shops_router
 from app.api.v1.semantic_search import router as semantic_search_router
 from app.api.v1.suggested_replies import router as suggested_replies_router
@@ -64,7 +65,7 @@ router.include_router(traces_router)
 router.include_router(scenarios_router)
 router.include_router(social_admin_router)
 
-router.include_router(fashion_router)
+router.include_router(catalog_attributes_router)
 router.include_router(failed_jobs_platform_router)
 router.include_router(failed_jobs_router)
 router.include_router(simulator_router)
@@ -74,3 +75,4 @@ router.include_router(agent_settings_router)
 router.include_router(agent_risk_router)
 router.include_router(trl_validation_router)
 router.include_router(suggested_replies_router)
+router.include_router(realtime_router)

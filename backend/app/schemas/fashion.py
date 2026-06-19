@@ -87,6 +87,21 @@ class SizeAliasRead(SizeAliasCreate):
     model_config = {"from_attributes": True}
 
 
+class AttributeAliasCreate(BaseModel):
+    attribute_slug: str = Field(min_length=1, max_length=128)
+    raw_value: str = Field(min_length=1, max_length=128)
+    normalized_value: str = Field(min_length=1, max_length=128)
+    language: str = "und"
+
+
+class AttributeAliasRead(AttributeAliasCreate):
+    id: UUID
+    shop_id: UUID | None = None
+    attribute_definition_id: UUID
+    is_active: bool
+    model_config = {"from_attributes": True}
+
+
 class SizeChartCreate(BaseModel):
     product_id: UUID | None = None
     category: str

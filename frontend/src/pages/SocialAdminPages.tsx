@@ -2,10 +2,14 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
-import { ShopSelector } from '../components/ShopSelector';
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Callout, Card, CardBody, CardHeader, Field, FilterChip, Input, RadioCard, RadioCardGrid, StatusBanner } from '../components/ui';
+import { KpiCard, DataTable, LoadingState, EmptyState } from '../components/data';
+import type { Column } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { apiClient } from '../services/apiClient';
+import { cn } from '../lib/cn';
 import type {
   AdminTask,
   AutomationSuggestion,
@@ -17,28 +21,22 @@ import type {
 const PROVIDER_LABELS = ['Instagram', 'WhatsApp', 'Telegram', 'Bale', 'Rubika'];
 
 function Page({
+  eyebrow = 'Automation',
   title,
   description,
   actions,
   children,
 }: {
+  eyebrow?: string;
   title: string;
   description: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide sa-hero">
-        <div className="sa-hero__intro">
-          <p className="dashboard-card__eyebrow">Social admin automation</p>
-          <h1>{title}</h1>
-          <p className="sa-hero__description">{description}</p>
-        </div>
-        {actions ? <div className="sa-hero__actions">{actions}</div> : null}
-      </section>
+    <HubPage eyebrow={eyebrow} title={title} description={description} actions={actions}>
       {children}
-    </div>
+    </HubPage>
   );
 }
 
@@ -50,28 +48,45 @@ function StatCard({
   label,
   value,
   hint,
-  tone,
+  tone = 'accent',
 }: {
   label: string;
   value: string;
   hint?: string;
-  tone?: 'success' | 'warning' | 'accent';
+  tone?: 'success' | 'warning' | 'accent' | 'danger';
 }) {
+  return <KpiCard label={label} value={value} hint={hint} tone={tone} />;
+}
+
+function StatusBadge({ status }: { status: string }) {
+  if (status === 'implemented') {
+    return <Badge tone="success">Implemented</Badge>;
+  }
+  if (status === 'partially_implemented') {
+    return <Badge tone="warning">Partial</Badge>;
+  }
+  return <Badge tone="neutral">{status.replace(/_/g, ' ')}</Badge>;
+}
+
+function AutomationTierBadge({ tier, children }: { tier: string; children: React.ReactNode }) {
   const toneClass =
-    tone === 'success'
-      ? ' stat-card--success'
-      : tone === 'warning'
-        ? ' stat-card--warning'
-        : tone === 'accent'
-          ? ' stat-card--accent'
-          : '';
+    tier === 'deterministic'
+      ? 'bg-accent-soft text-accent'
+      : tier === 'llm'
+        ? 'bg-info-soft text-info'
+        : tier === 'human'
+          ? 'bg-warning-soft text-warning'
+          : 'bg-surface-sunken text-muted';
   return (
-    <article className={`stat-card${toneClass}`}>
-      <p className="stat-card__label">{label}</p>
-      <p className="stat-card__value">{value}</p>
-      {hint ? <p className="stat-card__hint">{hint}</p> : null}
-    </article>
+    <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', toneClass)}>
+      {children}
+    </span>
   );
+}
+
+function PriorityBadge({ priority }: { priority: string }) {
+  const tone = priority === 'P0' ? 'danger' : priority === 'P1' ? 'warning' : 'neutral';
+  return <Badge tone={tone}>{priority}</Badge>;
 }
 
 /* ───────────────────────────── Scenario Coverage ───────────────────────────── */
@@ -96,27 +111,6 @@ const CAPABILITIES = [
 
 function groupOf(row: ScenarioCoverageRow): string {
   return row.scenario_code.charAt(0).toUpperCase();
-}
-
-function statusPill(status: string): { className: string; label: string } {
-  if (status === 'implemented') {
-    return { className: 'status-pill status-pill--success', label: 'Implemented' };
-  }
-  if (status === 'partially_implemented') {
-    return { className: 'status-pill status-pill--warning', label: 'Partial' };
-  }
-  return { className: 'status-pill status-pill--neutral', label: status.replace(/_/g, ' ') };
-}
-
-function priorityBadgeClass(priority: string): string {
-  switch (priority) {
-    case 'P0':
-      return 'priority-badge priority-badge--urgent';
-    case 'P1':
-      return 'priority-badge priority-badge--medium';
-    default:
-      return 'priority-badge priority-badge--low';
-  }
 }
 
 export function ScenarioCoveragePage() {
@@ -164,10 +158,14 @@ export function ScenarioCoveragePage() {
         title="Scenario Coverage"
         description="Track which social-admin scenarios are automated, where LLM fallback applies, and which still rely on human handoff."
       >
-        <section className="dashboard-card dashboard-card--wide sa-prompt-card">
-          <p className="empty-state">Select a shop to load its scenario coverage matrix.</p>
-          <ShopSelector />
-        </section>
+        <Card>
+          <CardBody>
+            <EmptyState
+              title="Select a shop"
+              description="Use the shop switcher in the top bar to load the scenario coverage matrix."
+            />
+          </CardBody>
+        </Card>
       </Page>
     );
   }
@@ -176,157 +174,150 @@ export function ScenarioCoveragePage() {
     <Page
       title="Scenario Coverage"
       description="Track which social-admin scenarios are automated, where LLM fallback applies, and which still rely on human handoff."
-      actions={<ShopSelector label="Shop" />}
     >
       {coverageQuery.isLoading ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="loading-state">Loading scenario coverage…</p>
-        </section>
+        <Card>
+          <CardBody>
+            <LoadingState label="Loading scenario coverage…" />
+          </CardBody>
+        </Card>
       ) : null}
 
       {coverageQuery.error ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="form-error" role="alert">
-            {coverageQuery.error instanceof Error
-              ? coverageQuery.error.message
-              : 'Failed to load scenario coverage'}
-          </p>
-        </section>
+        <Card>
+          <CardBody>
+            <p className="text-sm text-danger" role="alert">
+              {coverageQuery.error instanceof Error
+                ? coverageQuery.error.message
+                : 'Failed to load scenario coverage'}
+            </p>
+          </CardBody>
+        </Card>
       ) : null}
 
       {coverageQuery.data ? (
         <>
-          <section className="dashboard-card dashboard-card--wide">
-            <div className="section-header section-header--stacked">
-              <div>
-                <h2>Coverage summary</h2>
-                <p className="section-header__subtitle">
-                  Every scenario is exercised across {PROVIDER_LABELS.join(' · ')}.
-                </p>
+          <Card>
+            <CardHeader
+              title="Coverage summary"
+              description={`Every scenario is exercised across ${PROVIDER_LABELS.join(' · ')}.`}
+            />
+            <CardBody>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <StatCard label="Total scenarios" value={String(stats.total)} />
+                <StatCard
+                  label="Implemented"
+                  value={String(stats.implemented)}
+                  tone={stats.implemented > 0 ? 'success' : undefined}
+                />
+                <StatCard
+                  label="Partially implemented"
+                  value={String(stats.partial)}
+                  tone={stats.partial > 0 ? 'warning' : undefined}
+                />
+                <StatCard label="P0 priority" value={String(stats.p0)} tone="accent" />
+                <StatCard
+                  label="Full automation stack"
+                  value={`${stats.fullyCovered}/${stats.total}`}
+                  hint="Deterministic + LLM + handoff + tests + UI"
+                  tone={stats.fullyCovered === stats.total ? 'success' : undefined}
+                />
               </div>
-            </div>
-            <div className="stats-grid">
-              <StatCard label="Total scenarios" value={String(stats.total)} />
-              <StatCard
-                label="Implemented"
-                value={String(stats.implemented)}
-                tone={stats.implemented > 0 ? 'success' : undefined}
-              />
-              <StatCard
-                label="Partially implemented"
-                value={String(stats.partial)}
-                tone={stats.partial > 0 ? 'warning' : undefined}
-              />
-              <StatCard label="P0 priority" value={String(stats.p0)} tone="accent" />
-              <StatCard
-                label="Full automation stack"
-                value={`${stats.fullyCovered}/${stats.total}`}
-                hint="Deterministic + LLM + handoff + tests + UI"
-                tone={stats.fullyCovered === stats.total ? 'success' : undefined}
-              />
-            </div>
-          </section>
+            </CardBody>
+          </Card>
 
-          <section className="dashboard-card dashboard-card--wide">
-            <div className="section-header section-header--stacked">
-              <div>
-                <h2>Coverage matrix</h2>
-                <p className="section-header__subtitle">
-                  Filter by scenario group to inspect status, automation layers, and priority.
-                </p>
-              </div>
-            </div>
+          <Card>
+            <CardHeader
+              title="Coverage matrix"
+              description="Filter by scenario group to inspect status, automation layers, and priority."
+            />
+            <CardBody>
 
-            <div className="filter-chips" role="group" aria-label="Filter scenarios by group">
-              <button
-                type="button"
-                className={`filter-chip${groupFilter === 'all' ? ' filter-chip--active' : ''}`}
-                aria-pressed={groupFilter === 'all'}
-                onClick={() => setGroupFilter('all')}
-              >
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Filter scenarios by group">
+              <FilterChip active={groupFilter === 'all'} onClick={() => setGroupFilter('all')}>
                 All ({stats.total})
-              </button>
+              </FilterChip>
               {groups.map(([key, count]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={`filter-chip${groupFilter === key ? ' filter-chip--active' : ''}`}
-                  aria-pressed={groupFilter === key}
-                  onClick={() => setGroupFilter(key)}
-                >
+                <FilterChip key={key} active={groupFilter === key} onClick={() => setGroupFilter(key)}>
                   {GROUP_LABELS[key] ?? key} ({count})
-                </button>
+                </FilterChip>
               ))}
             </div>
 
-            <div className="sa-legend" aria-hidden="true">
+            <div
+              className="mt-4 flex flex-wrap gap-x-4 gap-y-2 rounded-lg border border-dashed border-border bg-surface-sunken px-3 py-2"
+              aria-hidden="true"
+            >
               {CAPABILITIES.map((cap) => (
-                <span key={cap.key} className="sa-legend__item">
-                  <span className="sa-cap sa-cap--on">{cap.short}</span>
+                <span key={cap.key} className="inline-flex items-center gap-1.5 text-xs text-muted">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-success-soft text-[10px] font-bold text-success">
+                    {cap.short}
+                  </span>
                   {cap.label}
                 </span>
               ))}
             </div>
 
-            <div className="table-wrap">
-              <table className="data-table data-table--compact">
-                <thead>
-                  <tr>
-                    <th scope="col">Scenario</th>
-                    <th scope="col" className="col-hide-md">Group</th>
-                    <th scope="col">Status</th>
-                    <th scope="col" className="col-hide-md">Automation layers</th>
-                    <th scope="col" className="col-hide-md">Priority</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleRows.map((row) => {
-                    const status = statusPill(row.current_status);
-                    const group = groupOf(row);
-                    return (
-                      <tr key={row.scenario_code}>
-                        <td>
-                          <div className="sa-scenario">
-                            <span className="sa-scenario__name">{row.scenario_name}</span>
-                            <span className="sa-scenario__code">{row.scenario_code}</span>
-                          </div>
-                        </td>
-                        <td className="col-hide-md">
-                          <span className="sa-group-tag">{GROUP_LABELS[group] ?? group}</span>
-                        </td>
-                        <td>
-                          <span className={status.className}>{status.label}</span>
-                        </td>
-                        <td className="col-hide-md">
-                          <span className="sa-caps">
-                            {CAPABILITIES.map((cap) => {
-                              const on = row[cap.key as keyof ScenarioCoverageRow] === true;
-                              return (
-                                <span
-                                  key={cap.key}
-                                  className={`sa-cap ${on ? 'sa-cap--on' : 'sa-cap--off'}`}
-                                  title={`${cap.label}: ${on ? 'yes' : 'no'}`}
-                                >
-                                  {cap.short}
-                                </span>
-                              );
-                            })}
+            <DataTable
+              columns={[
+                {
+                  key: 'scenario',
+                  header: 'Scenario',
+                  render: (row) => (
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-medium text-fg">{row.scenario_name}</span>
+                      <span className="font-mono text-xs text-subtle">{row.scenario_code}</span>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'group',
+                  header: 'Group',
+                  className: 'hidden md:table-cell',
+                  render: (row) => <Badge tone="neutral">{GROUP_LABELS[groupOf(row)] ?? groupOf(row)}</Badge>,
+                },
+                {
+                  key: 'status',
+                  header: 'Status',
+                  render: (row) => <StatusBadge status={row.current_status} />,
+                },
+                {
+                  key: 'layers',
+                  header: 'Automation layers',
+                  className: 'hidden md:table-cell',
+                  render: (row) => (
+                    <span className="inline-flex gap-1">
+                      {CAPABILITIES.map((cap) => {
+                        const on = row[cap.key as keyof ScenarioCoverageRow] === true;
+                        return (
+                          <span
+                            key={cap.key}
+                            className={cn(
+                              'inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold',
+                              on ? 'bg-success-soft text-success' : 'bg-surface-sunken text-subtle',
+                            )}
+                            title={`${cap.label}: ${on ? 'yes' : 'no'}`}
+                          >
+                            {cap.short}
                           </span>
-                        </td>
-                        <td className="col-hide-md">
-                          <span className={priorityBadgeClass(row.priority)}>{row.priority}</span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {visibleRows.length === 0 ? (
-              <p className="empty-state">No scenarios match this group.</p>
-            ) : null}
-          </section>
+                        );
+                      })}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'priority',
+                  header: 'Priority',
+                  className: 'hidden md:table-cell',
+                  render: (row) => <PriorityBadge priority={row.priority} />,
+                },
+              ]}
+              rows={visibleRows}
+              rowKey={(row) => row.scenario_code}
+              emptyTitle="No scenarios match this group"
+            />
+            </CardBody>
+          </Card>
         </>
       ) : null}
     </Page>
@@ -354,53 +345,54 @@ export function AutomationRulesPage() {
     <Page
       title="Automation Rules"
       description="The agent evaluates each incoming message top-to-bottom. The first matching layer wins, keeping responses deterministic and auditable before any model is invoked."
-      actions={<ShopSelector label="Shop" />}
     >
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h2>Handler priority ladder</h2>
-            <p className="section-header__subtitle">
-              Evaluated in order — deterministic handlers are always preferred over the LLM, and the
-              LLM is always preferred over interrupting a human.
-            </p>
-          </div>
-        </div>
+      <Card>
+        <CardHeader
+          title="Handler priority ladder"
+          description="Evaluated in order — deterministic handlers are always preferred over the LLM, and the LLM is always preferred over interrupting a human."
+        />
+        <CardBody>
 
-        {rulesQuery.isLoading ? <p className="loading-state">Loading handler priority…</p> : null}
+        {rulesQuery.isLoading ? <LoadingState label="Loading handler priority…" /> : null}
         {rulesQuery.error ? (
-          <p className="form-error" role="alert">
+          <p className="text-sm text-danger" role="alert">
             {rulesQuery.error instanceof Error ? rulesQuery.error.message : 'Failed to load rules'}
           </p>
         ) : null}
 
         {rulesQuery.data ? (
           <>
-            <ol className="sa-ladder">
+            <ol className="mt-5 grid gap-2.5">
               {rulesQuery.data.map((step) => (
-                <li key={step.order} className="sa-ladder__item">
-                  <span className="sa-ladder__num">{step.order}</span>
-                  <div className="sa-ladder__body">
-                    <p className="sa-ladder__label">{step.label}</p>
-                    <p className="sa-ladder__detail">{step.detail}</p>
-                  </div>
-                  <span className={`sa-tier sa-tier--${step.tier}`}>
-                    {TIER_LABELS[step.tier] ?? step.tier}
+                <li
+                  key={step.order}
+                  className="grid items-center gap-3 rounded-lg border border-border bg-surface-sunken px-4 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-fg text-sm font-bold text-canvas">
+                    {step.order}
                   </span>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-fg">{step.label}</p>
+                    <p className="mt-0.5 text-sm text-muted">{step.detail}</p>
+                  </div>
+                  <AutomationTierBadge tier={step.tier}>
+                    {TIER_LABELS[step.tier] ?? step.tier}
+                  </AutomationTierBadge>
                 </li>
               ))}
             </ol>
 
-            <div className="sa-pipeline" aria-hidden="true">
-              <span className="sa-pipeline__step sa-tier sa-tier--deterministic">Deterministic</span>
-              <span className="sa-pipeline__arrow">→</span>
-              <span className="sa-pipeline__step sa-tier sa-tier--llm">LLM fallback</span>
-              <span className="sa-pipeline__arrow">→</span>
-              <span className="sa-pipeline__step sa-tier sa-tier--human">Human handoff</span>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-muted" aria-hidden="true">
+              <AutomationTierBadge tier="deterministic">Deterministic</AutomationTierBadge>
+              <span>→</span>
+              <AutomationTierBadge tier="llm">LLM fallback</AutomationTierBadge>
+              <span>→</span>
+              <AutomationTierBadge tier="human">Human handoff</AutomationTierBadge>
             </div>
           </>
         ) : null}
-      </section>
+        </CardBody>
+      </Card>
     </Page>
   );
 }
@@ -440,90 +432,68 @@ export function ScenarioSimulatorPage() {
     <Page
       title="Scenario Simulator"
       description="Run the social-admin regression pack against the selected shop and inspect automation rate, LLM fallback rate, handoff rate, accuracy, and safety counters."
-      actions={<ShopSelector label="Shop for regression run" />}
     >
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h2>Regression pack</h2>
-            <p className="section-header__subtitle">
-              Replays the full 150-scenario pack and scores handler accuracy alongside safety
-              guardrails. Nothing is sent to customers.
-            </p>
-          </div>
-        </div>
-
-        <div className="button-row">
-          <button
-            type="button"
-            className="button button--primary"
-            disabled={!selectedShopId || runMutation.isPending}
-            onClick={() => runMutation.mutate()}
-          >
-            {runMutation.isPending ? 'Running scenario pack…' : 'Run scenario pack'}
-          </button>
-        </div>
+      <Card>
+        <CardHeader
+          title="Regression pack"
+          description="Replays the full 150-scenario pack and scores handler accuracy alongside safety guardrails. Nothing is sent to customers."
+        />
+        <CardBody className="flex flex-col gap-4">
+        <Button
+          type="button"
+          disabled={!selectedShopId || runMutation.isPending}
+          onClick={() => runMutation.mutate()}
+        >
+          {runMutation.isPending ? 'Running scenario pack…' : 'Run scenario pack'}
+        </Button>
 
         {!selectedShopId ? (
-          <p className="empty-state">Select a shop above to enable the regression run.</p>
+          <EmptyState title="Select a shop" description="Use the shop switcher in the top bar to enable the regression run." />
         ) : null}
 
         {runMutation.isError ? (
-          <p className="form-error" role="alert">
+          <p className="text-sm text-danger" role="alert">
             {runMutation.error instanceof Error ? runMutation.error.message : 'Regression failed'}
           </p>
         ) : null}
-      </section>
+        </CardBody>
+      </Card>
 
       {metrics ? (
-        <section className="dashboard-card dashboard-card--wide" aria-live="polite">
-          <div className="section-header section-header--stacked">
-            <div>
-              <h2>Regression results</h2>
-              <p className="section-header__subtitle">Latest run for the selected shop.</p>
-            </div>
-            <span
-              className={
-                safetyOk
-                  ? 'priority-badge priority-badge--low'
-                  : 'priority-badge priority-badge--urgent'
-              }
-            >
-              {safetyOk ? 'Safety clear' : 'Safety warnings'}
-            </span>
-          </div>
+        <Card aria-live="polite">
+          <CardHeader
+            title="Regression results"
+            description="Latest run for the selected shop."
+            actions={
+              <Badge tone={safetyOk ? 'success' : 'danger'}>
+                {safetyOk ? 'Safety clear' : 'Safety warnings'}
+              </Badge>
+            }
+          />
+          <CardBody className="flex flex-col gap-4">
+          <StatusBanner
+            tone={safetyOk ? 'ok' : 'failed'}
+            title={safetyOk ? 'All safety counters are zero' : 'Safety thresholds not met'}
+            description={
+              safetyOk
+                ? 'No unsafe actions, false orders, or false payments were produced.'
+                : 'Do not promote to pilot until unsafe actions, false orders, and false payments are resolved.'
+            }
+          />
 
-          <div
-            className={`health-status-banner sa-safety-banner health-status-banner--${safetyOk ? 'ok' : 'failed'}`}
-          >
-            <div className="health-status-banner__indicator" aria-hidden="true" />
+          <div className="flex flex-col gap-6">
             <div>
-              <p className="health-status-banner__title">
-                {safetyOk
-                  ? 'All safety counters are zero'
-                  : 'Safety thresholds not met'}
-              </p>
-              <p className="health-status-banner__meta">
-                {safetyOk
-                  ? 'No unsafe actions, false orders, or false payments were produced.'
-                  : 'Do not promote to pilot until unsafe actions, false orders, and false payments are resolved.'}
-              </p>
-            </div>
-          </div>
-
-          <div className="pilot-metrics-groups">
-            <div className="pilot-metrics-group">
-              <h3>Automation mix</h3>
-              <div className="stats-grid">
+              <h3 className="mb-3 text-sm font-semibold text-fg">Automation mix</h3>
+              <div className="grid gap-3 sm:grid-cols-3">
                 <StatCard label="Automation handled" value={formatRate(metrics.automation_handled_rate)} />
                 <StatCard label="LLM fallback" value={formatRate(metrics.llm_fallback_rate)} />
                 <StatCard label="Handoff" value={formatRate(metrics.handoff_rate)} />
               </div>
             </div>
 
-            <div className="pilot-metrics-group">
-              <h3>Accuracy</h3>
-              <div className="stats-grid">
+            <div>
+              <h3 className="mb-3 text-sm font-semibold text-fg">Accuracy</h3>
+              <div className="grid gap-3 sm:grid-cols-3">
                 <StatCard
                   label="Scenario accuracy (handler match)"
                   value={formatRate(metrics.scenario_accuracy)}
@@ -540,9 +510,9 @@ export function ScenarioSimulatorPage() {
               </div>
             </div>
 
-            <div className="pilot-metrics-group">
-              <h3>Safety counters</h3>
-              <div className="stats-grid">
+            <div>
+              <h3 className="mb-3 text-sm font-semibold text-fg">Safety counters</h3>
+              <div className="grid gap-3 sm:grid-cols-3">
                 <StatCard
                   label="Unsafe actions"
                   value={String(metrics.unsafe_action_count)}
@@ -561,7 +531,8 @@ export function ScenarioSimulatorPage() {
               </div>
             </div>
           </div>
-        </section>
+          </CardBody>
+        </Card>
       ) : null}
     </Page>
   );
@@ -578,17 +549,17 @@ const AI_TASKS: Array<{ id: string; label: string; description: string }> = [
   { id: 'draft_campaign_message', label: 'Draft campaign message', description: 'Compose a broadcast message for a campaign segment.' },
 ];
 
-function draftStatusPill(status: string): { className: string; label: string } {
+function draftStatusBadge(status: string): { tone: 'success' | 'danger' | 'warning' | 'neutral'; label: string } {
   if (status === 'approved') {
-    return { className: 'status-pill status-pill--success', label: 'Approved' };
+    return { tone: 'success', label: 'Approved' };
   }
   if (status === 'rejected') {
-    return { className: 'status-pill status-pill--danger', label: 'Rejected' };
+    return { tone: 'danger', label: 'Rejected' };
   }
   if (status === 'completed') {
-    return { className: 'status-pill status-pill--warning', label: 'Awaiting approval' };
+    return { tone: 'warning', label: 'Awaiting approval' };
   }
-  return { className: 'status-pill status-pill--neutral', label: status.replace(/_/g, ' ') };
+  return { tone: 'neutral', label: status.replace(/_/g, ' ') };
 }
 
 export function AdminAITasksPage() {
@@ -647,80 +618,67 @@ export function AdminAITasksPage() {
     <Page
       title="Admin AI Tasks"
       description="Generate approval-gated drafts for replies, summaries, captions, and campaigns. Every output is reviewed by an operator — nothing is published automatically."
-      actions={<ShopSelector label="Shop" />}
     >
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h2>Create approval-gated draft</h2>
-            <p className="section-header__subtitle">Pick a task, add context, and generate a draft for review.</p>
-          </div>
-        </div>
+      <Card>
+        <CardHeader
+          title="Create approval-gated draft"
+          description="Pick a task, add context, and generate a draft for review."
+        />
+        <CardBody>
+        <div className="grid gap-5">
+          <RadioCardGrid label="Task type" aria-label="Task type">
+            {AI_TASKS.map((task) => (
+              <RadioCard
+                key={task.id}
+                active={task.id === selectedTask}
+                label={task.label}
+                description={task.description}
+                onClick={() => setSelectedTask(task.id)}
+              />
+            ))}
+          </RadioCardGrid>
 
-        <div className="sa-composer">
-          <div className="sa-composer__field">
-            <p className="sa-composer__field-label">Task type</p>
-            <div className="agent-mode-grid" role="radiogroup" aria-label="Task type">
-              {AI_TASKS.map((task) => {
-                const active = task.id === selectedTask;
-                return (
-                  <button
-                    key={task.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    className={`agent-mode-card${active ? ' agent-mode-card--active' : ''}`}
-                    onClick={() => setSelectedTask(task.id)}
-                  >
-                    <span className="agent-mode-card__label">{task.label}</span>
-                    <span className="agent-mode-card__description">{task.description}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <label className="form-field form-field--wide sa-composer__field">
-            <span>Context</span>
+          <Field label="Context" className="sm:col-span-2">
             <textarea
               value={context}
               onChange={(event) => setContext(event.target.value)}
               rows={4}
               placeholder="Product, category, campaign, or conversation context"
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg"
             />
-          </label>
+          </Field>
 
-          <div className="sa-composer__submit">
-            <button
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
               type="button"
-              className="button button--primary sa-composer__generate"
               disabled={!selectedShopId || createMutation.isPending}
               onClick={() => createMutation.mutate()}
             >
               {createMutation.isPending ? 'Generating draft…' : 'Generate draft'}
-            </button>
+            </Button>
             {!selectedShopId ? (
-              <span className="sa-composer__hint">Select a shop to enable draft generation.</span>
+              <span className="text-sm text-muted">Select a shop to enable draft generation.</span>
             ) : null}
           </div>
 
           {activeDraft?.output_json.draft ? (
-            <div className="sa-composer__preview" aria-live="polite">
-              <div className="sa-composer__preview-header">
-                <p className="sa-composer__preview-label">
+            <div className="grid gap-3 rounded-lg border border-accent/30 bg-accent-soft/30 p-4" aria-live="polite">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-accent">
                   Generated draft · {activeTask.label}
                 </p>
-                <span className={draftStatusPill(activeDraft.status).className}>
-                  {draftStatusPill(activeDraft.status).label}
-                </span>
+                <Badge tone={draftStatusBadge(activeDraft.status).tone}>
+                  {draftStatusBadge(activeDraft.status).label}
+                </Badge>
               </div>
-              <div className="sa-composer__preview-scroll">
-                <p className="sa-composer__preview-body">{activeDraft.output_json.draft}</p>
+              <div className="max-h-80 overflow-y-auto rounded-lg border border-border bg-surface p-3">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{activeDraft.output_json.draft}</p>
               </div>
-              <div className="sa-composer__preview-actions">
-                <button
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Button
                   type="button"
-                  className="button button--ghost-dark sa-composer__copy"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     void navigator.clipboard
                       ?.writeText(activeDraft.output_json.draft ?? '')
@@ -729,82 +687,85 @@ export function AdminAITasksPage() {
                   }}
                 >
                   Copy
-                </button>
-                <div className="button-row">
-                  <button
+                </Button>
+                <div className="flex gap-2">
+                  <Button
                     type="button"
-                    className="button button--ghost-dark"
+                    variant="secondary"
                     disabled={actionsDisabled || activeDraft.status !== 'completed'}
                     onClick={() => rejectMutation.mutate(activeDraft.id)}
                   >
                     Reject draft
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="button button--primary"
                     disabled={actionsDisabled || activeDraft.status !== 'completed'}
                     onClick={() => approveMutation.mutate(activeDraft.id)}
                   >
                     Approve draft
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
           ) : null}
         </div>
 
-        <div className="sa-callout">
-          <span className="sa-callout__icon" aria-hidden="true">✓</span>
-          <div>
-            <p className="sa-callout__title">Approval gate</p>
-            <p className="sa-callout__text">
-              No task auto-publishes; every generated output requires admin approval before it reaches a
-              customer or channel.
-            </p>
-          </div>
-        </div>
-      </section>
+        <Callout icon="✓" title="Approval gate">
+          No task auto-publishes; every generated output requires admin approval before it reaches a
+          customer or channel.
+        </Callout>
+        </CardBody>
+      </Card>
 
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h2>Recent drafts</h2>
-            <p className="section-header__subtitle">Approval-gated tasks created for this shop.</p>
-          </div>
-        </div>
+      <Card>
+        <CardHeader
+          title="Recent drafts"
+          description="Approval-gated tasks created for this shop."
+        />
+        <CardBody>
 
-        {tasksQuery.isLoading ? <p className="loading-state">Loading admin tasks…</p> : null}
+        {tasksQuery.isLoading ? <LoadingState label="Loading admin tasks…" /> : null}
         {tasks.length === 0 && !tasksQuery.isLoading ? (
-          <p className="empty-state">No admin tasks yet. Generate a draft above.</p>
+          <EmptyState title="No admin tasks yet" description="Generate a draft above." />
         ) : null}
 
         {tasks.length > 0 ? (
-          <div className="table-wrap">
-            <table className="data-table data-table--compact">
-              <thead>
-                <tr>
-                  <th scope="col">Task</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tasks.map((task) => (
-                  <tr key={task.id}>
-                    <td>{task.task_type.replace(/_/g, ' ')}</td>
-                    <td>
-                      <span className={`status-pill status-pill--${task.status === 'approved' ? 'success' : task.status === 'rejected' ? 'danger' : 'warning'}`}>
-                        {task.status}
-                      </span>
-                    </td>
-                    <td>{new Date(task.created_at).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={[
+              {
+                key: 'task',
+                header: 'Task',
+                render: (task) => task.task_type.replace(/_/g, ' '),
+              },
+              {
+                key: 'status',
+                header: 'Status',
+                render: (task) => (
+                  <Badge
+                    tone={
+                      task.status === 'approved'
+                        ? 'success'
+                        : task.status === 'rejected'
+                          ? 'danger'
+                          : 'warning'
+                    }
+                  >
+                    {task.status}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'created',
+                header: 'Created',
+                render: (task) => new Date(task.created_at).toLocaleString(),
+              },
+            ]}
+            rows={tasks}
+            rowKey={(task) => task.id}
+          />
         ) : null}
-      </section>
+        </CardBody>
+      </Card>
     </Page>
   );
 }
@@ -885,115 +846,101 @@ export function OperatorCorrectionsPage() {
     <Page
       title="Operator Corrections"
       description="When an operator overrides the agent, the correction is captured as structured training signal that feeds rule, alias, and regression-test suggestions."
-      actions={<ShopSelector label="Shop" />}
     >
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h2>Capture correction</h2>
-            <p className="section-header__subtitle">
-              Record what the agent did versus what should have happened. Changed fields generate suggestions automatically.
-            </p>
-          </div>
-        </div>
-
-        <div className="inline-form">
-          <label className="form-field form-field--wide">
-            <span>Conversation ID</span>
-            <input
+      <Card>
+        <CardHeader
+          title="Capture correction"
+          description="Record what the agent did versus what should have happened. Changed fields generate suggestions automatically."
+        />
+        <CardBody>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Conversation ID" className="sm:col-span-2">
+            <Input
               value={form.conversation_id}
               onChange={(event) => setForm((current) => ({ ...current, conversation_id: event.target.value }))}
               placeholder="UUID of the conversation being corrected"
             />
-          </label>
+          </Field>
 
           {CAPTURE_FIELDS.map((field) => (
-            <label key={field.key} className="form-field">
-              <span>Before — {field.title}</span>
-              <input
+            <Field key={field.key} label={`Before — ${field.title}`}>
+              <Input
                 value={form.before[field.key as keyof typeof form.before]}
                 onChange={(event) => updateField('before', field.key, event.target.value)}
                 placeholder={`Agent ${field.title.toLowerCase()}`}
               />
-            </label>
+            </Field>
           ))}
 
           {CAPTURE_FIELDS.map((field) => (
-            <label key={`after-${field.key}`} className="form-field">
-              <span>After — {field.title}</span>
-              <input
+            <Field key={`after-${field.key}`} label={`After — ${field.title}`}>
+              <Input
                 value={form.after[field.key as keyof typeof form.after]}
                 onChange={(event) => updateField('after', field.key, event.target.value)}
                 placeholder={`Correct ${field.title.toLowerCase()}`}
               />
-            </label>
+            </Field>
           ))}
 
-          <button
+          <Button
             type="button"
-            className="button button--primary"
             disabled={!selectedShopId || !form.conversation_id || createMutation.isPending}
             onClick={() => createMutation.mutate()}
           >
             {createMutation.isPending ? 'Saving correction…' : 'Save correction'}
-          </button>
+          </Button>
         </div>
-      </section>
+        </CardBody>
+      </Card>
 
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h2>Recent corrections</h2>
-            <p className="section-header__subtitle">
-              Each saved field becomes a structured correction and may spawn automation suggestions.
-            </p>
-          </div>
-        </div>
+      <Card>
+        <CardHeader
+          title="Recent corrections"
+          description="Each saved field becomes a structured correction and may spawn automation suggestions."
+        />
+        <CardBody>
 
-        {correctionsQuery.isLoading ? <p className="loading-state">Loading corrections…</p> : null}
+        {correctionsQuery.isLoading ? <LoadingState label="Loading corrections…" /> : null}
         {corrections.length === 0 && !correctionsQuery.isLoading ? (
-          <p className="empty-state">No corrections captured yet.</p>
+          <EmptyState title="No corrections captured yet." />
         ) : null}
 
         {corrections.length > 0 ? (
-          <div className="table-wrap">
-            <table className="data-table data-table--compact">
-              <thead>
-                <tr>
-                  <th scope="col">Type</th>
-                  <th scope="col" className="col-hide-sm">Before</th>
-                  <th scope="col">After</th>
-                  <th scope="col" className="col-hide-sm">Captured</th>
-                </tr>
-              </thead>
-              <tbody>
-                {corrections.map((row: OperatorCorrection) => (
-                  <tr key={row.id}>
-                    <td>{row.correction_type}</td>
-                    <td className="col-hide-sm">{String(Object.values(row.before_json)[0] ?? '—')}</td>
-                    <td>{String(Object.values(row.after_json)[0] ?? '—')}</td>
-                    <td className="col-hide-sm">{new Date(row.created_at).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={[
+              { key: 'type', header: 'Type', render: (row) => row.correction_type },
+              {
+                key: 'before',
+                header: 'Before',
+                className: 'hidden sm:table-cell',
+                render: (row) => String(Object.values(row.before_json)[0] ?? '—'),
+              },
+              {
+                key: 'after',
+                header: 'After',
+                render: (row) => String(Object.values(row.after_json)[0] ?? '—'),
+              },
+              {
+                key: 'captured',
+                header: 'Captured',
+                className: 'hidden sm:table-cell',
+                render: (row) => new Date(row.created_at).toLocaleString(),
+              },
+            ]}
+            rows={corrections}
+            rowKey={(row) => row.id}
+          />
         ) : null}
 
-        <div className="sa-callout">
-          <span className="sa-callout__icon" aria-hidden="true">→</span>
-          <div>
-            <p className="sa-callout__title">Review the learning loop</p>
-            <p className="sa-callout__text">
-              Generated improvements appear in{' '}
-              <Link className="table-link" to="/automation-suggestions">
-                Automation Suggestions
-              </Link>{' '}
-              for review before they change agent behavior.
-            </p>
-          </div>
-        </div>
-      </section>
+        <Callout icon="→" title="Review the learning loop">
+          Generated improvements appear in{' '}
+          <Link className="font-medium text-accent hover:underline" to="/automation-suggestions">
+            Automation Suggestions
+          </Link>{' '}
+          for review before they change agent behavior.
+        </Callout>
+        </CardBody>
+      </Card>
     </Page>
   );
 }
@@ -1070,55 +1017,49 @@ export function AutomationSuggestionsPage() {
     <Page
       title="Automation Suggestions"
       description="Review rule, alias, and regression-test suggestions generated from operator corrections, then apply the ones that improve automation safely."
-      actions={<ShopSelector label="Shop" />}
     >
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h2>Learning loop</h2>
-            <p className="section-header__subtitle">
-              Corrections become reviewable suggestions — you stay in control of what changes.
-            </p>
-          </div>
-        </div>
-
-        <div className="sa-info-grid">
+      <Card>
+        <CardHeader
+          title="Learning loop"
+          description="Corrections become reviewable suggestions — you stay in control of what changes."
+        />
+        <CardBody>
+        <div className="grid gap-4 sm:grid-cols-3">
           {SUGGESTION_TYPES.map((type) => (
-            <article key={type.title} className="sa-info-card">
-              <span className="sa-info-card__icon" aria-hidden="true">{type.icon}</span>
-              <h3 className="sa-info-card__title">{type.title}</h3>
-              <p className="sa-info-card__body">{type.body}</p>
-              <p className="sa-info-card__example">{type.example}</p>
+            <article key={type.title} className="grid gap-2 rounded-lg border border-border bg-surface-sunken p-4">
+              <span
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-soft text-xs font-bold text-accent"
+                aria-hidden="true"
+              >
+                {type.icon}
+              </span>
+              <h3 className="font-semibold text-fg">{type.title}</h3>
+              <p className="text-sm leading-relaxed text-muted">{type.body}</p>
+              <p className="rounded-md bg-surface px-2.5 py-2 text-xs text-subtle">{type.example}</p>
             </article>
           ))}
         </div>
-      </section>
+        </CardBody>
+      </Card>
 
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h2>Suggestion inbox</h2>
-            <p className="section-header__subtitle">Approve or reject generated improvements before they affect automation.</p>
-          </div>
-        </div>
+      <Card>
+        <CardHeader
+          title="Suggestion inbox"
+          description="Approve or reject generated improvements before they affect automation."
+        />
+        <CardBody className="flex flex-col gap-4">
 
-        <div className="filter-chips" role="group" aria-label="Filter suggestions by status">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter suggestions by status">
           {(['all', 'pending', 'approved', 'rejected'] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={`filter-chip${statusFilter === option ? ' filter-chip--active' : ''}`}
-              aria-pressed={statusFilter === option}
-              onClick={() => setStatusFilter(option)}
-            >
+            <FilterChip key={option} active={statusFilter === option} onClick={() => setStatusFilter(option)}>
               {option.charAt(0).toUpperCase() + option.slice(1)}
-            </button>
+            </FilterChip>
           ))}
         </div>
 
-        {suggestionsQuery.isLoading ? <p className="loading-state">Loading suggestions…</p> : null}
+        {suggestionsQuery.isLoading ? <LoadingState label="Loading suggestions…" /> : null}
         {suggestionsQuery.error ? (
-          <p className="form-error" role="alert">
+          <p className="text-sm text-danger" role="alert">
             {suggestionsQuery.error instanceof Error
               ? suggestionsQuery.error.message
               : 'Failed to load suggestions'}
@@ -1126,72 +1067,83 @@ export function AutomationSuggestionsPage() {
         ) : null}
 
         {suggestions.length === 0 && !suggestionsQuery.isLoading ? (
-          <div className="empty-state-panel">
-            <p className="empty-state-panel__title">No suggestions yet</p>
-            <p className="empty-state-panel__hint">
-              Suggestions appear here once operators capture corrections in{' '}
-              <Link className="table-link" to="/operator-corrections">
-                Operator Corrections
-              </Link>
-              .
-            </p>
-          </div>
+          <EmptyState
+            title="No suggestions yet"
+            description={
+              <>
+                Suggestions appear here once operators capture corrections in{' '}
+                <Link className="font-medium text-accent hover:underline" to="/operator-corrections">
+                  Operator Corrections
+                </Link>
+                .
+              </>
+            }
+          />
         ) : null}
 
         {suggestions.length > 0 ? (
-          <div className="failed-jobs-list">
+          <div className="grid gap-4">
             {suggestions.map((suggestion: AutomationSuggestion) => (
-              <article key={suggestion.id} className="failed-job-card">
-                <div className="failed-job-card__header">
-                  <div className="failed-job-card__title-row">
-                    <h3 className="failed-job-card__title">
+              <article
+                key={suggestion.id}
+                className="grid gap-3 rounded-lg border border-border border-l-[3px] border-l-accent bg-surface p-4"
+              >
+                <div className="grid gap-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="font-semibold capitalize text-fg">
                       {suggestion.suggested_rule_json.title ?? 'Automation suggestion'}
                     </h3>
-                    <time className="failed-job-card__time" dateTime={suggestion.created_at}>
+                    <time className="text-xs text-muted" dateTime={suggestion.created_at}>
                       {new Date(suggestion.created_at).toLocaleString()}
                     </time>
                   </div>
-                  <div className="failed-job-card__meta">
-                    <span className="failed-job-badge failed-job-badge--shop">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge tone="neutral">
                       {suggestionTypeLabel(suggestion.suggested_rule_json.type)}
-                    </span>
-                    <span
-                      className={`failed-job-badge ${suggestion.status === 'approved' ? 'failed-job-badge--warn' : suggestion.status === 'rejected' ? 'failed-job-badge--danger' : 'failed-job-badge--queue'}`}
+                    </Badge>
+                    <Badge
+                      tone={
+                        suggestion.status === 'approved'
+                          ? 'success'
+                          : suggestion.status === 'rejected'
+                            ? 'danger'
+                            : 'warning'
+                      }
                     >
                       {suggestion.status}
-                    </span>
+                    </Badge>
                   </div>
                 </div>
-                <div className="failed-job-card__error-panel">
-                  <p className="failed-job-card__error">
+                <div className="rounded-lg border border-border bg-surface-sunken px-3 py-2">
+                  <p className="text-sm text-fg">
                     {suggestion.suggested_rule_json.summary ?? 'No summary provided.'}
                   </p>
                 </div>
                 {suggestion.status === 'pending' ? (
-                  <div className="failed-job-card__actions">
-                    <button
+                  <div className="flex flex-wrap gap-2">
+                    <Button
                       type="button"
-                      className="button button--primary"
                       disabled={actionsDisabled}
                       onClick={() => approveMutation.mutate(suggestion.id)}
                     >
                       Approve
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="button button--ghost-dark"
+                      variant="secondary"
                       disabled={actionsDisabled}
                       onClick={() => rejectMutation.mutate(suggestion.id)}
                     >
                       Reject
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
               </article>
             ))}
           </div>
         ) : null}
-      </section>
+        </CardBody>
+      </Card>
     </Page>
   );
 }

@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.domain.enums import AgentWorkflowState
+from app.domain.enums import AgentWorkflowState, ChannelProvider, ConversationState
 from app.domain.models import Conversation, ConversationSlots, Customer, Message, Order, Product
 from app.schemas.conversation import ConversationListFilters
 
@@ -114,6 +114,41 @@ class ConversationRepository:
             .limit(1)
         )
         return self.db.scalar(stmt)
+
+    def get_or_create_conversation_by_channel(
+        self,
+        *,
+        shop_id: UUID,
+        customer_id: UUID,
+        provider: ChannelProvider,
+        channel_account_id: UUID,
+        external_conversation_id: str,
+        external_thread_id: str | None = None,
+    ) -> Conversation:
+        conversation = self.db.scalar(
+            select(Conversation).where(
+                Conversation.shop_id == shop_id,
+                Conversation.channel_provider == provider.value,
+                Conversation.channel_account_id == channel_account_id,
+                Conversation.external_conversation_id == external_conversation_id,
+                Conversation.external_thread_id == external_thread_id,
+                Conversation.state == ConversationState.OPEN,
+            )
+        )
+        if conversation is not None:
+            return conversation
+        return self.create(
+            Conversation(
+                shop_id=shop_id,
+                customer_id=customer_id,
+                channel_provider=provider.value,
+                channel_account_id=channel_account_id,
+                external_conversation_id=external_conversation_id,
+                external_thread_id=external_thread_id,
+                channel_conversation_id=external_conversation_id,
+                state=ConversationState.OPEN,
+            )
+        )
 
     def create(self, conversation: Conversation) -> Conversation:
         self.db.add(conversation)

@@ -655,8 +655,8 @@ def _seed_failed_jobs(
         select(Message).where(Message.instagram_message_id == "demo-msg-sara-in-1")
     )
     now = datetime.now(UTC)
-    settings_queue = "instagram.message.received"
-    dlq_queue = "instagram.message.received.dlq"
+    settings_queue = "channel.message.received"
+    dlq_queue = "channel.message.received.dlq"
 
     if inbound_order is not None:
         db.add(

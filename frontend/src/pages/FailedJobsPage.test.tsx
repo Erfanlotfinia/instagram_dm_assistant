@@ -46,7 +46,7 @@ describe('FailedJobsPage', () => {
         {
           id: 'job-1',
           shop_id: 's1',
-          queue_name: 'instagram.message.received',
+          queue_name: 'channel.message.received',
           job_type: 'message_received',
           redacted_payload: { shop_id: 's1', access_token: '[REDACTED]' },
           error_message: 'boom',
@@ -64,7 +64,7 @@ describe('FailedJobsPage', () => {
     });
 
     renderPage();
-    expect(await screen.findByText('instagram.message.received')).toBeInTheDocument();
+    expect(await screen.findByText('channel.message.received')).toBeInTheDocument();
     expect(screen.getByText('View redacted payload')).toBeInTheDocument();
   });
 
@@ -74,7 +74,7 @@ describe('FailedJobsPage', () => {
         {
           id: 'job-1',
           shop_id: 's1',
-          queue_name: 'instagram.message.received',
+          queue_name: 'channel.message.received',
           job_type: 'message_received',
           redacted_payload: {},
           error_message: 'boom',

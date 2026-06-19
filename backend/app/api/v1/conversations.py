@@ -23,6 +23,7 @@ from app.schemas.conversation import (
 )
 from app.schemas.customer import CustomerUpdate
 from app.schemas.order import OrderRead
+from app.realtime import publish_event
 from app.services.conversation_service import ConversationService
 
 router = APIRouter(prefix="/shops/{shop_id}/conversations", tags=["conversations"])
@@ -101,7 +102,9 @@ def send_conversation_message(
     _rate_limit: Annotated[None, Depends(rate_limit_outbound_message)],
     db: Annotated[Session, Depends(get_db_session)],
 ) -> MessageRead:
-    return ConversationService(db).send_manual_message(shop_id, conversation_id, current_user, payload)
+    message = ConversationService(db).send_manual_message(shop_id, conversation_id, current_user, payload)
+    publish_event(shop_id, "message.created", {"conversation_id": str(conversation_id)})
+    return message
 
 
 @router.post("/{conversation_id}/send-manual-message", response_model=MessageRead, status_code=201)
@@ -125,7 +128,9 @@ def take_over_conversation(
     _membership: Annotated[ShopMember, Depends(require_shop_role(UserRole.OPERATOR))],
     db: Annotated[Session, Depends(get_db_session)],
 ) -> ConversationHandoffResponse:
-    return ConversationService(db).take_over(shop_id, conversation_id, current_user)
+    result = ConversationService(db).take_over(shop_id, conversation_id, current_user)
+    publish_event(shop_id, "conversation.updated", {"conversation_id": str(conversation_id)})
+    return result
 
 
 @router.post("/{conversation_id}/release-to-agent", response_model=ConversationHandoffResponse)
@@ -172,7 +177,9 @@ def mark_conversation_resolved(
     _membership: Annotated[ShopMember, Depends(require_shop_role(UserRole.OPERATOR))],
     db: Annotated[Session, Depends(get_db_session)],
 ) -> ConversationResolveResponse:
-    return ConversationService(db).mark_resolved(shop_id, conversation_id, current_user)
+    result = ConversationService(db).mark_resolved(shop_id, conversation_id, current_user)
+    publish_event(shop_id, "conversation.updated", {"conversation_id": str(conversation_id)})
+    return result
 
 
 @router.patch("/{conversation_id}/customer", response_model=CustomerRead)

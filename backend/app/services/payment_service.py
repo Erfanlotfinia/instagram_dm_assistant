@@ -24,7 +24,7 @@ from app.repositories.payment_repository import PaymentRepository
 from app.services.audit_service import AuditService
 from app.services.conversation_event_service import ConversationEventService
 from app.services.conversation_priority_service import ConversationPriorityService
-from app.services.instagram_send_service import InstagramSendService
+from app.services.channel_outbound_service import ChannelOutboundService
 from app.services.order_service import OrderService
 from app.services.payment_providers import get_payment_provider
 from app.services.pilot_service import PilotService
@@ -178,7 +178,7 @@ class PaymentService:
         payment = pending or self.initiate_payment(order)
         if order.conversation_id and payment.payment_url:
             message_text = f"لینک پرداخت سفارش شما:\n{payment.payment_url}"
-            InstagramSendService(self.db).send_text_message(order.conversation_id, message_text)
+            ChannelOutboundService(self.db).send_text_message(order.conversation_id, message_text)
             ConversationEventService(self.db).record(
                 order.conversation_id,
                 ConversationEventType.PAYMENT_LINK_SENT,

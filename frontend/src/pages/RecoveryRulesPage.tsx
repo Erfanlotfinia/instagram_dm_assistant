@@ -2,21 +2,20 @@ import { FormEvent, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { ShopSelector } from '../components/ShopSelector';
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Card, CardBody, CardHeader, Field, Input } from '../components/ui';
+import { DataTable, EmptyState } from '../components/data';
+import type { Column } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
+import { cn } from '../lib/cn';
 import { apiClient } from '../services/apiClient';
 import type { RecoveryRule } from '../types/sprintD';
 
 const DEFAULT_TEMPLATE =
   'Hi {customer_name}, your order ({order_total} {currency}) is waiting for payment. Reply here if you need help.';
 
-const TEMPLATE_TOKENS = [
-  '{customer_name}',
-  '{order_total}',
-  '{currency}',
-  '{order_id}',
-] as const;
+const TEMPLATE_TOKENS = ['{customer_name}', '{order_total}', '{currency}', '{order_id}'] as const;
 
 const TIMING_PRESETS = [
   { label: '30 min', minutes: 30 },
@@ -34,13 +33,25 @@ function previewTemplate(template: string): string {
 }
 
 function formatTiming(minutes: number): string {
-  if (minutes < 60) {
-    return `${minutes} min`;
-  }
-  if (minutes % 60 === 0) {
-    return `${minutes / 60} hr`;
-  }
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes % 60 === 0) return `${minutes / 60} hr`;
   return `${minutes} min`;
+}
+
+function Chip({ active, onClick, children }: { active?: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+        active ? 'border-accent bg-accent-soft text-accent' : 'border-border bg-surface text-muted hover:text-fg',
+      )}
+    >
+      {children}
+    </button>
+  );
 }
 
 export function RecoveryRulesPage() {
@@ -60,10 +71,7 @@ export function RecoveryRulesPage() {
   const [onlyInsideWindow, setOnlyInsideWindow] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<RecoveryRule | null>(null);
 
-  const activeCount = useMemo(
-    () => (rules.data ?? []).filter((rule) => rule.is_active).length,
-    [rules.data],
-  );
+  const activeCount = useMemo(() => (rules.data ?? []).filter((rule) => rule.is_active).length, [rules.data]);
 
   const create = useMutation({
     mutationFn: () =>
@@ -78,18 +86,14 @@ export function RecoveryRulesPage() {
       showToast('Recovery rule created.', 'success');
       queryClient.invalidateQueries({ queryKey: ['recovery-rules', selectedShopId] });
     },
-    onError: (error) =>
-      showToast(error instanceof Error ? error.message : 'Failed to create rule', 'error'),
+    onError: (error) => showToast(error instanceof Error ? error.message : 'Failed to create rule', 'error'),
   });
 
   const toggleActive = useMutation({
     mutationFn: ({ ruleId, isActive }: { ruleId: string; isActive: boolean }) =>
       apiClient.updateRecoveryRule(selectedShopId, ruleId, { is_active: isActive }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recovery-rules', selectedShopId] });
-    },
-    onError: (error) =>
-      showToast(error instanceof Error ? error.message : 'Failed to update rule', 'error'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['recovery-rules', selectedShopId] }),
+    onError: (error) => showToast(error instanceof Error ? error.message : 'Failed to update rule', 'error'),
   });
 
   const remove = useMutation({
@@ -99,8 +103,7 @@ export function RecoveryRulesPage() {
       setDeleteTarget(null);
       queryClient.invalidateQueries({ queryKey: ['recovery-rules', selectedShopId] });
     },
-    onError: (error) =>
-      showToast(error instanceof Error ? error.message : 'Failed to delete rule', 'error'),
+    onError: (error) => showToast(error instanceof Error ? error.message : 'Failed to delete rule', 'error'),
   });
 
   function appendToken(token: string) {
@@ -129,207 +132,177 @@ export function RecoveryRulesPage() {
 
   const canSubmit = Boolean(selectedShopId && messageTemplate.trim() && !create.isPending);
 
+  const columns: Column<RecoveryRule>[] = [
+    { key: 'timing', header: 'Timing', render: (rule) => formatTiming(rule.trigger_after_minutes) },
+    { key: 'attempts', header: 'Attempts', align: 'right', render: (rule) => rule.max_attempts },
+    {
+      key: 'policy',
+      header: 'Channel policy',
+      className: 'hidden md:table-cell',
+      render: (rule) => (rule.only_inside_allowed_messaging_window ? '24h window' : 'Always allowed'),
+    },
+    {
+      key: 'template',
+      header: 'Template',
+      render: (rule) => (
+        <div className="max-w-xs">
+          <p className="truncate text-sm">{rule.message_template}</p>
+          <p className="text-xs text-muted">Preview: {previewTemplate(rule.message_template)}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (rule) => <Badge tone={rule.is_active ? 'success' : 'neutral'}>{rule.is_active ? 'Active' : 'Paused'}</Badge>,
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: (rule) => (
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            disabled={toggleActive.isPending}
+            onClick={() => toggleActive.mutate({ ruleId: rule.id, isActive: !rule.is_active })}
+          >
+            {rule.is_active ? 'Pause' : 'Activate'}
+          </Button>
+          <Button variant="ghost" size="sm" type="button" onClick={() => setDeleteTarget(rule)}>
+            Delete
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Revenue recovery</p>
-        <h1>Abandoned recovery rules</h1>
-        <p>
-          Send template-based payment reminders when orders stay in waiting-for-payment. Messages are
-          never generated by the LLM.
-        </p>
-        <ShopSelector />
-      </section>
+    <HubPage
+      eyebrow="Automation"
+      title="Abandoned recovery rules"
+      description="Send template-based payment reminders when orders stay in waiting-for-payment. Messages are never generated by the LLM."
+    >
+      <Card>
+        <CardHeader
+          title="Create recovery rule"
+          description="The scheduler marks eligible unpaid orders, then sends your template if channel policy allows."
+        />
+        <CardBody>
+          {!selectedShopId ? (
+            <EmptyState title="Select a shop" description="Use the shop switcher in the top bar." />
+          ) : (
+            <form className="flex flex-col gap-4" onSubmit={submit}>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Trigger after (minutes)">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={10080}
+                    value={triggerAfterMinutes}
+                    onChange={(e) => setTriggerAfterMinutes(Number(e.target.value))}
+                    required
+                  />
+                </Field>
+                <Field label="Max attempts">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={maxAttempts}
+                    onChange={(e) => setMaxAttempts(Number(e.target.value))}
+                    required
+                  />
+                </Field>
+              </div>
 
-      <section className="dashboard-card dashboard-card--wide">
-        <h2>Create recovery rule</h2>
-        <p className="analytics-toolbar__summary">
-          The scheduler marks eligible unpaid orders, then sends your template if channel policy allows.
-          Only the newest active rule is used per shop.
-        </p>
+              <Field label="Quick timing presets">
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Timing presets">
+                  {TIMING_PRESETS.map((preset) => (
+                    <Chip
+                      key={preset.minutes}
+                      active={triggerAfterMinutes === preset.minutes}
+                      onClick={() => setTriggerAfterMinutes(preset.minutes)}
+                    >
+                      {preset.label}
+                    </Chip>
+                  ))}
+                </div>
+              </Field>
 
-        {!selectedShopId ? (
-          <p className="empty-state">Select a shop to configure recovery rules.</p>
-        ) : (
-          <form className="trigger-rules-form" onSubmit={submit}>
-            <div className="filter-grid">
-              <label className="form-field">
-                <span>Trigger after (minutes)</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={10080}
-                  value={triggerAfterMinutes}
-                  onChange={(event) => setTriggerAfterMinutes(Number(event.target.value))}
+              <Field label="Message template">
+                <textarea
+                  rows={4}
+                  value={messageTemplate}
+                  onChange={(e) => setMessageTemplate(e.target.value)}
+                  placeholder={DEFAULT_TEMPLATE}
                   required
+                  className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg focus:border-accent focus:outline-none"
                 />
+              </Field>
+
+              <Field label="Insert template variables">
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Template variables">
+                  {TEMPLATE_TOKENS.map((token) => (
+                    <Chip key={token} onClick={() => appendToken(token)}>
+                      {token}
+                    </Chip>
+                  ))}
+                </div>
+              </Field>
+
+              <label className="flex items-center gap-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  className="rounded border-border"
+                  checked={onlyInsideWindow}
+                  onChange={(e) => setOnlyInsideWindow(e.target.checked)}
+                />
+                Only send inside Instagram 24-hour messaging window
               </label>
 
-              <label className="form-field">
-                <span>Max attempts</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={maxAttempts}
-                  onChange={(event) => setMaxAttempts(Number(event.target.value))}
-                  required
-                />
-              </label>
-            </div>
+              <Field label="Preview">
+                <p className="rounded-lg border border-border bg-surface-sunken px-3 py-2 text-sm text-fg">
+                  {previewTemplate(messageTemplate.trim() || DEFAULT_TEMPLATE)}
+                </p>
+              </Field>
 
-            <div className="form-field trigger-rules-form__examples">
-              <span>Quick timing presets</span>
-              <div className="filter-chips" role="group" aria-label="Timing presets">
-                {TIMING_PRESETS.map((preset) => (
-                  <button
-                    key={preset.minutes}
-                    type="button"
-                    className={`filter-chip${
-                      triggerAfterMinutes === preset.minutes ? ' filter-chip--active' : ''
-                    }`}
-                    aria-pressed={triggerAfterMinutes === preset.minutes}
-                    onClick={() => setTriggerAfterMinutes(preset.minutes)}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" disabled={!canSubmit}>
+                  {create.isPending ? 'Creating…' : 'Create recovery rule'}
+                </Button>
+                <Button type="button" variant="secondary" onClick={resetForm}>
+                  Reset form
+                </Button>
               </div>
-            </div>
 
-            <label className="form-field form-field--wide">
-              <span>Message template</span>
-              <textarea
-                rows={4}
-                value={messageTemplate}
-                onChange={(event) => setMessageTemplate(event.target.value)}
-                placeholder={DEFAULT_TEMPLATE}
-                required
-              />
-            </label>
+              {create.error ? (
+                <p className="text-sm text-danger">
+                  {create.error instanceof Error ? create.error.message : 'Failed to create rule'}
+                </p>
+              ) : null}
+            </form>
+          )}
+        </CardBody>
+      </Card>
 
-            <div className="form-field trigger-rules-form__examples">
-              <span>Insert template variables</span>
-              <div className="filter-chips" role="group" aria-label="Template variables">
-                {TEMPLATE_TOKENS.map((token) => (
-                  <button
-                    key={token}
-                    type="button"
-                    className="filter-chip"
-                    onClick={() => appendToken(token)}
-                  >
-                    {token}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <label className="form-field form-field--checkbox">
-              <input
-                type="checkbox"
-                checked={onlyInsideWindow}
-                onChange={(event) => setOnlyInsideWindow(event.target.checked)}
-              />
-              <span>Only send inside Instagram 24-hour messaging window</span>
-            </label>
-
-            <div className="form-field form-field--wide">
-              <span>Preview</span>
-              <p className="template-preview">{previewTemplate(messageTemplate.trim() || DEFAULT_TEMPLATE)}</p>
-            </div>
-
-            <div className="button-row">
-              <button className="button button--primary" type="submit" disabled={!canSubmit}>
-                {create.isPending ? 'Creating…' : 'Create recovery rule'}
-              </button>
-              <button className="button button--ghost-dark" type="button" onClick={resetForm}>
-                Reset form
-              </button>
-            </div>
-          </form>
-        )}
-
-        {create.error ? (
-          <p className="form-error">
-            {create.error instanceof Error ? create.error.message : 'Failed to create rule'}
-          </p>
-        ) : null}
-      </section>
-
-      <section className="dashboard-card dashboard-card--wide">
-        <div className="section-header">
-          <div>
-            <h2>Configured rules</h2>
-            <p className="analytics-toolbar__summary">
-              {activeCount} active · {(rules.data?.length ?? 0) - activeCount} paused
-            </p>
-          </div>
-        </div>
-
-        {rules.isLoading ? <p className="loading-state">Loading recovery rules...</p> : null}
-        {rules.error ? (
-          <p className="form-error">
-            {rules.error instanceof Error ? rules.error.message : 'Failed to load recovery rules'}
-          </p>
-        ) : null}
-
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Timing</th>
-                <th>Attempts</th>
-                <th>Channel policy</th>
-                <th>Template</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rules.data?.map((rule) => (
-                <tr key={rule.id}>
-                  <td>{formatTiming(rule.trigger_after_minutes)}</td>
-                  <td>{rule.max_attempts}</td>
-                  <td>{rule.only_inside_allowed_messaging_window ? '24h window' : 'Always allowed'}</td>
-                  <td>
-                    <p>{rule.message_template}</p>
-                    <p className="analytics-toolbar__summary">
-                      Preview: {previewTemplate(rule.message_template)}
-                    </p>
-                  </td>
-                  <td>
-                    <span className="status-pill">{rule.is_active ? 'Active' : 'Paused'}</span>
-                  </td>
-                  <td>
-                    <div className="rule-actions">
-                      <button
-                        className="button button--ghost"
-                        type="button"
-                        disabled={toggleActive.isPending}
-                        onClick={() =>
-                          toggleActive.mutate({ ruleId: rule.id, isActive: !rule.is_active })
-                        }
-                      >
-                        {rule.is_active ? 'Pause' : 'Activate'}
-                      </button>
-                      <button
-                        className="button button--ghost"
-                        type="button"
-                        onClick={() => setDeleteTarget(rule)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!rules.isLoading && (rules.data?.length ?? 0) === 0 ? (
-            <p className="empty-state">No recovery rules yet. Create one above.</p>
-          ) : null}
-        </div>
-      </section>
+      <Card>
+        <CardHeader
+          title="Configured rules"
+          description={`${activeCount} active · ${(rules.data?.length ?? 0) - activeCount} paused`}
+        />
+        <DataTable
+          columns={columns}
+          rows={rules.data ?? []}
+          rowKey={(rule) => rule.id}
+          isLoading={rules.isLoading}
+          error={rules.error instanceof Error ? rules.error.message : null}
+          emptyTitle="No recovery rules yet"
+          emptyDescription="Create one above."
+        />
+      </Card>
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}
@@ -340,6 +313,6 @@ export function RecoveryRulesPage() {
         onCancel={() => setDeleteTarget(null)}
         isLoading={remove.isPending}
       />
-    </div>
+    </HubPage>
   );
 }

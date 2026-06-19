@@ -6,7 +6,22 @@ import { OperatorCorrectionPanel } from '../components/catalog/OperatorCorrectio
 import { ResolverTraceViewer } from '../components/catalog/ResolverTraceViewer';
 import { VariantConfidenceInspector } from '../components/catalog/VariantConfidenceInspector';
 import { WhyThisVariantPanel } from '../components/catalog/WhyThisVariantPanel';
-import { ShopSelector } from '../components/ShopSelector';
+import { EmptyState, KpiCard, LoadingState } from '../components/data';
+import { HubPage } from '../components/shell/HubPage';
+import {
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  Field,
+  FilterChip,
+  Input,
+  ScoreBar,
+  SectionPanel,
+} from '../components/ui';
+import { cn } from '../lib/cn';
+import { confidenceBandTone } from '../lib/confidenceBand';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { queryKeys } from '../lib/queryClient';
@@ -26,12 +41,82 @@ function formatApiError(error: unknown): string {
   return error instanceof Error ? error.message : 'Request failed';
 }
 
-function ScoreBar({ value, band }: { value: number; band: string }) {
-  const pct = Math.max(0, Math.min(100, Math.round(value * 100)));
+function WorkflowStep({
+  index,
+  label,
+  active,
+  done,
+}: {
+  index: number;
+  label: string;
+  active?: boolean;
+  done?: boolean;
+}) {
   return (
-    <div className="cc-scorebar" role="img" aria-label={`${pct}% match`}>
-      <div className={`cc-scorebar__fill cc-scorebar__fill--${band}`} style={{ width: `${pct}%` }} />
-    </div>
+    <li
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
+        done && 'bg-success-soft text-success',
+        active && !done && 'bg-accent-soft text-accent',
+        !active && !done && 'bg-surface-sunken text-subtle',
+      )}
+    >
+      <span className="font-mono text-[10px] opacity-80">{index}</span>
+      {label}
+    </li>
+  );
+}
+
+function ProductCandidateCard({
+  candidate,
+  rank,
+  selected,
+  onSelect,
+}: {
+  candidate: ProductCandidate;
+  rank: number;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        className={cn(
+          'w-full rounded-xl border p-3 text-left transition-all',
+          selected
+            ? 'border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--color-accent)]'
+            : 'border-border bg-surface hover:border-accent/35 hover:bg-surface-sunken/50',
+        )}
+        onClick={onSelect}
+        aria-pressed={selected}
+      >
+        <div className="flex items-start gap-3">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-sunken font-mono text-xs font-semibold text-muted">
+            {rank}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <p className="font-medium leading-snug text-fg">{candidate.title}</p>
+              <Badge tone={confidenceBandTone(candidate.confidence_band)}>
+                {Math.round(candidate.score * 100)}%
+              </Badge>
+            </div>
+            <ScoreBar value={candidate.score} band={candidate.confidence_band} className="mt-2.5" />
+            <p className="mt-2 text-sm leading-relaxed text-muted">{candidate.rationale}</p>
+            {candidate.matched_aliases.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {candidate.matched_aliases.map((alias) => (
+                  <Badge key={alias} tone="neutral">
+                    {alias}
+                  </Badge>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </button>
+    </li>
   );
 }
 
@@ -143,352 +228,372 @@ export function CatalogCopilotPage() {
   const isResolving = resolveMutation.isPending;
   const items = catalogQuery.data?.items ?? [];
   const hasResults = Boolean(productResult || variantResult);
+  const hasMessage = messageText.trim().length > 0;
 
   return (
-    <div className="page-stack catalog-copilot">
-      <header className="cc-hero">
-        <div className="cc-hero__top">
-          <div className="cc-hero__intro">
-            <span className="cc-hero__eyebrow">Catalog intelligence</span>
-            <h1 className="cc-hero__title">Catalog Copilot</h1>
-            <p className="cc-hero__subtitle">
-              Normalize catalog entries, run hybrid retrieval, and resolve messy customer DMs to the right product and
-              variant — with full trace visibility and operator review.
-            </p>
-          </div>
-          <div className="cc-hero__controls">
-            <div className="cc-hero__shop">
-              <ShopSelector label="Active shop" />
-            </div>
-            <div className="cc-hero__actions">
-              <button
-                className="button button--primary"
-                type="button"
-                disabled={!selectedShopId || reindexMutation.isPending}
-                onClick={() => reindexMutation.mutate()}
-              >
-                {reindexMutation.isPending ? 'Reindexing…' : 'Reindex catalog'}
-              </button>
-              <button
-                className="button cc-hero__refresh"
-                type="button"
-                disabled={!selectedShopId || catalogQuery.isFetching}
-                onClick={() => void catalogQuery.refetch()}
-              >
-                {catalogQuery.isFetching ? 'Refreshing…' : 'Refresh'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {selectedShopId ? (
-          <div className="cc-stats">
-            <div className="cc-stat">
-              <span className="cc-stat__label">Normalized products</span>
-              <span className="cc-stat__value">{catalogQuery.data?.total ?? '—'}</span>
-            </div>
-            <div className="cc-stat">
-              <span className="cc-stat__label">Indexed on page</span>
-              <span className="cc-stat__value">
-                {catalogQuery.isLoading ? '…' : `${indexedCount}/${items.length}`}
-              </span>
-            </div>
-            <div className="cc-stat">
-              <span className="cc-stat__label">Product candidates</span>
-              <span className="cc-stat__value">{productResult?.candidates.length ?? '—'}</span>
-            </div>
-            <div className="cc-stat">
-              <span className="cc-stat__label">Last confidence</span>
-              <span className="cc-stat__value">
-                {activeTrace ? (
-                  <span className={`status-pill status-pill--${activeTrace.confidence_band}`}>
+    <HubPage
+      className="mx-auto flex w-full max-w-7xl flex-col gap-5"
+      eyebrow="Catalog intelligence"
+      title="Catalog Copilot"
+      description="Normalize catalog entries, run hybrid retrieval, and resolve messy customer DMs to the right product and variant — with full trace visibility and operator review."
+      actions={
+        <>
+          <Button
+            type="button"
+            disabled={!selectedShopId || reindexMutation.isPending}
+            onClick={() => reindexMutation.mutate()}
+          >
+            {reindexMutation.isPending ? 'Reindexing…' : 'Reindex catalog'}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!selectedShopId || catalogQuery.isFetching}
+            onClick={() => void catalogQuery.refetch()}
+          >
+            {catalogQuery.isFetching ? 'Refreshing…' : 'Refresh'}
+          </Button>
+        </>
+      }
+    >
+      {!selectedShopId ? (
+        <Card>
+          <CardBody>
+            <EmptyState
+              title="Select a shop to begin"
+              description="Use the shop switcher in the top bar to browse the normalized catalog and run the resolver."
+            />
+          </CardBody>
+        </Card>
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <KpiCard label="Normalized products" value={catalogQuery.data?.total ?? '—'} />
+            <KpiCard
+              label="Indexed on page"
+              value={catalogQuery.isLoading ? '…' : `${indexedCount}/${items.length}`}
+            />
+            <KpiCard label="Product candidates" value={productResult?.candidates.length ?? '—'} />
+            <KpiCard
+              label="Last confidence"
+              value={
+                activeTrace ? (
+                  <Badge tone={confidenceBandTone(activeTrace.confidence_band)}>
                     {activeTrace.confidence_band}
-                  </span>
+                  </Badge>
                 ) : (
                   '—'
-                )}
-              </span>
-            </div>
+                )
+              }
+            />
           </div>
-        ) : null}
-      </header>
 
-      {!selectedShopId ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <div className="empty-state-panel">
-            <p className="empty-state-panel__title">Select a shop to begin</p>
-            <p className="empty-state-panel__hint">
-              Pick an active shop above to browse the normalized catalog and run the resolver.
-            </p>
-          </div>
-        </section>
-      ) : (
-        <div className="cc-workspace">
-          {/* Catalog browser */}
-          <section className="cc-card cc-card--catalog">
-            <div className="cc-card__head">
-              <div>
-                <h2 className="cc-card__title">Catalog products</h2>
-                <p className="cc-card__hint">Browse normalized products and manage their aliases.</p>
-              </div>
-              {catalogQuery.data ? <span className="cc-count-badge">{catalogQuery.data.total}</span> : null}
-            </div>
-
-            <div className="cc-search">
-              <svg className="cc-search__icon" viewBox="0 0 20 20" aria-hidden="true">
-                <path
-                  fill="currentColor"
-                  d="M8.5 3a5.5 5.5 0 1 0 3.4 9.83l3.13 3.14a1 1 0 0 0 1.42-1.42l-3.14-3.13A5.5 5.5 0 0 0 8.5 3Zm0 2a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"
-                />
-              </svg>
-              <input
-                id="catalog-search"
-                className="cc-search__input"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Search by title, brand, or alias…"
-                aria-label="Search normalized catalog"
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
+            {/* ── Catalog browser ── */}
+            <Card className="flex flex-col lg:sticky lg:top-20 lg:max-h-[calc(100vh-7rem)]">
+              <CardHeader
+                title="Catalog browser"
+                description="Search products and manage aliases."
+                actions={catalogQuery.data ? <Badge tone="neutral">{catalogQuery.data.total}</Badge> : undefined}
               />
-              {searchInput ? (
-                <button type="button" className="cc-search__clear" onClick={() => setSearchInput('')} aria-label="Clear search">
-                  ×
-                </button>
-              ) : null}
-            </div>
-
-            {catalogQuery.isLoading ? <p className="loading-state cc-state">Loading catalog…</p> : null}
-            {catalogQuery.isError ? (
-              <div className="cc-alert cc-alert--error" role="alert">
-                <strong>Could not load catalog.</strong>
-                <span>{formatApiError(catalogQuery.error)}</span>
-              </div>
-            ) : null}
-            {!catalogQuery.isLoading && !catalogQuery.isError && items.length === 0 ? (
-              <div className="empty-state-panel cc-state">
-                <p className="empty-state-panel__title">No normalized products yet</p>
-                <p className="empty-state-panel__hint">
-                  Run <strong>Reindex catalog</strong> to normalize existing products and build Qdrant vectors.
-                </p>
-              </div>
-            ) : null}
-
-            {items.length > 0 ? (
-              <ul className="cc-product-list">
-                {items.map((item) => {
-                  const isSelected = selectedProduct?.id === item.id;
-                  return (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        className={`cc-product${isSelected ? ' cc-product--selected' : ''}`}
-                        onClick={() => setSelectedProduct(isSelected ? null : item)}
-                        aria-pressed={isSelected}
-                      >
-                        <span className="cc-product__main">
-                          <span className="cc-product__title">{item.normalized_title}</span>
-                          <span className="cc-product__meta">
-                            {[item.brand, item.gender, item.color].filter(Boolean).join(' · ') || 'No attributes'}
-                          </span>
-                        </span>
-                        <span
-                          className={`cc-dot cc-dot--${item.last_indexed_at ? 'on' : 'off'}`}
-                          title={item.last_indexed_at ? 'Indexed' : 'Pending index'}
-                        >
-                          {item.last_indexed_at ? 'Indexed' : 'Pending'}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : null}
-
-            {catalogQuery.data && catalogQuery.data.total > catalogQuery.data.page_size ? (
-              <div className="cc-pagination">
-                <button
-                  className="button button--ghost-dark"
-                  type="button"
-                  disabled={page <= 1}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                >
-                  ← Prev
-                </button>
-                <span className="cc-pagination__label">
-                  Page {page} / {totalPages}
-                </span>
-                <button
-                  className="button button--ghost-dark"
-                  type="button"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((current) => current + 1)}
-                >
-                  Next →
-                </button>
-              </div>
-            ) : null}
-
-            {selectedProduct ? (
-              <AliasEditor
-                shopId={selectedShopId}
-                product={selectedProduct}
-                onUpdated={async () => {
-                  await queryClient.invalidateQueries({ queryKey: queryKeys.catalogProducts(selectedShopId) });
-                  const refreshed = await apiClient.listCatalogProducts(selectedShopId, {
-                    search: debouncedSearch || undefined,
-                    page,
-                    page_size: PAGE_SIZE,
-                  });
-                  const updated = refreshed.items.find((item) => item.id === selectedProduct.id);
-                  if (updated) {
-                    setSelectedProduct(updated);
-                  }
-                }}
-              />
-            ) : items.length > 0 ? (
-              <p className="cc-card__footnote">Select a product to view and edit its aliases.</p>
-            ) : null}
-          </section>
-
-          {/* Resolver playground */}
-          <section className="cc-card cc-card--resolver">
-            <div className="cc-card__head">
-              <div>
-                <h2 className="cc-card__title">Resolver playground</h2>
-                <p className="cc-card__hint">Paste a customer DM to resolve the product and variant.</p>
-              </div>
-              {variantResult ? (
-                <span className={`status-pill status-pill--${variantResult.confidence_band}`}>
-                  {variantResult.confidence_band} · {Math.round(variantResult.confidence_score * 100)}%
-                </span>
-              ) : null}
-            </div>
-
-            <form className="cc-resolver-form" onSubmit={handleResolveSubmit}>
-              <label className="cc-field-label" htmlFor="resolver-message">
-                Customer message
-              </label>
-              <textarea
-                id="resolver-message"
-                className="cc-textarea"
-                rows={3}
-                value={messageText}
-                onChange={(event) => setMessageText(event.target.value)}
-                placeholder="Paste DM text, e.g. مشکی سایز M"
-                dir="auto"
-              />
-
-              <div className="cc-examples">
-                <span className="cc-examples__label">Try:</span>
-                {EXAMPLE_MESSAGES.map((example) => (
-                  <button
-                    key={example.label}
-                    type="button"
-                    className="cc-chip"
-                    onClick={() => setMessageText(example.text)}
+              <CardBody className="flex min-h-0 flex-1 flex-col gap-4">
+                <div className="relative shrink-0">
+                  <Input
+                    id="catalog-search"
+                    value={searchInput}
+                    onChange={(event) => setSearchInput(event.target.value)}
+                    placeholder="Search title, brand, alias…"
+                    aria-label="Search normalized catalog"
+                    className="pl-9 pr-8"
+                  />
+                  <svg
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle"
+                    viewBox="0 0 20 20"
+                    aria-hidden="true"
                   >
-                    {example.label}
-                  </button>
-                ))}
-              </div>
+                    <path
+                      fill="currentColor"
+                      d="M8.5 3a5.5 5.5 0 1 0 3.4 9.83l3.13 3.14a1 1 0 0 0 1.42-1.42l-3.14-3.13A5.5 5.5 0 0 0 8.5 3Zm0 2a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z"
+                    />
+                  </svg>
+                  {searchInput ? (
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1.5 text-muted hover:bg-surface-sunken hover:text-fg"
+                      onClick={() => setSearchInput('')}
+                      aria-label="Clear search"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
 
-              {selectedProduct ? (
-                <p className="cc-resolver-form__scope">
-                  Variant search scoped to <strong>{selectedProduct.normalized_title}</strong>.
-                </p>
-              ) : null}
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  {catalogQuery.isLoading ? <LoadingState label="Loading catalog…" /> : null}
+                  {catalogQuery.isError ? (
+                    <div
+                      className="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger"
+                      role="alert"
+                    >
+                      <strong>Could not load catalog.</strong> {formatApiError(catalogQuery.error)}
+                    </div>
+                  ) : null}
+                  {!catalogQuery.isLoading && !catalogQuery.isError && items.length === 0 ? (
+                    <EmptyState
+                      title="No normalized products"
+                      description="Run Reindex catalog to build vectors and searchable aliases."
+                    />
+                  ) : null}
 
-              <button
-                className="button button--primary cc-resolver-form__submit"
-                type="submit"
-                disabled={!selectedShopId || isResolving || !messageText.trim()}
-              >
-                {isResolving ? 'Resolving…' : 'Resolve product + variant'}
-              </button>
-            </form>
-
-            {!hasResults && !isResolving ? (
-              <div className="cc-resolver-empty">
-                <div className="cc-resolver-empty__badge">AI</div>
-                <p>Run the resolver to see ranked product candidates, the matched variant, and a full rationale.</p>
-              </div>
-            ) : null}
-
-            {productResult ? (
-              <div className="cc-candidates">
-                <h3 className="cc-subhead">Product candidates</h3>
-                {productResult.candidates.length === 0 ? (
-                  <p className="empty-state cc-state">No product matches for this message.</p>
-                ) : (
-                  <ul className="cc-candidate-list">
-                    {productResult.candidates.map((candidate, index) => {
-                      const isSelected = selectedCandidateId === candidate.product_id;
-                      return (
-                        <li key={candidate.product_id}>
-                          <button
-                            type="button"
-                            className={`cc-candidate${isSelected ? ' cc-candidate--selected' : ''}`}
-                            onClick={() => handleSelectCandidate(candidate)}
-                            aria-pressed={isSelected}
-                          >
-                            <div className="cc-candidate__top">
-                              <span className="cc-candidate__rank">#{index + 1}</span>
-                              <span className="cc-candidate__title">{candidate.title}</span>
-                              <span className={`status-pill status-pill--${candidate.confidence_band}`}>
-                                {Math.round(candidate.score * 100)}%
+                  {items.length > 0 ? (
+                    <ul className="flex flex-col gap-1.5 pr-1">
+                      {items.map((item) => {
+                        const isSelected = selectedProduct?.id === item.id;
+                        return (
+                          <li key={item.id}>
+                            <button
+                              type="button"
+                              className={cn(
+                                'flex w-full items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors',
+                                isSelected
+                                  ? 'border-accent bg-accent-soft'
+                                  : 'border-transparent bg-surface-sunken/60 hover:border-border hover:bg-surface-sunken',
+                              )}
+                              onClick={() => setSelectedProduct(isSelected ? null : item)}
+                              aria-pressed={isSelected}
+                            >
+                              <span
+                                className={cn(
+                                  'h-2 w-2 shrink-0 rounded-full',
+                                  item.last_indexed_at ? 'bg-success' : 'bg-warning',
+                                )}
+                                title={item.last_indexed_at ? 'Indexed' : 'Pending index'}
+                                aria-hidden="true"
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium text-fg">
+                                  {item.normalized_title}
+                                </span>
+                                <span className="block truncate text-xs text-muted">
+                                  {[item.brand, item.gender, item.color].filter(Boolean).join(' · ') ||
+                                    'No attributes'}
+                                </span>
                               </span>
-                            </div>
-                            <ScoreBar value={candidate.score} band={candidate.confidence_band} />
-                            <p className="cc-candidate__rationale">{candidate.rationale}</p>
-                            {candidate.matched_aliases.length > 0 ? (
-                              <p className="cc-candidate__aliases">
-                                {candidate.matched_aliases.map((alias) => (
-                                  <span key={alias} className="cc-tag">
-                                    {alias}
-                                  </span>
-                                ))}
-                              </p>
-                            ) : null}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            ) : null}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                </div>
 
-            {variantResult ? (
-              <div className="cc-variant-results">
-                <VariantConfidenceInspector result={variantResult} />
-                <WhyThisVariantPanel result={variantResult} trace={activeTrace} />
-              </div>
-            ) : null}
-          </section>
+                {catalogQuery.data && catalogQuery.data.total > catalogQuery.data.page_size ? (
+                  <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border pt-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={page <= 1}
+                      onClick={() => setPage((current) => Math.max(1, current - 1))}
+                    >
+                      Prev
+                    </Button>
+                    <span className="text-xs text-muted">
+                      {page} / {totalPages}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((current) => current + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                ) : null}
 
-          {/* Trace + operator correction */}
-          <section className="cc-card cc-card--trace">
-            {activeTrace ? (
-              <div className="cc-trace-grid">
-                <ResolverTraceViewer trace={activeTrace} />
-                <OperatorCorrectionPanel
-                  shopId={selectedShopId}
-                  trace={activeTrace}
-                  productResult={productResult}
-                  variantResult={variantResult}
+                {selectedProduct ? (
+                  <div className="shrink-0 border-t border-border pt-4">
+                    <AliasEditor
+                      shopId={selectedShopId}
+                      product={selectedProduct}
+                      onUpdated={async () => {
+                        await queryClient.invalidateQueries({ queryKey: queryKeys.catalogProducts(selectedShopId) });
+                        const refreshed = await apiClient.listCatalogProducts(selectedShopId, {
+                          search: debouncedSearch || undefined,
+                          page,
+                          page_size: PAGE_SIZE,
+                        });
+                        const updated = refreshed.items.find((item) => item.id === selectedProduct.id);
+                        if (updated) {
+                          setSelectedProduct(updated);
+                        }
+                      }}
+                    />
+                  </div>
+                ) : items.length > 0 ? (
+                  <p className="shrink-0 border-t border-border pt-3 text-xs text-muted">
+                    Select a product to scope variant resolution or edit aliases.
+                  </p>
+                ) : null}
+              </CardBody>
+            </Card>
+
+            {/* ── Resolver workspace ── */}
+            <div className="flex flex-col gap-5">
+              <Card>
+                <CardHeader
+                  title="Resolver playground"
+                  description="Paste a customer DM. The pipeline ranks products, resolves variants, and records a full audit trace."
+                  actions={
+                    variantResult ? (
+                      <Badge tone={confidenceBandTone(variantResult.confidence_band)}>
+                        {variantResult.confidence_band} · {Math.round(variantResult.confidence_score * 100)}%
+                      </Badge>
+                    ) : undefined
+                  }
                 />
-              </div>
-            ) : (
-              <div className="empty-state-panel">
-                <p className="empty-state-panel__title">Resolver trace viewer</p>
-                <p className="empty-state-panel__hint">
-                  Run a resolver query to inspect candidates, rules fired, missing slots, and submit operator
-                  corrections.
-                </p>
-              </div>
-            )}
-          </section>
-        </div>
+                <CardBody className="flex flex-col gap-5">
+                  <ol className="flex flex-wrap gap-2" aria-label="Resolver workflow">
+                    <WorkflowStep index={1} label="Message" active={hasMessage} done={hasMessage} />
+                    <WorkflowStep index={2} label="Product match" done={Boolean(productResult)} active={isResolving} />
+                    <WorkflowStep index={3} label="Variant" done={Boolean(variantResult)} />
+                    <WorkflowStep index={4} label="Trace" done={Boolean(activeTrace)} />
+                  </ol>
+
+                  {selectedProduct ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-accent/25 bg-accent-soft/40 px-3 py-2 text-sm">
+                      <Badge tone="accent">Scoped</Badge>
+                      <span className="text-muted">
+                        Variant resolution limited to{' '}
+                        <strong className="text-fg">{selectedProduct.normalized_title}</strong>
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="ml-auto"
+                        onClick={() => setSelectedProduct(null)}
+                      >
+                        Clear scope
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  <SectionPanel title="Customer message" variant="compose">
+                    <form className="flex flex-col gap-3" onSubmit={handleResolveSubmit}>
+                      <Field label={<span className="visually-hidden">Customer message</span>} htmlFor="resolver-message">
+                        <textarea
+                          id="resolver-message"
+                          rows={4}
+                          value={messageText}
+                          onChange={(event) => setMessageText(event.target.value)}
+                          placeholder="Paste DM text — Persian or English, e.g. مشکی سایز M"
+                          dir="auto"
+                          className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-subtle focus:border-accent focus:outline-none"
+                        />
+                      </Field>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-medium text-muted">Examples</span>
+                        {EXAMPLE_MESSAGES.map((example) => (
+                          <FilterChip
+                            key={example.label}
+                            active={messageText === example.text}
+                            onClick={() => setMessageText(example.text)}
+                          >
+                            {example.label}
+                          </FilterChip>
+                        ))}
+                      </div>
+
+                      <Button type="submit" disabled={!selectedShopId || isResolving || !messageText.trim()}>
+                        {isResolving ? 'Resolving product + variant…' : 'Run resolver'}
+                      </Button>
+                    </form>
+                  </SectionPanel>
+
+                  {isResolving ? <LoadingState label="Running hybrid retrieval and variant match…" /> : null}
+
+                  {!hasResults && !isResolving ? (
+                    <EmptyState
+                      title="No resolver results yet"
+                      description="Enter a customer message and run the resolver to see ranked products, variant confidence, and operator feedback options."
+                    />
+                  ) : null}
+
+                  {productResult && !isResolving ? (
+                    <section className="flex flex-col gap-3" aria-label="Product candidates">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold text-fg">Product candidates</h3>
+                        <span className="text-xs text-muted">{productResult.candidates.length} matches</span>
+                      </div>
+                      {productResult.candidates.length === 0 ? (
+                        <EmptyState title="No product matches for this message" />
+                      ) : (
+                        <ul className="flex flex-col gap-2">
+                          {productResult.candidates.map((candidate, index) => (
+                            <ProductCandidateCard
+                              key={candidate.product_id}
+                              candidate={candidate}
+                              rank={index + 1}
+                              selected={selectedCandidateId === candidate.product_id}
+                              onSelect={() => handleSelectCandidate(candidate)}
+                            />
+                          ))}
+                        </ul>
+                      )}
+                    </section>
+                  ) : null}
+
+                  {variantResult && !isResolving ? (
+                    <section className="grid gap-4" aria-label="Variant resolution">
+                      <VariantConfidenceInspector result={variantResult} />
+                      <WhyThisVariantPanel result={variantResult} trace={activeTrace} />
+                    </section>
+                  ) : null}
+                </CardBody>
+              </Card>
+            </div>
+          </div>
+
+          {/* ── Full-width trace & correction ── */}
+          <Card>
+            <CardHeader
+              title="Audit trace & operator correction"
+              description="Inspect rules fired, candidate scores, and submit feedback to improve future resolution."
+              actions={
+                activeTrace ? (
+                  <Badge tone={confidenceBandTone(activeTrace.confidence_band)}>
+                    {activeTrace.confidence_band}
+                  </Badge>
+                ) : undefined
+              }
+            />
+            <CardBody>
+              {activeTrace ? (
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <ResolverTraceViewer trace={activeTrace} />
+                  <div className="rounded-lg border border-border bg-surface-sunken p-4">
+                    <OperatorCorrectionPanel
+                      shopId={selectedShopId}
+                      trace={activeTrace}
+                      productResult={productResult}
+                      variantResult={variantResult}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <EmptyState
+                  title="Trace will appear after a resolver run"
+                  description="Run the resolver above to inspect retrieval evidence, rules fired, missing slots, and submit operator corrections."
+                />
+              )}
+            </CardBody>
+          </Card>
+        </>
       )}
-    </div>
+    </HubPage>
   );
 }

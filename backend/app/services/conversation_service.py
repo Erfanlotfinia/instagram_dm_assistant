@@ -43,7 +43,7 @@ from app.services.audit_service import AuditService
 from app.services.conversation_event_service import ConversationEventService
 from app.services.conversation_priority_service import ConversationPriorityService
 from app.services.customer_service import CustomerService
-from app.services.instagram_send_service import InstagramSendService
+from app.services.channel_outbound_service import ChannelOutboundService
 from app.services.order_service import OrderService
 from app.services.shop_service import ShopService
 from app.domain.enums import ConversationEventType
@@ -193,7 +193,7 @@ class ConversationService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Take over the conversation before sending manual messages",
             )
-        message = InstagramSendService(self.db).send_text_message(conversation.id, payload.text)
+        message = ChannelOutboundService(self.db).send_text_message(conversation.id, payload.text)
         conversation.last_message_at = message.created_at
         conversation.last_operator_action_at = datetime.now(UTC)
         self.event_service.record(

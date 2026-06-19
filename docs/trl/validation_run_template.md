@@ -14,7 +14,7 @@
 | **Environment** | `local` / `docker-compose` / `staging` / **MISSING** |
 | **Commit hash** | `{git rev-parse HEAD}` |
 | **Dataset version** | `trl_scenarios.json` @ `{commit or tag}` |
-| **Shop** | `trl-fashion-demo` (`seed_trl_demo_data`) |
+| **Shop** | `trl-commerce-demo` (`seed_trl_demo_data`) |
 | **Scenario limit** | `100` (full) / `{N}` (partial) |
 | **LLM mode** | `rule-based` (default TRL runner) / `openai-live` / **MISSING** |
 | **Executed by** | `{name}` |

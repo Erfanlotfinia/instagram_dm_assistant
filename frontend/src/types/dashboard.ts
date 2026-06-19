@@ -25,10 +25,31 @@ export interface DashboardMetrics {
   recovered_revenue: string;
   upsell_suggestions: number;
   upsell_accepted: number;
+  active_conversations: number;
+  messages_today: number;
+  messages_week: number;
+  automation_success_rate: number;
+  llm_fallback_rate: number;
+  handoff_rate: number;
+  failed_jobs_count: number;
   top_selling_posts: TopSellingPostSummary[];
   top_lost_demand_variants: LostDemandVariantSummary[];
   low_stock_variants: LowStockVariantSummary[];
   conversion_funnel: ConversionFunnelMetrics;
+}
+
+export interface DashboardTrendPoint {
+  date: string;
+  messages: number;
+  automated: number;
+  llm: number;
+  handoff: number;
+  conversions: number;
+}
+
+export interface DashboardTrends {
+  period: string;
+  points: DashboardTrendPoint[];
 }
 
 export interface TopSellingPostSummary {

@@ -3,7 +3,9 @@ import { useForm } from 'react-hook-form';
 import { Navigate, useLocation } from 'react-router-dom';
 import { z } from 'zod';
 
+import { Button, Card, CardBody, Field, Input } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
+import { cn } from '../lib/cn';
 
 const loginSchema = z.object({
   email: z.string().email('Enter a valid email address'),
@@ -49,30 +51,32 @@ export function LoginPage() {
   }
 
   return (
-    <div className="auth-page">
-      <form className="auth-card" onSubmit={handleSubmit(onSubmit)} noValidate>
-        <p className="dashboard-card__eyebrow">Operator Console</p>
-        <h1>Sign in</h1>
-        <p className="auth-card__subtitle">Access your multi-shop Instagram DM console.</p>
+    <div className="flex min-h-screen items-center justify-center bg-canvas px-4 py-12">
+      <Card className="w-full max-w-md">
+        <CardBody>
+          <p className="text-xs font-semibold uppercase tracking-wide text-accent">Modira Command Center</p>
+          <h1 className="mt-1 text-xl font-semibold text-fg">Sign in</h1>
+          <p className="mt-1 text-sm text-muted">Access your multi-channel social commerce operations console.</p>
 
-        <label className="form-field">
-          <span>Email</span>
-          <input type="email" autoComplete="email" {...register('email')} />
-          {errors.email ? <span className="field-error">{errors.email.message}</span> : null}
-        </label>
+          <form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)} noValidate>
+            <Field label="Email" htmlFor="login-email">
+              <Input id="login-email" type="email" autoComplete="email" {...register('email')} />
+              {errors.email ? <span className="text-xs text-danger">{errors.email.message}</span> : null}
+            </Field>
 
-        <label className="form-field">
-          <span>Password</span>
-          <input type="password" autoComplete="current-password" {...register('password')} />
-          {errors.password ? <span className="field-error">{errors.password.message}</span> : null}
-        </label>
+            <Field label="Password" htmlFor="login-password">
+              <Input id="login-password" type="password" autoComplete="current-password" {...register('password')} />
+              {errors.password ? <span className="text-xs text-danger">{errors.password.message}</span> : null}
+            </Field>
 
-        {errors.root ? <p className="form-error">{errors.root.message}</p> : null}
+            {errors.root ? <p className="text-sm text-danger">{errors.root.message}</p> : null}
 
-        <button className="button button--primary" type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Signing in...' : 'Sign in'}
-        </button>
-      </form>
+            <Button type="submit" disabled={isSubmitting} className={cn('w-full')}>
+              {isSubmitting ? 'Signing in…' : 'Sign in'}
+            </Button>
+          </form>
+        </CardBody>
+      </Card>
     </div>
   );
 }

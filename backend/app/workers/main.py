@@ -11,7 +11,12 @@ from app.core.logging import configure_logging
 from app.core.metrics import PROCESSED_MESSAGES, QUEUE_LAG
 from app.integrations.rabbitmq import RETRY_COUNT_HEADER, RabbitMQPublisher, setup_message_queues
 from app.services.failed_job_service import FailedJobService, format_traceback
-from app.workers.message_consumer import ConversationLockedError, InvalidJobPayloadError, handle_delivery, parse_delivery_body
+from app.workers.message_consumer import (
+    ConversationLockedError,
+    InvalidJobPayloadError,
+    handle_delivery,
+    parse_delivery_body,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +31,16 @@ class WorkerApp:
         self._publisher = RabbitMQPublisher(self.settings)
 
     def start(self) -> None:
-        queue_name = self.settings.rabbitmq_queue_message_received
+        queue_names = [self.settings.rabbitmq_queue_message_received]
         parameters = pika.URLParameters(self.settings.rabbitmq_url)
         self._connection = pika.BlockingConnection(parameters)
         self._channel = self._connection.channel()
         setup_message_queues(self._channel, self.settings)
         self._channel.basic_qos(prefetch_count=1)
-        self._channel.basic_consume(queue=queue_name, on_message_callback=self._on_message)
+        for queue_name in queue_names:
+            self._channel.basic_consume(queue=queue_name, on_message_callback=self._on_message)
         self._update_queue_lag()
-        logger.info("Worker listening on queue %s", queue_name)
+        logger.info("Worker listening on queues %s", ", ".join(queue_names))
         self._channel.start_consuming()
 
     def stop(self) -> None:
@@ -84,7 +90,11 @@ class WorkerApp:
         except ConversationLockedError:
             channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
         except InvalidJobPayloadError as exc:
-            logger.error("Worker received non-retryable payload retry_count=%s: %s", retry_count, exc)
+            logger.error(
+                "Worker received non-retryable payload retry_count=%s: %s",
+                retry_count,
+                exc,
+            )
             channel.basic_ack(delivery_tag=method.delivery_tag)
             payload = self._payload_from_body(body)
             self._publisher.publish_to_dlq(payload, retry_count)

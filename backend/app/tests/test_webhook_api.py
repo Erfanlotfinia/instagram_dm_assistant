@@ -41,7 +41,7 @@ def test_instagram_webhook_verification_success(client) -> None:
         "/api/v1/webhooks/instagram",
         params={
             "hub.mode": "subscribe",
-            "hub.verify_token": settings.instagram_webhook_verify_token,
+            "hub.verify_token": settings.webhook_internal_secret,
             "hub.challenge": "challenge-token-123",
         },
     )

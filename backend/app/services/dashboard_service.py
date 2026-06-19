@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -13,7 +13,17 @@ from app.domain.enums import (
     OrderRecoveryStatus,
     OrderStatus,
 )
-from app.domain.models import Conversation, ConversationSlots, Message, Order, Product, ProductVariant, UnavailableDemandLog
+from app.domain.models import (
+    AgentDecisionTrace,
+    Conversation,
+    ConversationSlots,
+    FailedJob,
+    Message,
+    Order,
+    Product,
+    ProductVariant,
+    UnavailableDemandLog,
+)
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository
@@ -21,6 +31,8 @@ from app.repositories.variant_repository import VariantRepository
 from app.schemas.dashboard import (
     ConversionFunnelMetrics,
     DashboardMetrics,
+    DashboardTrendPoint,
+    DashboardTrends,
     LostDemandVariantSummary,
     LowStockVariantSummary,
     TopSellingPostSummary,
@@ -56,6 +68,12 @@ class DashboardService:
         upsell_suggestions, upsell_accepted = UpsellService.count_suggestions(self.db, shop_id)
         top_posts = self._top_selling_posts(shop_id)
         top_lost = self._top_lost_demand(shop_id)
+        week_start = today_start - timedelta(days=6)
+        active_conversations = self._count_active_conversations(shop_id)
+        messages_today = self._count_inbound_messages_since(shop_id, today_start)
+        messages_week = self._count_inbound_messages_since(shop_id, week_start)
+        automation_rate, llm_rate, handoff_rate = self._automation_rates(shop_id)
+        failed_jobs_count = self._count_failed_jobs(shop_id)
 
         return DashboardMetrics(
             today_orders=today_orders,
@@ -67,11 +85,144 @@ class DashboardService:
             recovered_revenue=str(recovered_revenue),
             upsell_suggestions=upsell_suggestions,
             upsell_accepted=upsell_accepted,
+            active_conversations=active_conversations,
+            messages_today=messages_today,
+            messages_week=messages_week,
+            automation_success_rate=automation_rate,
+            llm_fallback_rate=llm_rate,
+            handoff_rate=handoff_rate,
+            failed_jobs_count=failed_jobs_count,
             top_selling_posts=top_posts,
             top_lost_demand_variants=top_lost,
             low_stock_variants=low_stock,
             conversion_funnel=funnel,
         )
+
+    def get_trends(self, shop_id: UUID, user, period: str = "7d") -> DashboardTrends:
+        """Daily activity series used by the Overview charts."""
+        self.shop_service.get_shop(shop_id, user)
+        days = 30 if period == "30d" else 7
+        now = datetime.now(UTC)
+        start = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+        messages_by_day = self._inbound_messages_by_day(shop_id, start)
+        traces_by_day = self._trace_outcomes_by_day(shop_id, start)
+        conversions_by_day = self._paid_orders_by_day(shop_id, start)
+
+        points: list[DashboardTrendPoint] = []
+        for offset in range(days):
+            day = (start + timedelta(days=offset)).date()
+            key = day.isoformat()
+            automated, llm, handoff = traces_by_day.get(key, (0, 0, 0))
+            points.append(
+                DashboardTrendPoint(
+                    date=day.strftime("%b %d"),
+                    messages=messages_by_day.get(key, 0),
+                    automated=automated,
+                    llm=llm,
+                    handoff=handoff,
+                    conversions=conversions_by_day.get(key, 0),
+                )
+            )
+        return DashboardTrends(period=period, points=points)
+
+    def _count_active_conversations(self, shop_id: UUID) -> int:
+        stmt = select(func.count()).select_from(Conversation).where(
+            Conversation.shop_id == shop_id,
+            Conversation.state == ConversationState.OPEN,
+        )
+        return int(self.db.scalar(stmt) or 0)
+
+    def _count_inbound_messages_since(self, shop_id: UUID, since: datetime) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(Message)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(
+                Conversation.shop_id == shop_id,
+                Message.direction == MessageDirection.INBOUND,
+                Message.created_at >= since,
+            )
+        )
+        return int(self.db.scalar(stmt) or 0)
+
+    def _automation_rates(self, shop_id: UUID) -> tuple[float, float, float]:
+        rows = self.db.execute(
+            select(
+                AgentDecisionTrace.auto_send_allowed,
+                AgentDecisionTrace.human_handoff_required,
+            )
+            .join(Conversation, Conversation.id == AgentDecisionTrace.conversation_id)
+            .where(Conversation.shop_id == shop_id)
+        ).all()
+        total = len(rows)
+        if total == 0:
+            return 0.0, 0.0, 0.0
+        automated = sum(1 for auto, _ in rows if auto)
+        handoff = sum(1 for _, ho in rows if ho)
+        llm = total - automated - handoff
+        return (
+            round(automated / total, 4),
+            round(max(llm, 0) / total, 4),
+            round(handoff / total, 4),
+        )
+
+    def _count_failed_jobs(self, shop_id: UUID) -> int:
+        stmt = select(func.count()).select_from(FailedJob).where(
+            FailedJob.shop_id == shop_id,
+            FailedJob.resolved.is_(False),
+        )
+        return int(self.db.scalar(stmt) or 0)
+
+    def _inbound_messages_by_day(self, shop_id: UUID, start: datetime) -> dict[str, int]:
+        rows = self.db.execute(
+            select(func.date(Message.created_at), func.count())
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(
+                Conversation.shop_id == shop_id,
+                Message.direction == MessageDirection.INBOUND,
+                Message.created_at >= start,
+            )
+            .group_by(func.date(Message.created_at))
+        ).all()
+        return {str(day): int(count) for day, count in rows}
+
+    def _trace_outcomes_by_day(self, shop_id: UUID, start: datetime) -> dict[str, tuple[int, int, int]]:
+        rows = self.db.execute(
+            select(
+                func.date(AgentDecisionTrace.created_at),
+                AgentDecisionTrace.auto_send_allowed,
+                AgentDecisionTrace.human_handoff_required,
+            )
+            .join(Conversation, Conversation.id == AgentDecisionTrace.conversation_id)
+            .where(
+                Conversation.shop_id == shop_id,
+                AgentDecisionTrace.created_at >= start,
+            )
+        ).all()
+        buckets: dict[str, tuple[int, int, int]] = {}
+        for day, auto, handoff in rows:
+            automated, llm, ho = buckets.get(str(day), (0, 0, 0))
+            if handoff:
+                ho += 1
+            elif auto:
+                automated += 1
+            else:
+                llm += 1
+            buckets[str(day)] = (automated, llm, ho)
+        return buckets
+
+    def _paid_orders_by_day(self, shop_id: UUID, start: datetime) -> dict[str, int]:
+        rows = self.db.execute(
+            select(func.date(Order.created_at), func.count())
+            .where(
+                Order.shop_id == shop_id,
+                Order.payment_status == OrderPaymentStatus.PAID,
+                Order.created_at >= start,
+            )
+            .group_by(func.date(Order.created_at))
+        ).all()
+        return {str(day): int(count) for day, count in rows}
 
     def _count_orders_since(self, shop_id: UUID, since: datetime) -> int:
         stmt = select(func.count()).select_from(Order).where(

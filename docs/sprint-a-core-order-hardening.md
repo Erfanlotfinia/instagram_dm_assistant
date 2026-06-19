@@ -1,14 +1,14 @@
 # Sprint A — Core Order Agent Hardening
 
-This sprint strengthens fashion-specific order taking with deterministic backend services. The LLM may extract raw fields such as customer color and size text, but backend services normalize those fields, resolve product variants, check stock, return alternatives, and log unavailable demand.
+This sprint strengthens catalog order taking with deterministic backend services. The LLM may extract raw fields such as customer color and size text, but backend services normalize those fields, resolve product variants, check stock, return alternatives, and log unavailable demand.
 
 ## Added capabilities
 
-- Fashion dictionary tables for color and size aliases, including global defaults and shop-specific overrides.
+- Attribute dictionary tables for catalog aliases, including global defaults and shop-specific overrides.
 - `ColorNormalizer` and `SizeNormalizer` services for Persian/English deterministic normalization.
 - Variant resolver API for testing backend-only SKU resolution and stock-aware alternatives.
 - Unavailable demand log table with raw and normalized customer requests.
-- Admin pages for fashion dictionary management, variant resolver testing, and unavailable demand review.
+- Admin pages for attribute dictionary management, variant resolver testing, and unavailable demand review.
 
 ## API endpoints
 

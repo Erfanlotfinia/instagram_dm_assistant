@@ -11,8 +11,8 @@
 | Field | Value |
 |-------|-------|
 | Callback URL | `https://<your-api-host>/api/v1/webhooks/instagram` |
-| Verify token | Same as `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` |
-| App secret | Set as `INSTAGRAM_APP_SECRET` for signature verification |
+| Verify token | Same as `WEBHOOK_INTERNAL_SECRET` |
+| App secret | Set as `META_APP_SECRET` for signature verification |
 
 Subscribe to messaging fields your pilot needs (typically `messages`).
 
@@ -28,7 +28,7 @@ The API returns `hub.challenge` when the verify token matches.
 
 ## 4. Inbound events
 
-Meta POSTs JSON payloads. When `INSTAGRAM_APP_SECRET` is set, the API validates `X-Hub-Signature-256`.
+Meta POSTs JSON payloads. When `META_APP_SECRET` is set, the API validates `X-Hub-Signature-256`.
 
 Processing pipeline:
 
@@ -36,7 +36,7 @@ Processing pipeline:
 2. Resolve `instagram_accounts` by recipient `ig_user_id`
 3. Deduplicate by `instagram_message_id`
 4. Persist customer, conversation, message
-5. Publish job to RabbitMQ `instagram.message.received`
+5. Publish job to RabbitMQ `channel.message.received`
 6. Worker runs agent orchestration under Redis conversation lock
 
 ## 5. Local testing with ngrok

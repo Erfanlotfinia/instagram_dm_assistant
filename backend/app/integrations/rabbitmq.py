@@ -22,16 +22,31 @@ class MessagePublisher(Protocol):
 def setup_message_queues(channel: BlockingChannel, settings: Settings | None = None) -> None:
     """Declare primary, retry (TTL), and dead-letter queues."""
     settings = settings or get_settings()
-    main_queue = settings.rabbitmq_queue_message_received
-    retry_queue = settings.rabbitmq_queue_retry
-    dlq_queue = settings.rabbitmq_queue_dlq
+    _declare_message_queue_topology(
+        channel,
+        settings.rabbitmq_queue_message_received,
+        settings.rabbitmq_queue_retry,
+        settings.rabbitmq_queue_dlq,
+        settings.rabbitmq_retry_delay_ms,
+    )
 
+    setup_order_correctness_queues(channel, settings)
+    logger.info("RabbitMQ queues declared main=%s", settings.rabbitmq_queue_message_received)
+
+
+def _declare_message_queue_topology(
+    channel: BlockingChannel,
+    main_queue: str,
+    retry_queue: str,
+    dlq_queue: str,
+    retry_delay_ms: int,
+) -> None:
     channel.queue_declare(queue=dlq_queue, durable=True)
     channel.queue_declare(
         queue=retry_queue,
         durable=True,
         arguments={
-            "x-message-ttl": settings.rabbitmq_retry_delay_ms,
+            "x-message-ttl": retry_delay_ms,
             "x-dead-letter-exchange": "",
             "x-dead-letter-routing-key": main_queue,
         },
@@ -43,13 +58,6 @@ def setup_message_queues(channel: BlockingChannel, settings: Settings | None = N
             "x-dead-letter-exchange": "",
             "x-dead-letter-routing-key": retry_queue,
         },
-    )
-    setup_order_correctness_queues(channel, settings)
-    logger.info(
-        "RabbitMQ queues declared main=%s retry=%s dlq=%s",
-        main_queue,
-        retry_queue,
-        dlq_queue,
     )
 
 

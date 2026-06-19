@@ -1,3 +1,5 @@
+import { Button, Dialog } from './ui';
+
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
@@ -19,30 +21,23 @@ export function ConfirmDialog({
   onCancel,
   isLoading = false,
 }: ConfirmDialogProps) {
-  if (!open) {
-    return null;
-  }
-
   return (
-    <div className="dialog-overlay" role="presentation" onClick={onCancel}>
-      <div
-        className="dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirm-dialog-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h2 id="confirm-dialog-title">{title}</h2>
-        <p>{message}</p>
-        <div className="button-row">
-          <button className="button button--ghost-dark" type="button" onClick={onCancel} disabled={isLoading}>
+    <Dialog
+      open={open}
+      onClose={onCancel}
+      title={title}
+      footer={
+        <>
+          <Button variant="secondary" size="sm" type="button" onClick={onCancel} disabled={isLoading}>
             {cancelLabel}
-          </button>
-          <button className="button button--danger" type="button" onClick={onConfirm} disabled={isLoading}>
-            {isLoading ? 'Working...' : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+          <Button variant="danger" size="sm" type="button" onClick={onConfirm} disabled={isLoading}>
+            {isLoading ? 'Working…' : confirmLabel}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-muted">{message}</p>
+    </Dialog>
   );
 }

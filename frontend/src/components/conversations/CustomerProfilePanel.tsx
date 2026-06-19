@@ -1,6 +1,9 @@
 import { useForm } from 'react-hook-form';
 
+import { EmptyState } from '../data';
+import { Badge, Button, Field, Input, type BadgeTone } from '../ui';
 import type { CustomerProfile, CustomerUpdate, PreviousOrderSummary } from '../../types/conversation';
+import { cn } from '../../lib/cn';
 
 interface CustomerProfilePanelProps {
   profile: CustomerProfile | null | undefined;
@@ -8,8 +11,6 @@ interface CustomerProfilePanelProps {
   isSaving?: boolean;
 }
 
-// Map common color names to a displayable swatch color. Standard CSS color
-// names render directly; anything unknown falls back to a neutral chip.
 const KNOWN_CSS_COLORS = new Set([
   'black', 'white', 'red', 'green', 'blue', 'navy', 'gray', 'grey', 'silver',
   'maroon', 'olive', 'lime', 'aqua', 'teal', 'fuchsia', 'purple', 'pink',
@@ -33,10 +34,10 @@ function formatDate(iso: string | null): string {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
 }
 
-function orderStatusTone(order: PreviousOrderSummary): string {
-  if (order.payment_status === 'paid') return 'status-pill--success';
-  if (order.status === 'cancelled') return 'status-pill--danger';
-  return 'status-pill--warning';
+function paymentTone(order: PreviousOrderSummary): BadgeTone {
+  if (order.payment_status === 'paid') return 'success';
+  if (order.status === 'cancelled') return 'danger';
+  return 'warning';
 }
 
 export function CustomerProfilePanel({ profile, onSave, isSaving }: CustomerProfilePanelProps) {
@@ -52,139 +53,154 @@ export function CustomerProfilePanel({ profile, onSave, isSaving }: CustomerProf
   });
 
   if (!profile) {
-    return <p className="empty-state">No customer profile available.</p>;
+    return <EmptyState title="No customer profile available" />;
   }
 
   const displayName = profile.full_name?.trim() || profile.instagram_user_id || 'Unknown customer';
 
   return (
-    <div className="customer-profile-panel">
-      <header className="cp-header">
-        <div className="cp-header__avatar" aria-hidden="true">
+    <div className="flex flex-col gap-4">
+      <header className="flex items-start gap-3">
+        <div
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent"
+          aria-hidden="true"
+        >
           {customerInitial(profile)}
         </div>
-        <div className="cp-header__identity">
-          <p className="cp-header__name">{displayName}</p>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold text-fg">{displayName}</p>
           {profile.instagram_user_id ? (
-            <p className="cp-header__handle">@{profile.instagram_user_id}</p>
+            <p className="truncate text-sm text-muted">@{profile.instagram_user_id}</p>
           ) : null}
         </div>
         {profile.is_repeat_customer ? (
-          <span className="cp-vip-badge" title="Repeat customer">
+          <Badge tone="accent" title="Repeat customer">
             ★ VIP
-          </span>
+          </Badge>
         ) : null}
       </header>
 
-      <div className="cp-stats">
-        <p className="cp-stat">
-          <span className="cp-stat__label">Orders:</span>
-          <span className="cp-stat__value">{profile.order_count}</span>
-        </p>
-        <p className="cp-stat">
-          <span className="cp-stat__label">Total paid:</span>
-          <span className="cp-stat__value">{profile.total_paid_amount}</span>
-        </p>
-        <p className="cp-stat">
-          <span className="cp-stat__label">Last purchase:</span>
-          <span className="cp-stat__value cp-stat__value--sm">{formatDate(profile.last_purchase_at)}</span>
-        </p>
-      </div>
-
-      <section className="cp-section">
-        <h3 className="cp-section__title">Preferences</h3>
-        <div className="cp-facts">
-          <p className="cp-fact">
-            <span className="cp-fact__label">Preferred size:</span>
-            <span className="cp-fact__value">{profile.preferred_size ?? '—'}</span>
-          </p>
-          <p className="cp-fact">
-            <span className="cp-fact__label">Previous successful size:</span>
-            <span className="cp-fact__value">{profile.last_successful_size ?? '—'}</span>
-          </p>
-          <div className="cp-fact cp-fact--colors">
-            <span className="cp-fact__label">Preferred colors:</span>
-            {profile.preferred_colors.length ? (
-              <span className="cp-colors">
-                <span className="cp-colors__swatches" aria-hidden="true">
-                  {profile.preferred_colors.map((color, index) => (
-                    <span
-                      key={`${color}-${index}`}
-                      className="cp-colors__swatch"
-                      style={{ background: swatchColor(color) ?? '#cbd2e0' }}
-                    />
-                  ))}
-                </span>
-                <span className="cp-colors__names">{profile.preferred_colors.join(', ')}</span>
-              </span>
-            ) : (
-              <span className="cp-fact__value">—</span>
-            )}
-          </div>
+      <dl className="grid gap-2 text-sm sm:grid-cols-3">
+        <div>
+          <dt className="text-xs text-muted">Orders</dt>
+          <dd className="font-medium text-fg">{profile.order_count}</dd>
         </div>
+        <div>
+          <dt className="text-xs text-muted">Total paid</dt>
+          <dd className="font-medium text-fg">{profile.total_paid_amount}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted">Last purchase</dt>
+          <dd className="text-fg">{formatDate(profile.last_purchase_at)}</dd>
+        </div>
+      </dl>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Preferences</h3>
+        <dl className="grid gap-2 text-sm">
+          <div className="flex justify-between gap-2">
+            <dt className="text-muted">Preferred size</dt>
+            <dd className="text-fg">{profile.preferred_size ?? '—'}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt className="text-muted">Previous successful size</dt>
+            <dd className="text-fg">{profile.last_successful_size ?? '—'}</dd>
+          </div>
+          <div className="flex flex-col gap-1">
+            <dt className="text-muted">Preferred colors</dt>
+            <dd>
+              {profile.preferred_colors.length ? (
+                <span className="inline-flex flex-wrap items-center gap-2">
+                  <span className="inline-flex gap-1" aria-hidden="true">
+                    {profile.preferred_colors.map((color, index) => (
+                      <span
+                        key={`${color}-${index}`}
+                        className="h-4 w-4 rounded-full border border-border"
+                        style={{ background: swatchColor(color) ?? '#cbd2e0' }}
+                      />
+                    ))}
+                  </span>
+                  <span className="text-fg">{profile.preferred_colors.join(', ')}</span>
+                </span>
+              ) : (
+                '—'
+              )}
+            </dd>
+          </div>
+        </dl>
       </section>
 
-      <section className="cp-section">
-        <h3 className="cp-section__title">
+      <section className="flex flex-col gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
           Order history
           {profile.previous_orders.length > 0 ? (
-            <span className="cp-section__count">{profile.previous_orders.length}</span>
+            <span className="ml-1.5 rounded-full bg-surface-sunken px-1.5 py-0.5 text-[10px] font-medium text-muted">
+              {profile.previous_orders.length}
+            </span>
           ) : null}
         </h3>
         {profile.previous_orders.length > 0 ? (
-          <ul className="cp-orders">
+          <ul className="space-y-2">
             {profile.previous_orders.map((order) => (
-              <li key={order.id} className="cp-order">
-                <div className="cp-order__top">
-                  <span className="cp-order__id">#{order.id.slice(0, 8)}</span>
-                  <span className="cp-order__amount">{order.total_amount}</span>
+              <li key={order.id} className="rounded-lg border border-border bg-surface-sunken p-2.5">
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="font-mono text-xs text-muted">#{order.id.slice(0, 8)}</span>
+                  <span className="font-medium text-fg">{order.total_amount}</span>
                 </div>
-                <div className="cp-order__pills">
-                  <span className="status-pill status-pill--neutral">{order.status.replace(/_/g, ' ')}</span>
-                  <span className={`status-pill ${orderStatusTone(order)}`}>
-                    {order.payment_status.replace(/_/g, ' ')}
-                  </span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <Badge tone="neutral">{order.status.replace(/_/g, ' ')}</Badge>
+                  <Badge tone={paymentTone(order)}>{order.payment_status.replace(/_/g, ' ')}</Badge>
                 </div>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="empty-state">No previous orders.</p>
+          <EmptyState title="No previous orders" />
         )}
       </section>
 
-      <section className="cp-section">
-        <h3 className="cp-section__title">Edit details</h3>
-        <form className="inline-form cp-form" onSubmit={form.handleSubmit(onSave)}>
-          <div className="filter-grid">
-            <label className="form-field">
-              <span>Full name</span>
-              <input {...form.register('full_name')} />
-            </label>
-            <label className="form-field">
-              <span>Phone</span>
-              <input {...form.register('phone')} />
-            </label>
-            <label className="form-field">
-              <span>City</span>
-              <input {...form.register('city')} />
-            </label>
-            <label className="form-field">
-              <span>Postal code</span>
-              <input {...form.register('postal_code')} />
-            </label>
+      <section className="flex flex-col gap-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Edit details</h3>
+        <form className="flex flex-col gap-3" onSubmit={form.handleSubmit(onSave)}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Full name" htmlFor="customer-full-name">
+              <Input id="customer-full-name" {...form.register('full_name')} />
+            </Field>
+            <Field label="Phone" htmlFor="customer-phone">
+              <Input id="customer-phone" {...form.register('phone')} />
+            </Field>
+            <Field label="City" htmlFor="customer-city">
+              <Input id="customer-city" {...form.register('city')} />
+            </Field>
+            <Field label="Postal code" htmlFor="customer-postal">
+              <Input id="customer-postal" {...form.register('postal_code')} />
+            </Field>
           </div>
-          <label className="form-field">
-            <span>Address</span>
-            <textarea rows={2} {...form.register('address')} />
-          </label>
-          <label className="form-field">
-            <span>Notes</span>
-            <textarea rows={2} {...form.register('notes')} />
-          </label>
-          <button className="button button--primary" type="submit" disabled={isSaving}>
+          <Field label="Address" htmlFor="customer-address">
+            <textarea
+              id="customer-address"
+              rows={2}
+              {...form.register('address')}
+              className={cn(
+                'w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg',
+                'placeholder:text-subtle focus:border-accent focus:outline-none',
+              )}
+            />
+          </Field>
+          <Field label="Notes" htmlFor="customer-notes">
+            <textarea
+              id="customer-notes"
+              rows={2}
+              {...form.register('notes')}
+              className={cn(
+                'w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg',
+                'placeholder:text-subtle focus:border-accent focus:outline-none',
+              )}
+            />
+          </Field>
+          <Button type="submit" size="sm" disabled={isSaving}>
             {isSaving ? 'Saving…' : 'Save customer'}
-          </button>
+          </Button>
         </form>
       </section>
     </div>

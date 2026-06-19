@@ -1,6 +1,6 @@
 # Sprint F: Pilot readiness guide
 
-Sprint F prepares the Instagram Fashion Order Agent for real pilot usage with stronger analytics, reliability, health checks, failed job visibility, idempotency, security, and documentation.
+Sprint F prepares the Modira for real pilot usage with stronger analytics, reliability, health checks, failed job visibility, idempotency, security, and documentation.
 
 ## Analytics dashboard
 

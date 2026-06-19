@@ -8,7 +8,7 @@ Shop-scoped analytics power funnel, revenue, lost-demand, and agent-performance 
 |-------|---------|
 | `funnel` | Conversion from inbound → product/variant resolution → draft → payment |
 | `post-revenue` | Paid revenue and conversion by Instagram post URL |
-| `lost-demand` | Unavailable color/size/stock demand with estimated lost revenue |
+| `lost-demand` | Unavailable product, attribute, or variant demand with estimated lost revenue |
 | `agent-performance` | Auto-send rate, handoff rate, and operator workload signals |
 
 Use `date_from` / `date_to` query parameters (ISO-8601) to scope metrics.

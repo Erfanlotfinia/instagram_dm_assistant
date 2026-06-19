@@ -1,65 +1,24 @@
-# Environment Variables Guide
+# Environment Variables
 
-## Core
+Modira separates platform configuration from shop-specific provider credentials.
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `APP_ENV` | Runtime environment | `production` |
-| `LOG_LEVEL` | Python log level | `INFO` |
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql+psycopg://...` |
-| `REDIS_URL` | Redis for locks and rate limits | `redis://redis:6379/0` |
-| `RABBITMQ_URL` | AMQP broker | `amqp://guest:guest@rabbitmq:5672/` |
-| `QDRANT_URL` | Vector DB HTTP endpoint | `http://qdrant:6333` |
+## Platform variables
 
-## Security
+| Variable | Purpose |
+| --- | --- |
+| `APP_ENV` | Runtime environment; production enables strict secret checks. |
+| `DATABASE_URL`, `REDIS_URL`, `RABBITMQ_URL`, `QDRANT_URL` | Data, lock, queue, and vector services. |
+| `JWT_SECRET_KEY` | Admin auth signing secret. |
+| `TOKEN_ENCRYPTION_KEY` | Required in production; encrypts per-shop channel credentials. |
+| `WEBHOOK_INTERNAL_SECRET` | Internal verification secret for provider challenge flows where applicable. |
+| `META_APP_ID`, `META_APP_SECRET`, `META_GRAPH_API_VERSION`, `META_GRAPH_API_BASE_URL` | Global Meta app configuration and signature validation. These are not shop page tokens. |
+| `WEBHOOK_SIGNATURE_BYPASS` | Must be `false` in production. |
+| `ENABLED_CHANNEL_PROVIDERS` | Enabled adapters, for example `instagram,whatsapp,telegram,bale,rubika`. |
+| `ENABLE_REAL_PROVIDER_SEND` | Enables real provider outbound adapter calls. |
+| `RABBITMQ_QUEUE_MESSAGE_RECEIVED` | Generic inbound queue, normally `channel.message.received`. |
+| `LLM_PROVIDER`, `LLM_MODE`, model/API-key variables | Bounded LLM extraction and drafting. |
+| `VITE_API_BASE_URL` | Browser-safe frontend API URL. Never put provider tokens in frontend env. |
 
-| Variable | Description |
-|----------|-------------|
-| `JWT_SECRET_KEY` | HS256 signing key (min 16 chars) |
-| `TOKEN_ENCRYPTION_KEY` | Fernet key for Instagram tokens (min 32 chars) |
-| `CORS_ORIGINS` | JSON list of allowed admin origins |
-| `INSTAGRAM_APP_SECRET` | Meta app secret; enables webhook signature check |
-| `RATE_LIMIT_ENABLED` | Enable Redis rate limiting |
-| `RATE_LIMIT_LOGIN_PER_MINUTE` | Login attempts per IP per minute |
-| `RATE_LIMIT_WEBHOOK_PER_MINUTE` | Webhook POSTs per IP per minute |
-| `RATE_LIMIT_OUTBOUND_MESSAGE_PER_MINUTE` | Manual outbound messages per IP per minute |
+## Shop credentials
 
-## Instagram / Meta
-
-| Variable | Description |
-|----------|-------------|
-| `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` | Meta webhook verification token |
-| `ENABLE_REAL_INSTAGRAM_SEND` | `true` to call Graph API; `false` for local mock send |
-
-## Agent / LLM
-
-| Variable | Description |
-|----------|-------------|
-| `LLM_PROVIDER` | `openai` (default) or `gemini` |
-| `LLM_MODE` | `mock` for tests/local without API calls; `live` for real extraction |
-| `OPENAI_API_KEY` | OpenAI-compatible API key (AvalAI or OpenAI) when `LLM_PROVIDER=openai` |
-| `OPENAI_API_BASE_URL` | OpenAI-compatible API base URL (default: `https://api.avalai.ir/v1`) |
-| `OPENAI_MODEL` | Chat model when using OpenAI provider |
-| `OPENAI_EMBEDDING_MODEL` | Embedding model when using OpenAI provider |
-| `GEMINI_API_KEY` | Google Gemini API key when `LLM_PROVIDER=gemini` |
-| `GEMINI_MODEL` | Gemini chat model (default: `gemini-2.5-flash`) |
-| `GEMINI_EMBEDDING_MODEL` | Gemini embedding model (default: `gemini-embedding-001`, 3072-dim) |
-
-When switching `LLM_PROVIDER`, re-run catalog semantic reindex because embedding vector sizes may differ.
-
-## Queue / workers
-
-| Variable | Description |
-|----------|-------------|
-| `RABBITMQ_MAX_RETRIES` | Max processing retries before DLQ |
-| `RABBITMQ_RETRY_DELAY_MS` | Retry queue TTL delay |
-| `CONVERSATION_LOCK_TTL_SECONDS` | Redis lock TTL per conversation |
-| `BACKGROUND_JOB_INTERVAL_SECONDS` | Scheduler cycle interval |
-| `EMBEDDING_REFRESH_BATCH_SIZE` | Products re-indexed per scheduler run |
-| `ORDER_EXPIRATION_MINUTES` | Unpaid order TTL |
-
-## Frontend
-
-| Variable | Description |
-|----------|-------------|
-| `VITE_API_BASE_URL` | Backend URL visible to browser |
+Shop-specific provider tokens, bot tokens, phone IDs, account IDs, webhook secrets, and send identities are stored on channel accounts. APIs return metadata/status only and never raw decrypted tokens.

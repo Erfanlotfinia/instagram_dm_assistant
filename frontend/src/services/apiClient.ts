@@ -22,8 +22,15 @@ import type {
   RecoveryRuleCreate,
   RecoveryRuleUpdate,
 } from '../types/sprintD';
-import type { DashboardMetrics } from '../types/dashboard';
-import type { ChannelAccount, ChannelAccountCreate, TelegramWebhookInfo } from '../types/channel';
+import type { DashboardMetrics, DashboardTrends } from '../types/dashboard';
+import type {
+  ChannelAccount,
+  ChannelAccountCreate,
+  ChannelAccountCredentials,
+  ChannelAccountUpdate,
+  TelegramWebhookInfo,
+  WebhookTestResponse,
+} from '../types/channel';
 import type { AgentPerformanceMetrics, AgentStudioSettings, DMSimulatorRequest, DMSimulatorResponse, FunnelAnalytics, HandoffAnalyticsRow, OnboardingStatus, PaginatedLostDemand, PaginatedOperatorPerformance, PostPerformanceRow, ResponseTimeAnalytics, SimulatorRunSummary, StockDemandRow, TriggerPerformance, TriggerRule, UnavailableDemandRow } from '../types/competitive';
 import type { SemanticSearchResponse } from '../types/semanticSearch';
 import type { CatalogImportJob, CatalogImportRequest, CatalogProductListResponse, CatalogReindexRequest, ProductAliasesPatchRequest, ProductNormalized } from '../types/catalog';
@@ -51,7 +58,7 @@ import type {
 } from '../types/trust';
 import type { FailedJobListResponse, HealthResponse, ReadinessResponse } from '../types/health';
 import type { LoginRequest, TokenResponse, User } from '../types/auth';
-import type { ColorAlias, SizeAlias, UnavailableDemandLog, VariantResolverResult } from '../types/fashion';
+import type { AttributeAlias, ColorAlias, SizeAlias, UnavailableDemandLog, VariantResolverResult } from '../types/fashion';
 import type { InstagramAccount, InstagramAccountCreate } from '../types/instagramAccount';
 import type {
   Order,
@@ -189,14 +196,31 @@ export const apiClient = {
     }),
   getDashboardMetrics: (shopId: string) =>
     request<DashboardMetrics>(`/api/v1/shops/${shopId}/dashboard/metrics`),
+  getDashboardTrends: (shopId: string, period: '7d' | '30d' = '7d') =>
+    request<DashboardTrends>(`/api/v1/shops/${shopId}/dashboard/trends${buildQuery({ period })}`),
   getOnboardingStatus: (shopId: string) =>
     request<OnboardingStatus>(`/api/v1/shops/${shopId}/onboarding-status`),
 
   listChannelAccounts: (shopId: string) => request<ChannelAccount[]>(`/api/v1/shops/${shopId}/channels`),
   createChannelAccount: (shopId: string, payload: ChannelAccountCreate) =>
     request<ChannelAccount>(`/api/v1/shops/${shopId}/channels`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateChannelAccount: (shopId: string, channelAccountId: string, payload: ChannelAccountUpdate) =>
+    request<ChannelAccount>(`/api/v1/shops/${shopId}/channels/${channelAccountId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  updateChannelCredentials: (shopId: string, channelAccountId: string, payload: ChannelAccountCredentials) =>
+    request<ChannelAccount>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/credentials`, { method: 'POST', body: JSON.stringify(payload) }),
+  validateChannelCredentials: (shopId: string, channelAccountId: string) =>
+    request<ChannelAccount>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/validate`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   testChannelWebhook: (shopId: string, channelAccountId: string) =>
-    request<{ status: string }>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/webhook-test`, { method: 'POST', body: JSON.stringify({}) }),
+    request<WebhookTestResponse>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/webhook-test`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
 
   setTelegramWebhook: (shopId: string, channelAccountId: string, url?: string) =>
     request<TelegramWebhookInfo>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/set-webhook`, { method: 'POST', body: JSON.stringify({ ...(url ? { url } : {}) }) }),
@@ -496,6 +520,16 @@ export const apiClient = {
   getCustomerPreferences: (shopId: string, customerId: string) =>
     request<CustomerPreferences>(`/api/v1/shops/${shopId}/customers/${customerId}/preferences`),
 
+  listAttributeAliases: (shopId: string) =>
+    request<AttributeAlias[]>(`/api/v1/shops/${shopId}/attribute-aliases`),
+  createAttributeAlias: (
+    shopId: string,
+    payload: Pick<AttributeAlias, 'attribute_slug' | 'raw_value' | 'normalized_value' | 'language'>,
+  ) =>
+    request<AttributeAlias>(`/api/v1/shops/${shopId}/attribute-aliases`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   listColorAliases: (shopId: string) => request<ColorAlias[]>(`/api/v1/shops/${shopId}/color-aliases`),
   createColorAlias: (shopId: string, payload: Pick<ColorAlias, 'raw_value' | 'normalized_value' | 'language'>) =>
     request<ColorAlias>(`/api/v1/shops/${shopId}/color-aliases`, { method: 'POST', body: JSON.stringify(payload) }),

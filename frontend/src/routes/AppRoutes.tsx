@@ -1,344 +1,165 @@
-import type { ReactNode } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom';
 
-import { AppLayout } from '../components/AppLayout';
+import { AppShell } from '../components/shell/AppShell';
+import { HubLayout } from '../components/shell/HubLayout';
+import { HUBS } from '../components/shell/navConfig';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { CatalogCopilotPage } from '../pages/CatalogCopilotPage';
-import { ChannelAccountsPage } from '../pages/ChannelAccountsPage';
-import { ConversationDetailPage } from '../pages/ConversationDetailPage';
-import { ConversationsPage } from '../pages/ConversationsPage';
-import { AgentStudioSettingsPage } from '../pages/AgentStudioSettingsPage';
-import { AnalyticsPage } from '../pages/AnalyticsPage';
-import { DashboardPage } from '../pages/DashboardPage';
-import { DMSimulatorPage } from '../pages/DMSimulatorPage';
-import { FashionDictionaryPage } from '../pages/FashionDictionaryPage';
-import { FailedJobsPage } from '../pages/FailedJobsPage';
-import { InstagramAccountsPage } from '../pages/InstagramAccountsPage';
 import {
+  AdminAITasksPage,
+  AIFallbacksPage,
+  AIControlOverviewPage,
+  AISafetyPage,
+  AnalyticsOverviewPage,
+  AutomationRulesPage,
+  AttributeDictionaryPage,
+  ChannelAccountsPage,
+  ChannelAnalyticsPage,
+  ConversationIntelligencePage,
+  DMSimulatorPage,
+  FailedJobsPage,
+  HandoffQueuePage,
+  InboxPage,
+  IncidentTimelinePage,
   InstagramProductMappingPage,
-  ProductResolverPage,
-} from '../pages/InstagramProductMappingPage';
-import { LoginPage } from '../pages/LoginPage';
-import { OnboardingPage } from '../pages/OnboardingPage';
-import { OrderDetailPage } from '../pages/OrderDetailPage';
-import { OrdersPage } from '../pages/OrdersPage';
-import { ProductDetailPage } from '../pages/ProductDetailPage';
-import { ProductsPage } from '../pages/ProductsPage';
-import { PostRevenueAnalyticsPage } from '../pages/PostRevenueAnalyticsPage';
-import { PilotReadinessPage } from '../pages/PilotReadinessPage';
-import { PilotControlCenterPage } from '../pages/PilotControlCenterPage';
-import { IncidentTimelinePage } from '../pages/IncidentTimelinePage';
-import { RecoveryRulesPage } from '../pages/RecoveryRulesPage';
-import { RiskSettingsPage } from '../pages/RiskSettingsPage';
-import { SystemHealthPage } from '../pages/SystemHealthPage';
-import { UpsellRulesPage } from '../pages/UpsellRulesPage';
-import { SemanticSearchPage } from '../pages/SemanticSearchPage';
-import { SettingsPage } from '../pages/SettingsPage';
-import { TriggerRulesPage } from '../pages/TriggerRulesPage';
-import { TRLValidationPage } from '../pages/TRLValidationPage';
-import { UnavailableDemandPage } from '../pages/UnavailableDemandPage';
-import { VariantResolverPage } from '../pages/VariantResolverPage';
-import { ShopsPage } from '../pages/ShopsPage';
-import { AdminAITasksPage, AutomationRulesPage, AutomationSuggestionsPage, OperatorCorrectionsPage, ScenarioCoveragePage, ScenarioSimulatorPage } from '../pages/SocialAdminPages';
+  LLMLogsPage,
+  LoginPage,
+  OperatorCorrectionsPage,
+  OrderDetailPage,
+  OrdersHubPage,
+  OverviewPage,
+  PostRevenueAnalyticsPage,
+  ProductDetailPage,
+  ProductsPage,
+  RecoveryRulesPage,
+  RiskSettingsPage,
+  RolloutPage,
+  ScenarioCoveragePage,
+  ScenarioSimulatorPage,
+  SettingsPage,
+  ShopsPage,
+  SystemHealthPage,
+  TriggerRulesPage,
+  UnavailableDemandPage,
+  UpsellRulesPage,
+  VariantResolverPage,
+} from './lazyPages';
+import { RouteSuspense } from './RouteSuspense';
 
-function AuthenticatedShell({ children }: { children: ReactNode }) {
-  return (
-    <ProtectedRoute>
-      <AppLayout>{children}</AppLayout>
-    </ProtectedRoute>
-  );
+function LegacyConversationRedirect() {
+  const { conversationId } = useParams<{ conversationId?: string }>();
+  const location = useLocation();
+  const inboxPath = conversationId ? `/inbox/${conversationId}` : '/inbox';
+
+  return <Navigate to={`${inboxPath}${location.search}${location.hash}`} replace />;
+}
+
+function tabsFor(hubId: string) {
+  return HUBS.find((hub) => hub.id === hubId)?.tabs ?? [];
 }
 
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
       <Route
-        path="/"
+        path="/login"
         element={
-          <AuthenticatedShell>
-            <DashboardPage />
-          </AuthenticatedShell>
+          <RouteSuspense>
+            <LoginPage />
+          </RouteSuspense>
         }
       />
 
       <Route
-        path="/onboarding"
         element={
-          <AuthenticatedShell>
-            <OnboardingPage />
-          </AuthenticatedShell>
+          <ProtectedRoute>
+            <AppShell>
+              <RouteSuspense>
+                <Outlet />
+              </RouteSuspense>
+            </AppShell>
+          </ProtectedRoute>
         }
-      />
-      <Route
-        path="/simulator"
-        element={
-          <AuthenticatedShell>
-            <DMSimulatorPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/pilot-readiness"
-        element={
-          <AuthenticatedShell>
-            <PilotReadinessPage />
-          </AuthenticatedShell>
-        }
-      />
+      >
+        <Route path="/" element={<OverviewPage />} />
 
-      <Route
-        path="/pilot-control"
-        element={
-          <AuthenticatedShell>
-            <PilotControlCenterPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/incidents"
-        element={
-          <AuthenticatedShell>
-            <IncidentTimelinePage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/incidents/:incidentId"
-        element={
-          <AuthenticatedShell>
-            <IncidentTimelinePage />
-          </AuthenticatedShell>
-        }
-      />
+        {/* Inbox */}
+        <Route path="/inbox" element={<InboxPage />} />
+        <Route path="/inbox/:conversationId" element={<InboxPage />} />
+        <Route path="/inbox/:conversationId/intelligence" element={<ConversationIntelligencePage />} />
 
-      <Route
-        path="/trl-validation"
-        element={
-          <AuthenticatedShell>
-            <TRLValidationPage />
-          </AuthenticatedShell>
-        }
-      />
+        {/* Handoffs */}
+        <Route path="/handoffs" element={<HandoffQueuePage />} />
 
+        {/* Orders */}
+        <Route path="/orders" element={<OrdersHubPage />} />
+        <Route path="/orders/:orderId" element={<OrderDetailPage />} />
 
-      <Route
-        path="/catalog-copilot"
-        element={
-          <AuthenticatedShell>
-            <CatalogCopilotPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/fashion-dictionary"
-        element={
-          <AuthenticatedShell>
-            <FashionDictionaryPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/variant-resolver"
-        element={
-          <AuthenticatedShell>
-            <VariantResolverPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/unavailable-demand"
-        element={
-          <AuthenticatedShell>
-            <UnavailableDemandPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/triggers"
-        element={
-          <AuthenticatedShell>
-            <TriggerRulesPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/risk-settings"
-        element={
-          <AuthenticatedShell>
-            <RiskSettingsPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/agent-studio"
-        element={
-          <AuthenticatedShell>
-            <AgentStudioSettingsPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/analytics"
-        element={
-          <AuthenticatedShell>
-            <AnalyticsPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/shops"
-        element={
-          <AuthenticatedShell>
-            <ShopsPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/instagram-accounts"
-        element={
-          <AuthenticatedShell>
-            <InstagramAccountsPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/channels"
-        element={
-          <AuthenticatedShell>
-            <ChannelAccountsPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/recovery-rules"
-        element={
-          <AuthenticatedShell>
-            <RecoveryRulesPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/upsell-rules"
-        element={
-          <AuthenticatedShell>
-            <UpsellRulesPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/post-revenue"
-        element={
-          <AuthenticatedShell>
-            <PostRevenueAnalyticsPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/products"
-        element={
-          <AuthenticatedShell>
-            <ProductsPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/products/:productId"
-        element={
-          <AuthenticatedShell>
-            <ProductDetailPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/instagram-mapping"
-        element={
-          <AuthenticatedShell>
-            <InstagramProductMappingPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/product-resolver"
-        element={
-          <AuthenticatedShell>
-            <ProductResolverPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/semantic-search"
-        element={
-          <AuthenticatedShell>
-            <SemanticSearchPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/orders"
-        element={
-          <AuthenticatedShell>
-            <OrdersPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/orders/:orderId"
-        element={
-          <AuthenticatedShell>
-            <OrderDetailPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/conversations"
-        element={
-          <AuthenticatedShell>
-            <ConversationsPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/conversations/:conversationId"
-        element={
-          <AuthenticatedShell>
-            <ConversationDetailPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route
-        path="/system-health"
-        element={
-          <AuthenticatedShell>
-            <SystemHealthPage />
-          </AuthenticatedShell>
-        }
-      />
+        {/* Catalog */}
+        <Route path="/catalog" element={<HubLayout tabs={tabsFor('catalog')} />}>
+          <Route index element={<Navigate to="/catalog/products" replace />} />
+          <Route path="products" element={<ProductsPage />} />
+          <Route path="products/:productId" element={<ProductDetailPage />} />
+          <Route path="mapping" element={<InstagramProductMappingPage />} />
+          <Route path="resolver" element={<VariantResolverPage />} />
+          <Route path="attributes" element={<AttributeDictionaryPage />} />
+        </Route>
 
-      <Route
-        path="/failed-jobs"
-        element={
-          <AuthenticatedShell>
-            <FailedJobsPage />
-          </AuthenticatedShell>
-        }
-      />
+        {/* Automation */}
+        <Route path="/automation" element={<HubLayout tabs={tabsFor('automation')} />}>
+          <Route index element={<Navigate to="/automation/rules" replace />} />
+          <Route path="rules" element={<AutomationRulesPage />} />
+          <Route path="coverage" element={<ScenarioCoveragePage />} />
+          <Route path="triggers" element={<TriggerRulesPage />} />
+          <Route path="recovery" element={<RecoveryRulesPage />} />
+          <Route path="upsell" element={<UpsellRulesPage />} />
+          <Route path="simulator" element={<DMSimulatorPage />} />
+          <Route path="scenario-simulator" element={<ScenarioSimulatorPage />} />
+          <Route path="risk" element={<RiskSettingsPage />} />
+        </Route>
 
-      <Route path="/scenario-coverage" element={<AuthenticatedShell><ScenarioCoveragePage /></AuthenticatedShell>} />
-      <Route path="/automation-rules" element={<AuthenticatedShell><AutomationRulesPage /></AuthenticatedShell>} />
-      <Route path="/scenario-simulator" element={<AuthenticatedShell><ScenarioSimulatorPage /></AuthenticatedShell>} />
-      <Route path="/admin-ai-tasks" element={<AuthenticatedShell><AdminAITasksPage /></AuthenticatedShell>} />
-      <Route path="/operator-corrections" element={<AuthenticatedShell><OperatorCorrectionsPage /></AuthenticatedShell>} />
-      <Route path="/automation-suggestions" element={<AuthenticatedShell><AutomationSuggestionsPage /></AuthenticatedShell>} />
-      <Route
-        path="/settings"
-        element={
-          <AuthenticatedShell>
-            <SettingsPage />
-          </AuthenticatedShell>
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
+        {/* AI Control */}
+        <Route path="/ai" element={<HubLayout tabs={tabsFor('ai')} />}>
+          <Route index element={<Navigate to="/ai/overview" replace />} />
+          <Route path="overview" element={<AIControlOverviewPage />} />
+          <Route path="logs" element={<LLMLogsPage />} />
+          <Route path="fallbacks" element={<AIFallbacksPage />} />
+          <Route path="safety" element={<AISafetyPage />} />
+          <Route path="corrections" element={<OperatorCorrectionsPage />} />
+          <Route path="tasks" element={<AdminAITasksPage />} />
+        </Route>
+
+        {/* Analytics */}
+        <Route path="/analytics" element={<HubLayout tabs={tabsFor('analytics')} />}>
+          <Route index element={<Navigate to="/analytics/overview" replace />} />
+          <Route path="overview" element={<AnalyticsOverviewPage />} />
+          <Route path="revenue" element={<PostRevenueAnalyticsPage />} />
+          <Route path="demand" element={<UnavailableDemandPage />} />
+          <Route path="channels" element={<ChannelAnalyticsPage />} />
+        </Route>
+
+        {/* System */}
+        <Route path="/system" element={<HubLayout tabs={tabsFor('system')} />}>
+          <Route index element={<Navigate to="/system/health" replace />} />
+          <Route path="health" element={<SystemHealthPage />} />
+          <Route path="jobs" element={<FailedJobsPage />} />
+          <Route path="channels" element={<ChannelAccountsPage />} />
+          <Route path="shops" element={<ShopsPage />} />
+          <Route path="rollout" element={<RolloutPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+        </Route>
+
+        {/* Legacy in-app links kept while callers migrate to the final hub routes. */}
+        <Route path="/conversations" element={<LegacyConversationRedirect />} />
+        <Route path="/conversations/:conversationId" element={<LegacyConversationRedirect />} />
+        <Route path="/incidents" element={<IncidentTimelinePage />} />
+        <Route path="/incidents/:incidentId" element={<IncidentTimelinePage />} />
+        <Route path="/system-health" element={<Navigate to="/system/health" replace />} />
+        <Route path="/operator-corrections" element={<Navigate to="/ai/corrections" replace />} />
+
+        {/* Unknown paths return to the Overview hub. */}
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
     </Routes>
   );
 }

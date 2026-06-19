@@ -3,9 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { ShopSelector } from '../components/ShopSelector';
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Card, CardBody, CardHeader, Field, Select } from '../components/ui';
+import type { BadgeTone } from '../components/ui';
+import { DataTable, EmptyState, KpiCard, LoadingState } from '../components/data';
+import type { Column } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
+import { cn } from '../lib/cn';
 import { apiClient } from '../services/apiClient';
 import type { TRLRiskMetrics, TRLValidationRun, TRLValidationScenarioResult } from '../types/trlValidation';
 
@@ -40,22 +45,22 @@ function formatRunTimestamp(value: string | null | undefined) {
   return new Date(value).toLocaleString();
 }
 
-function runStatusBadge(run: TRLValidationRun) {
+function runStatusBadge(run: TRLValidationRun): { label: string; tone: BadgeTone } {
   const thresholds = (run.metrics_json.thresholds_passed ?? {}) as Record<string, boolean>;
   const allPassed = Object.values(thresholds).length > 0 && Object.values(thresholds).every(Boolean);
   if (run.status === 'failed') {
-    return { label: 'Run failed', className: 'priority-badge priority-badge--urgent' };
+    return { label: 'Run failed', tone: 'danger' };
   }
   if (run.status === 'running') {
-    return { label: 'Running', className: 'priority-badge priority-badge--medium' };
+    return { label: 'Running', tone: 'warning' };
   }
   if (allPassed && run.failed_scenarios === 0) {
-    return { label: 'All thresholds passed', className: 'priority-badge priority-badge--low' };
+    return { label: 'All thresholds passed', tone: 'success' };
   }
   if (allPassed) {
-    return { label: 'Thresholds passed', className: 'priority-badge priority-badge--medium' };
+    return { label: 'Thresholds passed', tone: 'warning' };
   }
-  return { label: 'Thresholds failing', className: 'priority-badge priority-badge--high' };
+  return { label: 'Thresholds failing', tone: 'danger' };
 }
 
 function isUnsafeScenario(row: TRLValidationScenarioResult) {
@@ -70,13 +75,27 @@ function filterScenarios(rows: TRLValidationScenarioResult[], filter: ScenarioFi
   return rows;
 }
 
-function MetricCard({ label, value, tone }: { label: string; value: string; tone?: 'success' | 'warning' }) {
-  const toneClass = tone === 'success' ? ' stat-card--success' : tone === 'warning' ? ' stat-card--warning' : '';
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <article className={`stat-card${toneClass}`}>
-      <p className="stat-card__label">{label}</p>
-      <p className="stat-card__value">{value}</p>
-    </article>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+        active ? 'border-accent bg-accent-soft text-accent' : 'border-border bg-surface text-muted hover:text-fg',
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -92,88 +111,95 @@ function ScenarioDetailPanel({
   const actualIntent = String(scenario.actual_json.intent ?? '—');
 
   return (
-    <section className="dashboard-card dashboard-card--wide trl-scenario-detail" aria-label="Scenario detail">
-      <div className="section-header">
-        <div>
-          <h2>{scenario.scenario_id}</h2>
-          <p className="dashboard-card__subtitle">
-            {scenario.passed ? 'Scenario passed all checks.' : 'Review mismatches and failure reasons below.'}
-          </p>
+    <Card aria-label="Scenario detail">
+      <CardHeader
+        title={scenario.scenario_id}
+        description={
+          scenario.passed ? 'Scenario passed all checks.' : 'Review mismatches and failure reasons below.'
+        }
+        actions={<Badge tone={scenario.passed ? 'success' : 'danger'}>{scenario.passed ? 'Passed' : 'Failed'}</Badge>}
+      />
+      <CardBody className="flex flex-col gap-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <KpiCard
+            label="Intent (actual)"
+            value={actualIntent}
+            tone={scenario.passed ? 'success' : 'warning'}
+          />
+          <KpiCard label="State" value={String(scenario.actual_json.state ?? '—')} />
+          <KpiCard label="Processing time" value={`${scenario.processing_time_ms}ms`} />
         </div>
-        <span className={scenario.passed ? 'priority-badge priority-badge--low' : 'priority-badge priority-badge--high'}>
-          {scenario.passed ? 'Passed' : 'Failed'}
-        </span>
-      </div>
 
-      <div className="stats-grid">
-        <MetricCard label="Intent (actual)" value={actualIntent} tone={scenario.passed ? 'success' : 'warning'} />
-        <MetricCard label="State" value={String(scenario.actual_json.state ?? '—')} />
-        <MetricCard label="Processing time" value={`${scenario.processing_time_ms}ms`} />
-      </div>
+        <dl className="detail-grid">
+          <div>
+            <dt>Customer message</dt>
+            <dd dir="auto">{inputMessage}</dd>
+          </div>
+          <div>
+            <dt>Expected intent</dt>
+            <dd>{expectedIntent}</dd>
+          </div>
+          <div>
+            <dt>Actual intent</dt>
+            <dd>{actualIntent}</dd>
+          </div>
+        </dl>
 
-      <dl className="detail-grid trl-scenario-detail__grid">
-        <div>
-          <dt>Customer message</dt>
-          <dd dir="auto">{inputMessage}</dd>
-        </div>
-        <div>
-          <dt>Expected intent</dt>
-          <dd>{expectedIntent}</dd>
-        </div>
-        <div>
-          <dt>Actual intent</dt>
-          <dd>{actualIntent}</dd>
-        </div>
-      </dl>
-
-      {scenario.failure_reasons.length > 0 ? (
-        <div className="trl-scenario-detail__failures">
-          <h3>Failure reasons</h3>
-          <ul>
-            {scenario.failure_reasons.map((reason) => (
-              <li key={reason}>{reason}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <div className="button-row">
-        {scenario.conversation_id ? (
-          <>
-            <Link className="button button--ghost-dark" to={`/conversations/${scenario.conversation_id}`}>
-              Open conversation
-            </Link>
-            <Link className="button button--ghost-dark" to={`/conversations/${scenario.conversation_id}#decision-trace`}>
-              Decision trace
-            </Link>
-          </>
+        {scenario.failure_reasons.length > 0 ? (
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-fg">Failure reasons</h3>
+            <ul className="list-inside list-disc space-y-1 text-sm text-muted">
+              {scenario.failure_reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </div>
         ) : null}
-        <button className="button button--ghost-dark" type="button" onClick={onClose}>
-          Close
-        </button>
-      </div>
 
-      <details className="match-panel resolver-raw-details">
-        <summary>Full scenario payload</summary>
-        <pre className="resolver-raw-json">
-          {JSON.stringify(
-            {
-              input: scenario.input_json,
-              expected: scenario.expected_json,
-              actual: scenario.actual_json,
-              failure_reasons: scenario.failure_reasons,
-            },
-            null,
-            2,
-          )}
-        </pre>
-      </details>
-    </section>
+        <div className="flex flex-wrap gap-2">
+          {scenario.conversation_id ? (
+            <>
+              <Link
+                className="inline-flex h-10 items-center rounded-lg border border-border bg-surface px-4 text-sm font-medium text-fg hover:bg-surface-sunken"
+                to={`/conversations/${scenario.conversation_id}`}
+              >
+                Open conversation
+              </Link>
+              <Link
+                className="inline-flex h-10 items-center rounded-lg border border-border bg-surface px-4 text-sm font-medium text-fg hover:bg-surface-sunken"
+                to={`/conversations/${scenario.conversation_id}#decision-trace`}
+              >
+                Decision trace
+              </Link>
+            </>
+          ) : null}
+          <Button variant="secondary" type="button" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+
+        <details className="text-sm">
+          <summary className="cursor-pointer text-accent hover:underline">Full scenario payload</summary>
+          <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-surface-sunken p-3 text-xs text-subtle">
+            {JSON.stringify(
+              {
+                input: scenario.input_json,
+                expected: scenario.expected_json,
+                actual: scenario.actual_json,
+                failure_reasons: scenario.failure_reasons,
+              },
+              null,
+              2,
+            )}
+          </pre>
+        </details>
+      </CardBody>
+    </Card>
   );
 }
 
 export function TRLValidationPage() {
-  const { selectedShop, selectedShopId } = useShop();
+  const { selectedShopId } = useShop();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -274,310 +300,278 @@ export function TRLValidationPage() {
     [allScenarios],
   );
 
-  if (!selectedShop) {
-    return (
-      <section className="dashboard-card dashboard-card--wide">
-        <h1>TRL 5 Validation</h1>
-        <p>Select a shop to run the repeatable relevant-environment validation suite.</p>
-        <ShopSelector />
-      </section>
-    );
-  }
+  const scenarioColumns: Column<TRLValidationScenarioResult>[] = [
+    { key: 'id', header: 'ID', render: (row) => row.scenario_id },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (row) => (
+        <Badge tone={row.passed ? 'success' : 'danger'}>{row.passed ? 'Passed' : 'Failed'}</Badge>
+      ),
+    },
+    { key: 'intent', header: 'Intent', render: (row) => String(row.actual_json.intent ?? '—') },
+    { key: 'state', header: 'State', render: (row) => String(row.actual_json.state ?? '—') },
+    { key: 'time', header: 'Time', render: (row) => `${row.processing_time_ms}ms` },
+    {
+      key: 'links',
+      header: 'Links',
+      render: (row) =>
+        row.conversation_id ? (
+          <Link
+            className="font-medium text-accent hover:underline"
+            to={`/conversations/${row.conversation_id}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            Conversation
+          </Link>
+        ) : (
+          '—'
+        ),
+    },
+  ];
 
   return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Relevant environment testing</p>
-        <h1>TRL 5 Validation</h1>
-        <p>
-          Runs scripted DM scenarios through the production orchestrator without sending real Instagram
-          messages. Use this before enabling pilot traffic.
-        </p>
-        <ShopSelector />
-      </section>
-
-      <section className="dashboard-card dashboard-card--wide trl-validation-controls">
-        <div className="section-header section-header--stacked">
-          <div>
-            <h2>Run validation</h2>
-            <p className="dashboard-card__subtitle">
-              Choose how many scenarios to execute. Full runs can take a minute — keep this tab open.
-            </p>
-          </div>
-          <span className="priority-badge priority-badge--medium">Test harness</span>
-        </div>
-
-        <div className="filter-grid trl-validation-controls__grid">
-          <label className="form-field">
-            <span>Scenario count</span>
-            <select
-              value={scenarioLimit}
-              onChange={(event) => setScenarioLimit(Number(event.target.value))}
-              disabled={runMutation.isPending}
-            >
-              {SCENARIO_LIMIT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="form-field form-field--checkbox">
-            <input
-              type="checkbox"
-              checked={resetDemoData}
-              onChange={(event) => setResetDemoData(event.target.checked)}
-              disabled={runMutation.isPending}
-            />
-            <span>Reset demo catalog before run</span>
-          </label>
-        </div>
-
-        {runMutation.isPending ? (
-          <p className="loading-state trl-validation-status" role="status">
-            Running {scenarioLimit} scenarios through the orchestrator…
-          </p>
-        ) : null}
-
-        <div className="trl-validation-actions">
-          <div className="button-row trl-validation-actions__primary">
-            <button
-              className="button button--primary"
-              type="button"
-              onClick={() => runMutation.mutate()}
-              disabled={runMutation.isPending || resetMutation.isPending || !selectedShopId}
-            >
-              {runMutation.isPending ? 'Running…' : 'Run validation'}
-            </button>
-            <button
-              className="button button--ghost-dark"
-              type="button"
-              disabled={runMutation.isPending || resetMutation.isPending || !selectedShopId}
-              onClick={() => setResetDialogOpen(true)}
-            >
-              Reset validation data
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {runsQuery.isLoading ? <p className="loading-state">Loading validation history…</p> : null}
-      {runsQuery.error ? (
-        <div role="alert" className="alert alert--error">
-          {runsQuery.error instanceof Error ? runsQuery.error.message : 'Failed to load validation runs'}
-        </div>
+    <HubPage
+      eyebrow="Relevant environment testing"
+      title="TRL 5 Validation"
+      description="Runs scripted DM scenarios through the production orchestrator without sending real Instagram messages. Use this before enabling pilot traffic."
+    >
+      {!selectedShopId ? (
+        <Card>
+          <CardBody>
+            <EmptyState title="Select a shop" description="Use the shop switcher in the top bar." />
+          </CardBody>
+        </Card>
       ) : null}
 
-      {!runsQuery.isLoading && runs.length === 0 ? (
-        <div className="empty-state-panel">
-          <p className="empty-state-panel__title">No validation runs yet</p>
-          <p className="empty-state-panel__hint">
-            Run validation to generate TRL 5 metrics, threshold checks, and per-scenario evidence.
-          </p>
-        </div>
-      ) : null}
-
-      {selectedRun ? (
+      {selectedShopId ? (
         <>
-          <section className="dashboard-card dashboard-card--wide">
-            <div className="section-header section-header--stacked">
-              <div>
-                <h2>Run summary</h2>
-                <p className="dashboard-card__subtitle">
-                  Started {formatRunTimestamp(selectedRun.started_at)}
-                  {selectedRun.completed_at ? ` · Completed ${formatRunTimestamp(selectedRun.completed_at)}` : ''}
-                </p>
-              </div>
-              {statusBadge ? <span className={statusBadge.className}>{statusBadge.label}</span> : null}
-            </div>
-
-            {runs.length > 1 ? (
-              <label className="form-field trl-run-picker">
-                <span>Run history</span>
-                <select
-                  aria-label="Select validation run"
-                  value={selectedRun.id}
-                  onChange={(event) => {
-                    setSelectedRunId(event.target.value);
-                    setDetail(null);
-                  }}
-                >
-                  {runs.map((run) => (
-                    <option key={run.id} value={run.id}>
-                      {formatRunTimestamp(run.started_at)} — {run.passed_scenarios}/{run.total_scenarios} passed ({run.status})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-
-            <div className="stats-grid">
-              <MetricCard label="Validation mode" value={String(selectedRun.validation_mode ?? metrics.validation_mode ?? 'deterministic_regression')} />
-              <MetricCard
-                label="Evidence type"
-                value={metrics.proves_live_llm ? 'Live/staging LLM' : 'Deterministic regression'}
-              />
-              <MetricCard label="Scenarios passed" value={`${selectedRun.passed_scenarios}/${selectedRun.total_scenarios}`} />
-              <MetricCard
-                label="Pass rate"
-                value={`${passRate}%`}
-                tone={passRate >= 90 ? 'success' : passRate >= 70 ? undefined : 'warning'}
-              />
-              <MetricCard label="Failed scenarios" value={String(selectedRun.failed_scenarios)} tone={selectedRun.failed_scenarios > 0 ? 'warning' : undefined} />
-              <MetricCard label="Run status" value={selectedRun.status} />
-            </div>
-
-            <div className="stats-grid">
-              <MetricCard label="Intent accuracy" value={percent(metrics.intent_accuracy)} />
-              <MetricCard label="Slot accuracy" value={percent(metrics.slot_extraction_accuracy)} />
-              <MetricCard label="Product resolution" value={percent(metrics.product_resolution_accuracy)} />
-              <MetricCard label="Variant resolution" value={percent(metrics.variant_resolution_accuracy)} />
-              <MetricCard label="False auto-sends" value={String(metrics.false_auto_send_count ?? 0)} />
-              <MetricCard label="False orders" value={String(metrics.false_order_creation_count ?? 0)} />
-            </div>
-          </section>
-
-          <section className="dashboard-card dashboard-card--wide">
-            <h2>Risk &amp; latency</h2>
-            <div className="stats-grid">
-              <MetricCard label="Invalid LLM JSON" value={String(riskMetrics?.invalid_llm_json_count ?? metrics.invalid_llm_json_count ?? 0)} />
-              <MetricCard label="Safe fallbacks" value={String(riskMetrics?.safe_fallback_count ?? metrics.safe_fallback_count ?? 0)} />
-              <MetricCard label="Human handoffs" value={String(riskMetrics?.human_handoff_count ?? metrics.human_handoff_count ?? 0)} />
-              <MetricCard label="Critical risk events" value={String(riskMetrics?.critical_risk_count ?? metrics.critical_risk_count ?? 0)} />
-              <MetricCard
-                label="Average risk score"
-                value={
-                  riskMetrics
-                    ? `${Math.round(riskMetrics.average_risk_score * 100)}%`
-                    : `${Math.round(Number(metrics.average_risk_score ?? 0) * 100)}%`
-                }
-              />
-              <MetricCard label="P95 latency" value={`${riskMetrics?.p95_processing_latency ?? metrics.p95_processing_latency ?? 0}ms`} />
-            </div>
-
-            <h3>Pass rate by category</h3>
-            <ul className="trl-category-list">
-              {Object.entries(
-                riskMetrics?.scenario_pass_rate_by_category ??
-                  (metrics.scenario_pass_rate_by_category as Record<string, number> | undefined) ??
-                  {},
-              ).map(([category, value]) => (
-                <li key={category}>
-                  <span>{category}</span>
-                  <strong>{percent(value)}</strong>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="dashboard-card dashboard-card--wide">
-            <h2>Acceptance thresholds</h2>
-            {thresholdRows.length ? (
-              <ul className="checklist">
-                {thresholdRows.map(([name, ok]) => (
-                  <li key={name}>
-                    <strong>
-                      {ok ? '✅' : '❌'} {THRESHOLD_LABELS[name] ?? name}
-                    </strong>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="empty-state">No threshold evaluation yet.</p>
-            )}
-          </section>
-
-          <section className="dashboard-card dashboard-card--wide">
-            <div className="section-header section-header--stacked">
-              <div>
-                <h2>Scenario results</h2>
-                <p className="dashboard-card__subtitle">Click a row to inspect expected vs actual behavior.</p>
-              </div>
-            </div>
-
-            <div className="filter-chips" role="group" aria-label="Filter scenarios">
-              {(['all', 'passed', 'failed', 'unsafe'] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  className={`filter-chip${filter === option ? ' filter-chip--active' : ''}`}
-                  aria-pressed={filter === option}
-                  onClick={() => setFilter(option)}
-                >
-                  {option === 'all' ? 'All' : option === 'unsafe' ? 'Failed/unsafe' : option.charAt(0).toUpperCase() + option.slice(1)}
-                  {' '}({filterCounts[option] ?? 0})
-                </button>
-              ))}
-            </div>
-
-            {scenariosQuery.isLoading ? <p className="loading-state">Loading scenarios…</p> : null}
-            {scenariosQuery.error ? (
-              <div role="alert" className="alert alert--error">
-                {scenariosQuery.error instanceof Error ? scenariosQuery.error.message : 'Failed to load scenarios'}
-              </div>
-            ) : null}
-
-            {!scenariosQuery.isLoading && scenarios.length === 0 ? (
-              <p className="empty-state">No scenarios match this filter.</p>
-            ) : null}
-
-            {scenarios.length > 0 ? (
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">ID</th>
-                      <th scope="col">Status</th>
-                      <th scope="col">Intent</th>
-                      <th scope="col">State</th>
-                      <th scope="col">Time</th>
-                      <th scope="col">Links</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {scenarios.map((row) => (
-                      <tr
-                        key={row.id}
-                        className={!row.passed || isUnsafeScenario(row) ? 'data-table__row--attention' : 'row-success'}
-                        onClick={() => setDetail(row)}
-                        tabIndex={0}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            setDetail(row);
-                          }
-                        }}
-                        role="button"
-                        aria-label={`Inspect scenario ${row.scenario_id}`}
-                      >
-                        <td>{row.scenario_id}</td>
-                        <td>{row.passed ? 'Passed' : 'Failed'}</td>
-                        <td>{String(row.actual_json.intent ?? '—')}</td>
-                        <td>{String(row.actual_json.state ?? '—')}</td>
-                        <td>{row.processing_time_ms}ms</td>
-                        <td>
-                          {row.conversation_id ? (
-                            <Link
-                              className="table-link"
-                              to={`/conversations/${row.conversation_id}`}
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              Conversation
-                            </Link>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                      </tr>
+          <Card>
+            <CardHeader
+              title="Run validation"
+              description="Choose how many scenarios to execute. Full runs can take a minute — keep this tab open."
+              actions={<Badge tone="info">Test harness</Badge>}
+            />
+            <CardBody className="flex flex-col gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Scenario count">
+                  <Select
+                    value={scenarioLimit}
+                    onChange={(event) => setScenarioLimit(Number(event.target.value))}
+                    disabled={runMutation.isPending}
+                  >
+                    {SCENARIO_LIMIT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
-          </section>
+                  </Select>
+                </Field>
 
-          {detail ? <ScenarioDetailPanel scenario={detail} onClose={() => setDetail(null)} /> : null}
+                <label className="flex items-center gap-2 self-end pb-1 text-sm text-fg">
+                  <input
+                    type="checkbox"
+                    checked={resetDemoData}
+                    onChange={(event) => setResetDemoData(event.target.checked)}
+                    disabled={runMutation.isPending}
+                    className="rounded border-border"
+                  />
+                  Reset demo catalog before run
+                </label>
+              </div>
+
+              {runMutation.isPending ? (
+                <LoadingState label={`Running ${scenarioLimit} scenarios through the orchestrator…`} />
+              ) : null}
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() => runMutation.mutate()}
+                  disabled={runMutation.isPending || resetMutation.isPending}
+                >
+                  {runMutation.isPending ? 'Running…' : 'Run validation'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  type="button"
+                  disabled={runMutation.isPending || resetMutation.isPending}
+                  onClick={() => setResetDialogOpen(true)}
+                >
+                  Reset validation data
+                </Button>
+              </div>
+            </CardBody>
+          </Card>
+
+          {runsQuery.isLoading ? (
+            <Card>
+              <CardBody>
+                <LoadingState label="Loading validation history…" />
+              </CardBody>
+            </Card>
+          ) : null}
+          {runsQuery.error ? (
+            <Card>
+              <CardBody>
+                <p className="text-sm text-danger" role="alert">
+                  {runsQuery.error instanceof Error ? runsQuery.error.message : 'Failed to load validation runs'}
+                </p>
+              </CardBody>
+            </Card>
+          ) : null}
+
+          {!runsQuery.isLoading && runs.length === 0 ? (
+            <Card>
+              <CardBody>
+                <EmptyState
+                  title="No validation runs yet"
+                  description="Run validation to generate TRL 5 metrics, threshold checks, and per-scenario evidence."
+                />
+              </CardBody>
+            </Card>
+          ) : null}
+
+          {selectedRun ? (
+            <>
+              <Card>
+                <CardHeader
+                  title="Run summary"
+                  description={`Started ${formatRunTimestamp(selectedRun.started_at)}${selectedRun.completed_at ? ` · Completed ${formatRunTimestamp(selectedRun.completed_at)}` : ''}`}
+                  actions={statusBadge ? <Badge tone={statusBadge.tone}>{statusBadge.label}</Badge> : null}
+                />
+                <CardBody className="flex flex-col gap-4">
+                  {runs.length > 1 ? (
+                    <Field label="Run history">
+                      <Select
+                        aria-label="Select validation run"
+                        value={selectedRun.id}
+                        onChange={(event) => {
+                          setSelectedRunId(event.target.value);
+                          setDetail(null);
+                        }}
+                      >
+                        {runs.map((run) => (
+                          <option key={run.id} value={run.id}>
+                            {formatRunTimestamp(run.started_at)} — {run.passed_scenarios}/{run.total_scenarios} passed ({run.status})
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  ) : null}
+
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <KpiCard label="Validation mode" value={String(selectedRun.validation_mode ?? metrics.validation_mode ?? 'deterministic_regression')} />
+                    <KpiCard label="Evidence type" value={metrics.proves_live_llm ? 'Live/staging LLM' : 'Deterministic regression'} />
+                    <KpiCard label="Scenarios passed" value={`${selectedRun.passed_scenarios}/${selectedRun.total_scenarios}`} />
+                    <KpiCard label="Pass rate" value={`${passRate}%`} tone={passRate >= 90 ? 'success' : passRate >= 70 ? 'accent' : 'warning'} />
+                    <KpiCard label="Failed scenarios" value={String(selectedRun.failed_scenarios)} tone={selectedRun.failed_scenarios > 0 ? 'warning' : 'accent'} />
+                    <KpiCard label="Run status" value={selectedRun.status} />
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <KpiCard label="Intent accuracy" value={percent(metrics.intent_accuracy)} />
+                    <KpiCard label="Slot accuracy" value={percent(metrics.slot_extraction_accuracy)} />
+                    <KpiCard label="Product resolution" value={percent(metrics.product_resolution_accuracy)} />
+                    <KpiCard label="Variant resolution" value={percent(metrics.variant_resolution_accuracy)} />
+                    <KpiCard label="False auto-sends" value={String(metrics.false_auto_send_count ?? 0)} />
+                    <KpiCard label="False orders" value={String(metrics.false_order_creation_count ?? 0)} />
+                  </div>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader title="Risk & latency" />
+                <CardBody className="flex flex-col gap-4">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <KpiCard label="Invalid LLM JSON" value={String(riskMetrics?.invalid_llm_json_count ?? metrics.invalid_llm_json_count ?? 0)} />
+                    <KpiCard label="Safe fallbacks" value={String(riskMetrics?.safe_fallback_count ?? metrics.safe_fallback_count ?? 0)} />
+                    <KpiCard label="Human handoffs" value={String(riskMetrics?.human_handoff_count ?? metrics.human_handoff_count ?? 0)} />
+                    <KpiCard label="Critical risk events" value={String(riskMetrics?.critical_risk_count ?? metrics.critical_risk_count ?? 0)} />
+                    <KpiCard
+                      label="Average risk score"
+                      value={
+                        riskMetrics
+                          ? `${Math.round(riskMetrics.average_risk_score * 100)}%`
+                          : `${Math.round(Number(metrics.average_risk_score ?? 0) * 100)}%`
+                      }
+                    />
+                    <KpiCard label="P95 latency" value={`${riskMetrics?.p95_processing_latency ?? metrics.p95_processing_latency ?? 0}ms`} />
+                  </div>
+
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold text-fg">Pass rate by category</h3>
+                    <ul className="space-y-1 text-sm">
+                      {Object.entries(
+                        riskMetrics?.scenario_pass_rate_by_category ??
+                          (metrics.scenario_pass_rate_by_category as Record<string, number> | undefined) ??
+                          {},
+                      ).map(([category, value]) => (
+                        <li key={category} className="flex justify-between gap-4 text-muted">
+                          <span>{category}</span>
+                          <strong className="text-fg">{percent(value)}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader title="Acceptance thresholds" />
+                <CardBody>
+                  {thresholdRows.length ? (
+                    <ul className="space-y-2 text-sm">
+                      {thresholdRows.map(([name, ok]) => (
+                        <li
+                          key={name}
+                          className={cn(
+                            'rounded-md border px-3 py-2',
+                            ok ? 'border-success/30 bg-success-soft/20' : 'border-danger/30 bg-danger-soft/20',
+                          )}
+                        >
+                          <strong className="text-fg">
+                            {ok ? '✅' : '❌'} {THRESHOLD_LABELS[name] ?? name}
+                          </strong>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <EmptyState title="No threshold evaluation yet" />
+                  )}
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader title="Scenario results" description="Click a row to inspect expected vs actual behavior." />
+                <CardBody className="flex flex-col gap-4">
+                  <div className="flex flex-wrap gap-2" role="group" aria-label="Filter scenarios">
+                    {(['all', 'passed', 'failed', 'unsafe'] as const).map((option) => (
+                      <Chip key={option} active={filter === option} onClick={() => setFilter(option)}>
+                        {option === 'all' ? 'All' : option === 'unsafe' ? 'Failed/unsafe' : option.charAt(0).toUpperCase() + option.slice(1)}
+                        {' '}({filterCounts[option] ?? 0})
+                      </Chip>
+                    ))}
+                  </div>
+
+                  <DataTable
+                    columns={scenarioColumns}
+                    rows={scenarios}
+                    rowKey={(row) => row.id}
+                    onRowClick={setDetail}
+                    isLoading={scenariosQuery.isLoading}
+                    error={scenariosQuery.error instanceof Error ? scenariosQuery.error.message : null}
+                    emptyTitle="No scenarios match this filter"
+                    rowClassName={(row) =>
+                      !row.passed || isUnsafeScenario(row) ? 'bg-danger-soft/10' : undefined
+                    }
+                  />
+                </CardBody>
+              </Card>
+
+              {detail ? <ScenarioDetailPanel scenario={detail} onClose={() => setDetail(null)} /> : null}
+            </>
+          ) : null}
         </>
       ) : null}
 
@@ -590,6 +584,6 @@ export function TRLValidationPage() {
         onCancel={() => setResetDialogOpen(false)}
         isLoading={resetMutation.isPending}
       />
-    </div>
+    </HubPage>
   );
 }

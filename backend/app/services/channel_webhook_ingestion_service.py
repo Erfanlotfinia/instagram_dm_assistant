@@ -17,27 +17,31 @@ from app.channels.adapters import (
     TelegramProviderAdapter,
     WhatsAppProviderAdapter,
 )
+from app.core.config import get_settings
+from app.core.request_context import get_request_id
 from app.domain.enums import (
     ChannelConversationStatus,
     ChannelMessageType,
     ChannelProvider,
-    ConversationState,
     MessageChannel,
     MessageDirection,
     MessageType,
     OutboxEventStatus,
+    WebhookDedupeOutcome,
+    WebhookProcessingStatus,
+    WebhookProvider,
 )
 from app.domain.models import (
     ChannelAccount,
-    ChannelContactIdentity,
     ChannelConversation,
-    ChannelMessage,
     ChannelDeliveryStatusEvent,
-    Conversation,
-    Customer,
+    ChannelMessage,
     Message,
     OutboxEvent,
+    WebhookEvent,
 )
+from app.repositories.conversation_repository import ConversationRepository
+from app.repositories.customer_repository import CustomerRepository
 from app.schemas.channels import NormalizedInboundMessage
 from app.schemas.queue_events import MessageReceivedJob
 from app.schemas.webhook import WebhookAckResponse, WebhookIgnoredResponse
@@ -89,60 +93,88 @@ class ChannelWebhookIngestionService:
         shop_id: Any | None = None,
         channel_account_id: Any | None = None,
     ) -> WebhookAckResponse | WebhookIgnoredResponse:
-        messages = self.adapter_for_provider(provider).parse_inbound_update(
-            payload, headers
+        account = self._account_by_id(provider, channel_account_id)
+        if account is None:
+            return WebhookIgnoredResponse(reason="channel_account_not_found")
+
+        webhook_key = self._webhook_idempotency_key(provider, account, payload)
+        existing_event = self.db.scalar(
+            select(WebhookEvent).where(
+                WebhookEvent.provider == WebhookProvider(provider.value),
+                WebhookEvent.idempotency_key == webhook_key,
+            )
         )
+        if existing_event is not None:
+            return WebhookAckResponse(dedupe_outcome=WebhookDedupeOutcome.DUPLICATE.value)
+
+        webhook_event = WebhookEvent(
+            provider=WebhookProvider(provider.value),
+            shop_id=account.shop_id,
+            event_type="channel.webhook.received",
+            raw_payload=mask_pii(payload),
+            processing_status=WebhookProcessingStatus.RECEIVED,
+            idempotency_key=webhook_key,
+            trace_id=get_request_id(),
+            dedupe_outcome=WebhookDedupeOutcome.PROCESSED,
+        )
+        self.db.add(webhook_event)
+        try:
+            self.db.flush()
+        except IntegrityError:
+            self.db.rollback()
+            return WebhookAckResponse(dedupe_outcome=WebhookDedupeOutcome.DUPLICATE.value)
+
+        messages = self.adapter_for_provider(provider).parse_inbound_update(payload, headers)
         if not messages:
+            webhook_event.processing_status = WebhookProcessingStatus.PROCESSED
+            webhook_event.dedupe_outcome = WebhookDedupeOutcome.IGNORED
+            self.db.commit()
             return WebhookIgnoredResponse(reason="no_channel_messages")
         jobs = []
         for normalized in messages:
-            account = self._resolve_account(
-                provider, normalized, shop_id, channel_account_id
-            )
-            if not account:
-                logger.warning(
-                    "No channel account found for provider=%s payload=%s",
-                    provider.value,
-                    mask_pii(normalized.raw_payload),
-                )
-                continue
             normalized.shop_id = account.shop_id
             normalized.channel_account_id = account.id
-            job = self._process_message(account, normalized)
+            job = self._process_message(account, normalized, webhook_event.id)
             if job:
                 jobs.append(job)
+        webhook_event.processing_status = (
+            WebhookProcessingStatus.QUEUED if jobs else WebhookProcessingStatus.PROCESSED
+        )
+        webhook_event.dedupe_outcome = (
+            WebhookDedupeOutcome.PROCESSED if jobs else WebhookDedupeOutcome.IGNORED
+        )
         self.db.commit()
         return WebhookAckResponse(dedupe_outcome="processed" if jobs else "ignored")
 
-    def _resolve_account(
-        self,
-        provider: ChannelProvider,
-        message: NormalizedInboundMessage,
-        shop_id: Any | None,
-        channel_account_id: Any | None,
+    def _account_by_id(
+        self, provider: ChannelProvider, channel_account_id: Any | None
     ) -> ChannelAccount | None:
-        stmt = select(ChannelAccount).where(ChannelAccount.provider == provider)
-        if channel_account_id:
-            stmt = stmt.where(ChannelAccount.id == channel_account_id)
-        elif shop_id:
-            stmt = stmt.where(ChannelAccount.shop_id == shop_id)
-        elif provider == ChannelProvider.WHATSAPP:
-            phone_number_id = message.raw_payload.get("phone_number_id")
-            if not phone_number_id:
-                return None
-            stmt = stmt.where(ChannelAccount.phone_number_id == phone_number_id)
-        elif provider == ChannelProvider.INSTAGRAM:
-            recipient = message.raw_payload.get("recipient") or {}
-            recipient_id = recipient.get("id") if isinstance(recipient, dict) else None
-            if not recipient_id:
-                return None
-            stmt = stmt.where(ChannelAccount.external_account_id == str(recipient_id))
-        else:
+        if channel_account_id is None:
             return None
-        return self.db.scalar(stmt)
+        return self.db.scalar(
+            select(ChannelAccount).where(
+                ChannelAccount.provider == provider,
+                ChannelAccount.id == channel_account_id,
+            )
+        )
+
+    @staticmethod
+    def _webhook_idempotency_key(
+        provider: ChannelProvider,
+        account: ChannelAccount,
+        payload: dict[str, Any],
+    ) -> str:
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+        return (
+            f"channel-webhook:{provider.value}:{account.id}:"
+            f"{hashlib.sha256(raw.encode()).hexdigest()}"
+        )
 
     def _process_message(
-        self, account: ChannelAccount, normalized: NormalizedInboundMessage
+        self,
+        account: ChannelAccount,
+        normalized: NormalizedInboundMessage,
+        webhook_event_id: Any,
     ) -> MessageReceivedJob | None:
         idempotency_key = channel_idempotency_key(normalized)
         if normalized.raw_payload.get("event_type") == "delivery_status":
@@ -156,8 +188,7 @@ class ChannelWebhookIngestionService:
                 select(ChannelDeliveryStatusEvent).where(
                     ChannelDeliveryStatusEvent.provider == account.provider,
                     ChannelDeliveryStatusEvent.channel_account_id == account.id,
-                    ChannelDeliveryStatusEvent.external_message_id
-                    == external_message_id,
+                    ChannelDeliveryStatusEvent.external_message_id == external_message_id,
                     ChannelDeliveryStatusEvent.status
                     == str(status_payload.get("status", "unknown")),
                 )
@@ -184,76 +215,25 @@ class ChannelWebhookIngestionService:
             )
         ):
             return None
-        customer = self.db.scalar(
-            select(Customer).where(
-                Customer.shop_id == account.shop_id,
-                Customer.instagram_user_id == normalized.external_user_id,
-            )
+        customer = CustomerRepository(self.db).create_customer_from_channel_identity(
+            shop_id=account.shop_id,
+            provider=account.provider,
+            channel_account_id=account.id,
+            external_user_id=normalized.external_user_id,
+            external_chat_id=normalized.external_chat_id,
+            username=normalized.username,
+            display_name=normalized.display_name,
+            phone=normalized.phone,
+            raw_profile_json=mask_pii(normalized.raw_payload),
         )
-        if customer is None:
-            customer = Customer(
-                shop_id=account.shop_id,
-                instagram_user_id=normalized.external_user_id,
-                full_name=normalized.display_name,
-                phone=normalized.phone,
-            )
-            self.db.add(customer)
-            self.db.flush()
-        identity = self.db.scalar(
-            select(ChannelContactIdentity).where(
-                ChannelContactIdentity.shop_id == account.shop_id,
-                ChannelContactIdentity.provider == account.provider,
-                ChannelContactIdentity.channel_account_id == account.id,
-                ChannelContactIdentity.external_user_id == normalized.external_user_id,
-            )
+        conversation = ConversationRepository(self.db).get_or_create_conversation_by_channel(
+            shop_id=account.shop_id,
+            customer_id=customer.id,
+            provider=account.provider,
+            channel_account_id=account.id,
+            external_conversation_id=normalized.external_chat_id,
         )
-        if identity is None:
-            identity = ChannelContactIdentity(
-                shop_id=account.shop_id,
-                provider=account.provider,
-                channel_account_id=account.id,
-                external_user_id=normalized.external_user_id,
-                username=normalized.username,
-                phone=normalized.phone,
-                display_name=normalized.display_name,
-                raw_profile_json=mask_pii(normalized.raw_payload),
-                customer_id=customer.id,
-            )
-            self.db.add(identity)
-        conversation = self.db.scalar(
-            select(Conversation).where(
-                Conversation.shop_id == account.shop_id,
-                Conversation.customer_id == customer.id,
-                Conversation.channel_provider == account.provider.value,
-                Conversation.channel_conversation_id == normalized.external_chat_id,
-                Conversation.state == ConversationState.OPEN,
-            )
-        )
-        if conversation is None:
-            instagram_account_id = account.settings_json.get(
-                "legacy_instagram_account_id"
-            ) or self.db.scalar(
-                select(Conversation.instagram_account_id)
-                .where(Conversation.shop_id == account.shop_id)
-                .limit(1)
-            )
-            if instagram_account_id is None:
-                logger.warning(
-                    "No legacy Instagram account for channel conversation bridge shop=%s",
-                    account.shop_id,
-                )
-                return None
-            conversation = Conversation(
-                shop_id=account.shop_id,
-                instagram_account_id=instagram_account_id,
-                customer_id=customer.id,
-                state=ConversationState.OPEN,
-                channel_provider=account.provider.value,
-                channel_conversation_id=normalized.external_chat_id,
-                channel_customer_id=normalized.external_user_id,
-            )
-            self.db.add(conversation)
-            self.db.flush()
+        conversation.channel_customer_id = normalized.external_user_id
         channel_conversation = self.db.scalar(
             select(ChannelConversation).where(
                 ChannelConversation.provider == account.provider,
@@ -296,8 +276,14 @@ class ChannelWebhookIngestionService:
             or normalized.button_text
         )
         internal_message = Message(
+            shop_id=account.shop_id,
             conversation_id=conversation.id,
+            customer_id=customer.id,
             direction=MessageDirection.INBOUND,
+            channel_provider=account.provider,
+            channel_account_id=account.id,
+            external_message_id=normalized.external_message_id,
+            external_update_id=normalized.external_update_id,
             channel=MessageChannel(account.provider.value),
             instagram_message_id=(
                 normalized.external_message_id
@@ -307,7 +293,10 @@ class ChannelWebhookIngestionService:
             channel_message_id=normalized.external_message_id,
             message_type=internal_type,
             text=text,
+            content=text,
             raw_payload=mask_pii(normalized.raw_payload),
+            raw_payload_json=mask_pii(normalized.raw_payload),
+            normalized_payload_json=normalized.model_dump(mode="json"),
         )
         self.db.add(internal_message)
         self.db.flush()
@@ -323,9 +312,7 @@ class ChannelWebhookIngestionService:
             message_type=normalized.message_type,
             text=normalized.text,
             caption=normalized.caption,
-            media_json={
-                "items": [m.model_dump(mode="json") for m in normalized.media_items]
-            },
+            media_json={"items": [m.model_dump(mode="json") for m in normalized.media_items]},
             interactive_json={
                 "button_id": normalized.button_id,
                 "button_text": normalized.button_text,
@@ -346,16 +333,19 @@ class ChannelWebhookIngestionService:
             conversation_id=conversation.id,
             shop_id=account.shop_id,
             instagram_account_id=conversation.instagram_account_id,
+            channel_provider=account.provider,
+            channel_account_id=account.id,
             customer_id=customer.id,
-            webhook_event_id=None,
+            webhook_event_id=webhook_event_id,
         )
         self.db.add(
             OutboxEvent(
-                event_type="message.received",
+                event_type="channel.message.received",
                 aggregate_type="message",
                 aggregate_id=str(internal_message.id),
                 shop_id=account.shop_id,
                 payload={
+                    "_queue_name": get_settings().rabbitmq_queue_message_received,
                     "_body": job.model_dump(mode="json"),
                     "idempotency_key": f"message-received:{internal_message.id}",
                 },

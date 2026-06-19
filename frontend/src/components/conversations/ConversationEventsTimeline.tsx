@@ -1,3 +1,4 @@
+import { EmptyState } from '../data';
 import type { ConversationEvent, ConversationEventType } from '../../types/conversation';
 
 interface ConversationEventsTimelineProps {
@@ -67,8 +68,10 @@ export function ConversationEventsTimeline({ events }: ConversationEventsTimelin
   if (events.length === 0) {
     return (
       <div className="activity-timeline activity-timeline--empty">
-        <p className="empty-state">No conversation events yet.</p>
-        <p className="activity-timeline__hint">Events appear when messages arrive, orders progress, or operators take action.</p>
+        <EmptyState
+          title="No conversation events yet"
+          description="Events appear when messages arrive, orders progress, or operators take action."
+        />
       </div>
     );
   }

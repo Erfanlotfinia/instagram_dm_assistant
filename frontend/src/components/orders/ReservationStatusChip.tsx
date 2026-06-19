@@ -1,33 +1,34 @@
+import { Badge, type BadgeTone } from '../ui';
 import type { ReservationSummary } from '../../types/order';
 
 interface ReservationStatusChipProps {
   reservations: ReservationSummary[];
 }
 
-function toneForStatus(status: ReservationSummary['status']): string {
+function toneForStatus(status: ReservationSummary['status']): BadgeTone {
   switch (status) {
     case 'active':
-      return 'status-pill--warning';
+      return 'warning';
     case 'confirmed':
-      return 'status-pill--success';
+      return 'success';
     case 'released':
-      return 'status-pill--neutral';
+      return 'neutral';
     case 'expired':
-      return 'status-pill--danger';
+      return 'danger';
     default:
-      return 'status-pill--neutral';
+      return 'neutral';
   }
 }
 
 export function ReservationStatusChip({ reservations }: ReservationStatusChipProps) {
   const active = reservations.find((r) => r.status === 'active' || r.status === 'confirmed');
   if (!active) {
-    return <span className="status-pill status-pill--neutral">No reservation</span>;
+    return <Badge tone="neutral">No reservation</Badge>;
   }
 
   return (
-    <span className={`status-pill ${toneForStatus(active.status)}`} title={`Expires ${active.expires_at}`}>
+    <Badge tone={toneForStatus(active.status)} title={`Expires ${active.expires_at}`}>
       Reserved: {active.quantity} ({active.status})
-    </span>
+    </Badge>
   );
 }

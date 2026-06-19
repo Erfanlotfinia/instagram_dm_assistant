@@ -98,7 +98,7 @@ describe('RiskSettingsPage', () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText(/Select a shop to configure risk settings/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Select a shop/i)).toBeInTheDocument();
   });
 
   it('renders grouped settings and policy snapshot', async () => {

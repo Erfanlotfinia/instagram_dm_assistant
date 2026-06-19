@@ -25,8 +25,8 @@
 |---|------|--------|------------------|
 | 1 | JWT auth on admin APIs | ✅ Present | `test_auth_api.py` |
 | 2 | Shop membership / role checks | ✅ Present | `test_roles.py`, `require_shop_role` |
-| 3 | Instagram tokens encrypted at rest | ✅ Present | Fernet encryption in Sprint 7 |
-| 4 | Optional Meta webhook signature verification | ✅ Present | `INSTAGRAM_APP_SECRET` |
+| 3 | Channel credentials encrypted at rest | ✅ Present | Fernet encryption in Sprint 7 |
+| 4 | Optional Meta webhook signature verification | ✅ Present | `META_APP_SECRET` |
 | 5 | Rate limiting on login, webhook, outbound | ✅ Present | Sprint 7 security |
 | 6 | Audit logging for sensitive actions | ✅ Present | `AdminAuditLog`, Sprint F docs |
 | 7 | Cross-shop isolation matrix (all endpoints) | ❌ Missing | Partial tests only |
@@ -74,7 +74,7 @@
 | 5 | Redis available for locks/rate limits | ✅ Present | Compose + tests |
 | 6 | Qdrant for semantic search | ✅ Present | Readiness check includes qdrant |
 | 7 | OpenAI API key configured | ⚠️ Partial | Readiness checks config presence, not quality |
-| 8 | Real Instagram send disabled for lab (`ENABLE_REAL_INSTAGRAM_SEND=false`) | ✅ Present | Env documented |
+| 8 | Real Instagram send disabled for lab (`ENABLE_REAL_PROVIDER_SEND=false`) | ✅ Present | Env documented |
 
 ---
 

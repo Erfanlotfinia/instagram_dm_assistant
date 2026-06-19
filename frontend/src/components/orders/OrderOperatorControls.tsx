@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { ConfirmDialog } from '../ConfirmDialog';
+import { Button, Dialog, Field, Input } from '../ui';
 
 interface OrderOperatorControlsProps {
   canApprove: boolean;
@@ -31,73 +31,84 @@ export function OrderOperatorControls({
   const [cancelReason, setCancelReason] = useState('');
 
   return (
-    <div className="order-operator-controls">
-      {canApprove && (
-        <button className="button button--primary" type="button" onClick={onApprove} disabled={isApproving}>
+    <div className="flex flex-wrap gap-2">
+      {canApprove ? (
+        <Button type="button" size="sm" onClick={onApprove} disabled={isApproving}>
           Approve order
-        </button>
-      )}
-      {canReject && (
-        <button
-          className="button button--secondary"
-          type="button"
-          onClick={() => setRejectOpen(true)}
-          disabled={isRejecting}
-        >
+        </Button>
+      ) : null}
+      {canReject ? (
+        <Button type="button" variant="secondary" size="sm" onClick={() => setRejectOpen(true)} disabled={isRejecting}>
           Reject
-        </button>
-      )}
-      {canCancel && (
-        <button className="button button--ghost" type="button" onClick={() => setCancelOpen(true)} disabled={isCancelling}>
+        </Button>
+      ) : null}
+      {canCancel ? (
+        <Button type="button" variant="ghost" size="sm" onClick={() => setCancelOpen(true)} disabled={isCancelling}>
           Cancel order
-        </button>
-      )}
+        </Button>
+      ) : null}
 
-      {rejectOpen && (
-        <div className="form-field">
-          <label>
-            <span>Reject reason</span>
-            <input type="text" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
-          </label>
-        </div>
-      )}
-
-      <ConfirmDialog
+      <Dialog
         open={rejectOpen}
+        onClose={() => setRejectOpen(false)}
         title="Reject order"
-        message="Rejecting will cancel the order and release any reservation."
-        confirmLabel="Reject"
-        onConfirm={() => {
-          onReject(rejectReason);
-          setRejectOpen(false);
-          setRejectReason('');
-        }}
-        onCancel={() => setRejectOpen(false)}
-        isLoading={isRejecting}
-      />
+        footer={
+          <>
+            <Button variant="secondary" size="sm" type="button" onClick={() => setRejectOpen(false)} disabled={isRejecting}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              type="button"
+              disabled={isRejecting}
+              onClick={() => {
+                onReject(rejectReason);
+                setRejectOpen(false);
+                setRejectReason('');
+              }}
+            >
+              {isRejecting ? 'Working…' : 'Reject'}
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-3 text-sm text-muted">Rejecting will cancel the order and release any reservation.</p>
+        <Field label="Reject reason" htmlFor="reject-reason">
+          <Input id="reject-reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
+        </Field>
+      </Dialog>
 
-      {cancelOpen && (
-        <div className="form-field">
-          <label>
-            <span>Cancel reason</span>
-            <input type="text" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
-          </label>
-        </div>
-      )}
-
-      <ConfirmDialog
+      <Dialog
         open={cancelOpen}
+        onClose={() => setCancelOpen(false)}
         title="Cancel order"
-        message="This releases inventory reservations."
-        confirmLabel="Cancel order"
-        onConfirm={() => {
-          onCancel(cancelReason);
-          setCancelOpen(false);
-          setCancelReason('');
-        }}
-        onCancel={() => setCancelOpen(false)}
-        isLoading={isCancelling}
-      />
+        footer={
+          <>
+            <Button variant="secondary" size="sm" type="button" onClick={() => setCancelOpen(false)} disabled={isCancelling}>
+              Back
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              type="button"
+              disabled={isCancelling}
+              onClick={() => {
+                onCancel(cancelReason);
+                setCancelOpen(false);
+                setCancelReason('');
+              }}
+            >
+              {isCancelling ? 'Working…' : 'Cancel order'}
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-3 text-sm text-muted">This releases inventory reservations.</p>
+        <Field label="Cancel reason" htmlFor="cancel-reason">
+          <Input id="cancel-reason" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
+        </Field>
+      </Dialog>
     </div>
   );
 }

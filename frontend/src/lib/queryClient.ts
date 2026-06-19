@@ -17,6 +17,11 @@ export const queryKeys = {
   shop: (shopId: string) => ['shops', shopId] as const,
   shopSettings: (shopId: string) => ['shops', shopId, 'settings'] as const,
   dashboardMetrics: (shopId: string) => ['shops', shopId, 'dashboard'] as const,
+  dashboardTrends: (shopId: string, period: string) =>
+    ['shops', shopId, 'dashboard', 'trends', period] as const,
+  handoffQueue: (shopId: string) => ['shops', shopId, 'handoffs'] as const,
+  conversationIntelligence: (shopId: string, conversationId: string) =>
+    ['shops', shopId, 'conversations', conversationId, 'intelligence'] as const,
   conversations: (shopId: string, filters?: ConversationListFilters) =>
     ['shops', shopId, 'conversations', filters ?? {}] as const,
   conversation: (shopId: string, conversationId: string) =>

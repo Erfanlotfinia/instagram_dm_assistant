@@ -33,10 +33,16 @@ export interface ChannelAccount {
   phone_number_id?: string | null;
   bot_username?: string | null;
   bot_id?: string | null;
-  webhook_verify_token?: string | null;
+  webhook_url?: string | null;
   status: ChannelAccountStatus;
   capabilities_json: Partial<ChannelCapabilities>;
   settings_json: Record<string, unknown>;
+  token_configured: boolean;
+  bot_token_configured: boolean;
+  webhook_secret_configured: boolean;
+  webhook_verify_token_configured?: boolean;
+  last_validation_at?: string | null;
+  last_error?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,14 +55,32 @@ export interface ChannelAccountCreate {
   bot_username?: string;
   bot_id?: string;
   webhook_verify_token?: string;
+  settings?: Record<string, unknown>;
+}
+
+export interface ChannelAccountUpdate {
+  display_name?: string;
+  external_account_id?: string;
+  phone_number_id?: string;
+  bot_username?: string;
+  bot_id?: string;
+  webhook_verify_token?: string;
+  settings?: Record<string, unknown>;
+  status?: ChannelAccountStatus;
+}
+
+export interface ChannelAccountCredentials {
   webhook_secret?: string;
   access_token?: string;
   bot_token?: string;
-  app_secret?: string;
-  default_language_code?: string;
-  settings_json?: Record<string, unknown>;
+  webhook_verify_token?: string;
 }
 
+export interface WebhookTestResponse {
+  status: string;
+  provider: ChannelProvider;
+  channel_account_id: string;
+}
 
 export interface TelegramWebhookInfo {
   ok?: boolean;

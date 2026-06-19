@@ -44,11 +44,11 @@ describe('UpsellRulesPage', () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByRole('option', { name: 'Demo' });
+    await screen.findByRole('button', { name: /create upsell rule/i });
     await waitFor(() => {
       const selects = screen.getAllByRole('combobox');
-      expect((selects[1] as HTMLSelectElement).value).toBe('p1');
-      expect((selects[2] as HTMLSelectElement).value).toBe('p2');
+      expect((selects[0] as HTMLSelectElement).value).toBe('p1');
+      expect((selects[1] as HTMLSelectElement).value).toBe('p2');
     });
     await user.click(screen.getByRole('button', { name: /create upsell rule/i }));
 

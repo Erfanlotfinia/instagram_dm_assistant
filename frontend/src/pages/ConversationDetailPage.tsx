@@ -13,6 +13,7 @@ import { DecisionTraceViewer } from '../components/conversations/DecisionTraceVi
 import { PriorityBadge } from '../components/conversations/PriorityBadge';
 import { RiskBadge } from '../components/conversations/RiskBadge';
 import { SuggestedReplyPanel } from '../components/conversations/SuggestedReplyPanel';
+import { Button, Badge, Card, CardBody, Dialog, Field, Input } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
@@ -287,12 +288,14 @@ export function ConversationDetailPage() {
 
   if (!shopId) {
     return (
-      <section className="dashboard-card">
-        <p className="form-error">Select a shop to open this conversation.</p>
-        <Link className="table-link" to="/conversations">
-          Back to conversations
-        </Link>
-      </section>
+      <Card>
+        <CardBody>
+          <p className="form-error">Select a shop to open this conversation.</p>
+          <Link className="font-medium text-accent hover:underline" to="/conversations">
+            Back to conversations
+          </Link>
+        </CardBody>
+      </Card>
     );
   }
 
@@ -300,25 +303,31 @@ export function ConversationDetailPage() {
     return (
       <div className="conversation-workspace conversation-skeleton" aria-busy="true" aria-live="polite">
         <span className="visually-hidden">Loading conversation…</span>
-        <div className="dashboard-card dashboard-card--wide conversation-skeleton__header">
+        <Card className="conversation-skeleton__header">
+          <CardBody className="flex items-center gap-4">
           <div className="skeleton-line skeleton-line--avatar" />
           <div className="conversation-skeleton__header-text">
             <div className="skeleton-line skeleton-line--title" />
             <div className="skeleton-line skeleton-line--badges" />
           </div>
-        </div>
+          </CardBody>
+        </Card>
         <div className="conversation-workspace__body">
-          <section className="dashboard-card conversation-skeleton__chat">
+          <Card className="conversation-skeleton__chat">
+            <CardBody>
             <div className="skeleton-bubble skeleton-bubble--inbound" />
             <div className="skeleton-bubble skeleton-bubble--outbound" />
             <div className="skeleton-bubble skeleton-bubble--inbound" />
             <div className="skeleton-line skeleton-line--composer" />
-          </section>
-          <div className="dashboard-card conversation-skeleton__panel">
+            </CardBody>
+          </Card>
+          <Card className="conversation-skeleton__panel">
+            <CardBody>
             <div className="skeleton-line" />
             <div className="skeleton-line" />
             <div className="skeleton-line skeleton-line--short" />
-          </div>
+            </CardBody>
+          </Card>
         </div>
       </div>
     );
@@ -326,16 +335,18 @@ export function ConversationDetailPage() {
 
   if (conversationQuery.error || !conversation) {
     return (
-      <section className="dashboard-card">
-        <p className="form-error">
-          {conversationQuery.error instanceof Error
-            ? conversationQuery.error.message
-            : 'Conversation not found'}
-        </p>
-        <Link className="table-link" to="/conversations">
-          Back to conversations
-        </Link>
-      </section>
+      <Card>
+        <CardBody>
+          <p className="form-error">
+            {conversationQuery.error instanceof Error
+              ? conversationQuery.error.message
+              : 'Conversation not found'}
+          </p>
+          <Link className="font-medium text-accent hover:underline" to="/conversations">
+            Back to conversations
+          </Link>
+        </CardBody>
+      </Card>
     );
   }
 
@@ -356,7 +367,9 @@ export function ConversationDetailPage() {
 
   return (
     <div className="conversation-workspace">
-      <header className="conversation-workspace__header dashboard-card dashboard-card--wide">
+      <header className="conversation-workspace__header">
+      <Card>
+        <CardBody>
         <div className="conversation-workspace__identity">
           <Link className="conversation-workspace__back" to="/conversations">
             ← Back to conversations
@@ -367,27 +380,25 @@ export function ConversationDetailPage() {
               {customerInitial(displayName)}
             </div>
             <div>
-              <p className="dashboard-card__eyebrow">Conversation</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Conversation</p>
               <h1 className="conversation-workspace__title">{displayName}</h1>
               <div className="conversation-workspace__badges">
-                <span className="status-pill status-pill--neutral">{stateLabel}</span>
-                <span className="status-pill status-pill--neutral">{workflowLabel}</span>
-                <span className="status-pill status-pill--accent">{channelProvider === 'whatsapp' ? 'WhatsApp' : channelProvider === 'telegram' ? 'Telegram' : channelProvider}</span>
-                {windowCountdown ? <span className="status-pill status-pill--neutral">WhatsApp window: {windowCountdown}</span> : null}
-                {templateRequired ? <span className="status-pill status-pill--warning">Template required</span> : null}
-                {channelProvider === 'telegram' && conversation.chat_type && conversation.chat_type !== 'private' ? <span className="status-pill status-pill--warning">Group chat: commands, mentions or replies only</span> : null}
+                <Badge tone="neutral">{stateLabel}</Badge>
+                <Badge tone="neutral">{workflowLabel}</Badge>
+                <Badge tone="accent">{channelProvider === 'whatsapp' ? 'WhatsApp' : channelProvider === 'telegram' ? 'Telegram' : channelProvider}</Badge>
+                {windowCountdown ? <Badge tone="neutral">WhatsApp window: {windowCountdown}</Badge> : null}
+                {templateRequired ? <Badge tone="warning">Template required</Badge> : null}
+                {channelProvider === 'telegram' && conversation.chat_type && conversation.chat_type !== 'private' ? (
+                  <Badge tone="warning">Group chat: commands, mentions or replies only</Badge>
+                ) : null}
                 <PriorityBadge
                   level={conversation.priority_level}
                   score={conversation.priority_score}
                   reason={conversation.priority_reason}
                 />
                 <RiskBadge level={latestRisk?.risk_level} score={latestRisk?.score} />
-                {conversation.handoff_required ? (
-                  <span className="status-pill status-pill--warning">Handoff required</span>
-                ) : null}
-                {conversation.agent_paused ? (
-                  <span className="status-pill status-pill--accent">Agent paused</span>
-                ) : null}
+                {conversation.handoff_required ? <Badge tone="warning">Handoff required</Badge> : null}
+                {conversation.agent_paused ? <Badge tone="accent">Agent paused</Badge> : null}
               </div>
 
               <dl className="conversation-workspace__meta">
@@ -442,10 +453,13 @@ export function ConversationDetailPage() {
           onCancelOrder={() => setShowCancelConfirm(true)}
           isLoading={isMutating}
         />
+        </CardBody>
+      </Card>
       </header>
 
       <div className="conversation-workspace__body">
-        <section className="conversation-chat dashboard-card">
+        <Card className="conversation-chat">
+          <CardBody>
           <h2 className="conversation-chat__title">Message timeline</h2>
 
           <div className="conversation-chat__thread">
@@ -471,20 +485,25 @@ export function ConversationDetailPage() {
           />
 
           <form className="conversation-chat__composer" onSubmit={submitMessage}>
-            <label className="form-field conversation-chat__compose-field">
-              <span className="visually-hidden">Message</span>
+            <Field
+              label={<span className="visually-hidden">Message</span>}
+              htmlFor="conversation-compose"
+              className="conversation-chat__compose-field"
+            >
               <textarea
+                id="conversation-compose"
                 rows={3}
                 maxLength={4000}
                 placeholder="Write a manual reply to the customer…"
                 dir="auto"
                 {...messageForm.register('text')}
                 onKeyDown={handleComposerKeyDown}
+                className="w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg"
               />
               {messageForm.formState.errors.text ? (
-                <span className="field-error">{messageForm.formState.errors.text.message}</span>
+                <span className="text-xs text-danger">{messageForm.formState.errors.text.message}</span>
               ) : null}
-            </label>
+            </Field>
             <div className="conversation-chat__composer-footer">
               <p className="conversation-chat__composer-hint">
                 <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line
@@ -492,18 +511,18 @@ export function ConversationDetailPage() {
                   <span className="conversation-chat__composer-count">{messageText.length} / 4000</span>
                 ) : null}
               </p>
-              <button
-                className="button button--primary"
+              <Button
                 type="submit"
                 disabled={!trimmedMessage || sendMessageMutation.isPending}
               >
                 {sendMessageMutation.isPending ? 'Sending…' : 'Send message'}
-              </button>
+              </Button>
             </div>
           </form>
-        </section>
+          </CardBody>
+        </Card>
 
-        <div className="page-stack">
+        <div className="flex flex-col gap-5">
           <ConversationContextPanel
             conversation={conversation}
             shopId={shopId}
@@ -535,30 +554,29 @@ export function ConversationDetailPage() {
         isLoading={cancelOrderMutation.isPending}
       />
 
-      {showTrackingPrompt ? (
-        <div className="dialog-overlay" role="presentation" onClick={() => setShowTrackingPrompt(false)}>
-          <div className="dialog" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-            <h2>Send tracking code</h2>
-            <label className="form-field">
-              <span>Tracking code</span>
-              <input value={trackingCode} onChange={(event) => setTrackingCode(event.target.value)} />
-            </label>
-            <div className="button-row">
-              <button className="button button--ghost-dark" type="button" onClick={() => setShowTrackingPrompt(false)}>
-                Cancel
-              </button>
-              <button
-                className="button button--primary"
-                type="button"
-                disabled={!trackingCode || sendTrackingMutation.isPending}
-                onClick={() => sendTrackingMutation.mutate(trackingCode)}
-              >
-                Send tracking
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <Dialog
+        open={showTrackingPrompt}
+        onClose={() => setShowTrackingPrompt(false)}
+        title="Send tracking code"
+        footer={
+          <>
+            <Button type="button" variant="secondary" onClick={() => setShowTrackingPrompt(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!trackingCode || sendTrackingMutation.isPending}
+              onClick={() => sendTrackingMutation.mutate(trackingCode)}
+            >
+              Send tracking
+            </Button>
+          </>
+        }
+      >
+        <Field label="Tracking code" htmlFor="tracking-code">
+          <Input id="tracking-code" value={trackingCode} onChange={(event) => setTrackingCode(event.target.value)} />
+        </Field>
+      </Dialog>
     </div>
   );
 }

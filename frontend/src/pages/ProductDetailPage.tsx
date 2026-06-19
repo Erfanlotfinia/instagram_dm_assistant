@@ -1,7 +1,12 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Card, CardBody, CardHeader, Field, Input, Select } from '../components/ui';
+import { DataTable, EmptyState, LoadingState } from '../components/data';
+import type { Column } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
+import { cn } from '../lib/cn';
 import { apiClient } from '../services/apiClient';
 import type { Product, ProductVariant } from '../types/product';
 
@@ -26,27 +31,32 @@ export function ProductDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddingVariant, setIsAddingVariant] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!shopId || !productId) {
       return;
     }
 
-    apiClient
-      .getProduct(shopId, productId)
-      .then((data) => {
-        setProduct(data);
-        setTitle(data.title);
-        setDescription(data.description ?? '');
-        setBasePrice(data.base_price);
-        setStatus(data.status);
-      })
-      .catch(() => setProduct(null));
+    setIsLoading(true);
 
-    apiClient
-      .listVariants(shopId, productId)
-      .then(setVariants)
-      .catch(() => setVariants([]));
+    Promise.all([
+      apiClient.getProduct(shopId, productId),
+      apiClient.listVariants(shopId, productId),
+    ])
+      .then(([productData, variantData]) => {
+        setProduct(productData);
+        setTitle(productData.title);
+        setDescription(productData.description ?? '');
+        setBasePrice(productData.base_price);
+        setStatus(productData.status);
+        setVariants(variantData);
+      })
+      .catch(() => {
+        setProduct(null);
+        setVariants([]);
+      })
+      .finally(() => setIsLoading(false));
   }, [shopId, productId]);
 
   async function handleUpdateProduct(event: FormEvent<HTMLFormElement>) {
@@ -104,154 +114,199 @@ export function ProductDetailPage() {
     }
   }
 
+  const variantColumns: Column<ProductVariant>[] = useMemo(
+    () => [
+      { key: 'sku', header: 'SKU', render: (variant) => variant.sku },
+      { key: 'color', header: 'Color', render: (variant) => variant.color ?? '—' },
+      { key: 'size', header: 'Size', render: (variant) => variant.size ?? '—' },
+      {
+        key: 'price',
+        header: 'Price',
+        align: 'right',
+        render: (variant) => <span className="tabular-nums">{variant.price}</span>,
+      },
+      {
+        key: 'stock',
+        header: 'Stock',
+        align: 'right',
+        render: (variant) => variant.stock_quantity,
+      },
+      {
+        key: 'reserved',
+        header: 'Reserved',
+        align: 'right',
+        render: (variant) => variant.reserved_quantity,
+      },
+      {
+        key: 'available',
+        header: 'Available',
+        align: 'right',
+        render: (variant) => (
+          <span className={cn(variant.available_stock <= lowStockThreshold && 'text-warning')}>
+            {variant.available_stock}
+            {variant.available_stock <= lowStockThreshold ? (
+              <Badge tone="warning" className="ml-2">
+                Low
+              </Badge>
+            ) : null}
+          </span>
+        ),
+      },
+      {
+        key: 'active',
+        header: 'Active',
+        render: (variant) => (
+          <Badge tone={variant.is_active ? 'success' : 'neutral'}>{variant.is_active ? 'yes' : 'no'}</Badge>
+        ),
+      },
+    ],
+    [lowStockThreshold],
+  );
+
   if (!shopId) {
     return (
-      <div className="page-stack">
-        <section className="dashboard-card">
-          <p className="empty-state">Open this product from the products list.</p>
-          <Link className="table-link" to="/products">
-            Back to products
-          </Link>
-        </section>
-      </div>
+      <HubPage eyebrow="Catalog" title="Product detail" description="View and edit a catalog product.">
+        <Card>
+          <CardBody>
+            <EmptyState
+              title="Select a shop"
+              description="Open this product from the products list or use the shop switcher in the top bar."
+              action={
+                <Link to="/catalog/products">
+                  <Button variant="secondary" size="sm">
+                    Back to products
+                  </Button>
+                </Link>
+              }
+            />
+          </CardBody>
+        </Card>
+      </HubPage>
     );
   }
 
-  if (!product) {
+  if (isLoading || !product) {
     return (
-      <div className="page-stack">
-        <section className="dashboard-card">
-          <p className="loading-state">Loading product...</p>
-        </section>
-      </div>
+      <HubPage eyebrow="Catalog" title="Product detail" description="View and edit a catalog product.">
+        <Card>
+          <CardBody>
+            {isLoading ? (
+              <LoadingState label="Loading product…" />
+            ) : (
+              <EmptyState title="Product not found" description="This product may have been removed." />
+            )}
+          </CardBody>
+        </Card>
+      </HubPage>
     );
   }
 
   return (
-    <div className="page-stack">
-      <section className="dashboard-card">
-        <p className="dashboard-card__eyebrow">Product</p>
-        <h1>{product.title}</h1>
-        <Link className="table-link" to="/products">
-          Back to products
+    <HubPage
+      eyebrow="Catalog"
+      title={product.title}
+      description="Edit product details and manage variant inventory."
+      actions={
+        <Link to="/catalog/products">
+          <Button variant="secondary" size="sm">
+            Back to products
+          </Button>
         </Link>
+      }
+    >
+      <Card>
+        <CardHeader title="Product details" description="Update title, pricing, and catalog status." />
+        <CardBody>
+          <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleUpdateProduct}>
+            <Field label="Title">
+              <Input value={title} onChange={(event) => setTitle(event.target.value)} required />
+            </Field>
+            <Field label="Description">
+              <Input value={description} onChange={(event) => setDescription(event.target.value)} />
+            </Field>
+            <Field label="Base price">
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={basePrice}
+                onChange={(event) => setBasePrice(event.target.value)}
+                required
+              />
+            </Field>
+            <Field label="Status">
+              <Select value={status} onChange={(event) => setStatus(event.target.value as Product['status'])}>
+                <option value="active">active</option>
+                <option value="inactive">inactive</option>
+                <option value="archived">archived</option>
+              </Select>
+            </Field>
+            <div className="flex items-end sm:col-span-2">
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? 'Saving…' : 'Save product'}
+              </Button>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
 
-        <form className="inline-form" onSubmit={handleUpdateProduct}>
-          <label className="form-field">
-            <span>Title</span>
-            <input value={title} onChange={(event) => setTitle(event.target.value)} required />
-          </label>
-          <label className="form-field">
-            <span>Description</span>
-            <input value={description} onChange={(event) => setDescription(event.target.value)} />
-          </label>
-          <label className="form-field">
-            <span>Base price</span>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={basePrice}
-              onChange={(event) => setBasePrice(event.target.value)}
-              required
-            />
-          </label>
-          <label className="form-field">
-            <span>Status</span>
-            <select value={status} onChange={(event) => setStatus(event.target.value as Product['status'])}>
-              <option value="active">active</option>
-              <option value="inactive">inactive</option>
-              <option value="archived">archived</option>
-            </select>
-          </label>
-          <button className="button button--primary" type="submit" disabled={isSaving}>
-            {isSaving ? 'Saving...' : 'Save product'}
-          </button>
-        </form>
-      </section>
+      <Card>
+        <CardHeader title="Variants & inventory" description="Add SKUs and track stock levels per variant." />
+        <CardBody className="flex flex-col gap-4">
+          <form className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={handleAddVariant}>
+            <Field label="SKU">
+              <Input value={sku} onChange={(event) => setSku(event.target.value)} required />
+            </Field>
+            <Field label="Color">
+              <Input value={color} onChange={(event) => setColor(event.target.value)} />
+            </Field>
+            <Field label="Size">
+              <Input value={size} onChange={(event) => setSize(event.target.value)} />
+            </Field>
+            <Field label="Price">
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={variantPrice}
+                onChange={(event) => setVariantPrice(event.target.value)}
+                required
+              />
+            </Field>
+            <Field label="Stock quantity">
+              <Input
+                type="number"
+                min="0"
+                value={stockQuantity}
+                onChange={(event) => setStockQuantity(event.target.value)}
+                required
+              />
+            </Field>
+            <div className="flex items-end">
+              <Button type="submit" disabled={isAddingVariant}>
+                {isAddingVariant ? 'Adding…' : 'Add variant'}
+              </Button>
+            </div>
+          </form>
 
-      <section className="dashboard-card">
-        <p className="dashboard-card__eyebrow">Variants &amp; inventory</p>
-        <h2>Variants</h2>
+          {error ? (
+            <p className="text-sm text-danger" role="alert">
+              {error}
+            </p>
+          ) : null}
 
-        <form className="inline-form" onSubmit={handleAddVariant}>
-          <label className="form-field">
-            <span>SKU</span>
-            <input value={sku} onChange={(event) => setSku(event.target.value)} required />
-          </label>
-          <label className="form-field">
-            <span>Color</span>
-            <input value={color} onChange={(event) => setColor(event.target.value)} />
-          </label>
-          <label className="form-field">
-            <span>Size</span>
-            <input value={size} onChange={(event) => setSize(event.target.value)} />
-          </label>
-          <label className="form-field">
-            <span>Price</span>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={variantPrice}
-              onChange={(event) => setVariantPrice(event.target.value)}
-              required
-            />
-          </label>
-          <label className="form-field">
-            <span>Stock quantity</span>
-            <input
-              type="number"
-              min="0"
-              value={stockQuantity}
-              onChange={(event) => setStockQuantity(event.target.value)}
-              required
-            />
-          </label>
-          <button className="button button--primary" type="submit" disabled={isAddingVariant}>
-            {isAddingVariant ? 'Adding...' : 'Add variant'}
-          </button>
-        </form>
-        {error ? <p className="form-error">{error}</p> : null}
-
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>SKU</th>
-                <th>Color</th>
-                <th>Size</th>
-                <th>Price</th>
-                <th>Stock</th>
-                <th>Reserved</th>
-                <th>Available</th>
-                <th>Active</th>
-              </tr>
-            </thead>
-            <tbody>
-              {variants.map((variant) => (
-                <tr
-                  key={variant.id}
-                  className={variant.available_stock <= lowStockThreshold ? 'row-warning' : undefined}
-                >
-                  <td>{variant.sku}</td>
-                  <td>{variant.color ?? '—'}</td>
-                  <td>{variant.size ?? '—'}</td>
-                  <td>{variant.price}</td>
-                  <td>{variant.stock_quantity}</td>
-                  <td>{variant.reserved_quantity}</td>
-                  <td>
-                    {variant.available_stock}
-                    {variant.available_stock <= lowStockThreshold ? ' ⚠' : ''}
-                  </td>
-                  <td>{variant.is_active ? 'yes' : 'no'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {variants.length === 0 ? <p className="empty-state">No variants yet.</p> : null}
-        </div>
-      </section>
-    </div>
+          <DataTable
+            columns={variantColumns}
+            rows={variants}
+            rowKey={(variant) => variant.id}
+            rowClassName={(variant) =>
+              variant.available_stock <= lowStockThreshold ? 'bg-warning-soft/20' : undefined
+            }
+            emptyTitle="No variants yet"
+            emptyDescription="Add your first SKU above."
+          />
+        </CardBody>
+      </Card>
+    </HubPage>
   );
 }

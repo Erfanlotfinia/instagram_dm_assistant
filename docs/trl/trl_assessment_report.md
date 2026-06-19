@@ -1,20 +1,20 @@
-# TRL Assessment Report — Instagram Fashion Order Agent
+# TRL Assessment Report — Modira
 
-**Document version:** 1.0  
-**Assessment date:** 2026-06-09  
-**Repository:** `instagram_dm_assistant`  
+**Document version:** 1.0
+**Assessment date:** 2026-06-09
+**Repository:** `modira`
 **Assessor role:** Engineering evidence pack (derived from codebase, tests, and in-repo documentation)
 
 ---
 
 ## Executive summary
 
-The Instagram Fashion Order Agent is an integrated Instagram-first Fashion Order OS comprising a FastAPI backend, PostgreSQL/Alembic schema, RabbitMQ workers, Redis locking, Qdrant semantic search, OpenAI LLM extraction, and a React TypeScript admin panel. The product has moved beyond a disconnected prototype: major capabilities are wired end-to-end in a lab/Docker Compose environment with substantial automated test coverage and dedicated TRL validation and pilot-readiness tooling.
+The Modira is an integrated AI Social Media Admin OS comprising a FastAPI backend, PostgreSQL/Alembic schema, RabbitMQ workers, Redis locking, Qdrant semantic search, OpenAI LLM extraction, and a React TypeScript admin panel. The product has moved beyond a disconnected prototype: major capabilities are wired end-to-end in a lab/Docker Compose environment with substantial automated test coverage and dedicated TRL validation and pilot-readiness tooling.
 
-**Current estimated TRL: 4+ (integrated lab prototype with validation harness).**  
+**Current estimated TRL: 4+ (integrated lab prototype with validation harness).**
 **Target TRL: 5 (validated in relevant environment) and 6 (pilot-ready).**
 
-The codebase now includes a **TRL Validation Runner** (`TRLValidationRunner`) with 100 labeled Persian/English fashion DM scenarios, threshold evaluation, persisted run results, and an admin dashboard at `/trl-validation`. It also includes **pilot controls** (daily caps, allowed accounts/products, emergency stop, readiness API) at `/pilot-readiness`.
+The codebase now includes a **TRL Validation Runner** (`TRLValidationRunner`) with 100 labeled Persian/English commerce message scenarios, threshold evaluation, persisted run results, and an admin dashboard at `/trl-validation`. It also includes **pilot controls** (daily caps, allowed accounts/products, emergency stop, readiness API) at `/pilot-readiness`.
 
 **Honest conclusion:** The evidence **does not yet support a formal TRL 5 pass** or **TRL 6 pilot-ready sign-off** without executing and archiving a full validation run in a relevant environment. Several TRL metrics are partially stubbed in the validation runner (rule-based LLM substitute, hardcoded security/idempotency rates). No validation run artifacts are stored in the repository — results live in the database at runtime only.
 
@@ -22,7 +22,7 @@ The codebase now includes a **TRL Validation Runner** (`TRLValidationRunner`) wi
 
 ## Product description
 
-An Instagram-first Fashion Order OS for online fashion shops that:
+An AI Social Media Admin OS for online fashion shops that:
 
 - Ingests Instagram DMs and shared posts via Meta webhooks
 - Extracts structured intent and slots (color, size, quantity, customer info) via LLM with deterministic backend validation
@@ -31,7 +31,7 @@ An Instagram-first Fashion Order OS for online fashion shops that:
 - Supports mock payment flows, human handoff, operator inbox, suggested replies, and audit trails
 - Provides analytics, system health, failed-job management, DM simulator, TRL validation, and pilot readiness controls
 
-Primary demo shop for TRL: `trl-fashion-demo` (seeded via `seed_trl_demo_data`).
+Primary demo shop for TRL: `trl-commerce-demo` (seeded via `seed_trl_demo_data`).
 
 ---
 
@@ -80,7 +80,7 @@ This assessment uses the standard NASA/DoD TRL scale adapted for software:
 Instagram (Meta webhook)
     → POST /api/v1/webhooks/instagram
     → WebhookIngestionService (persist webhook_events, customer, conversation, message)
-    → RabbitMQ queue: instagram.message.received
+    → RabbitMQ queue: channel.message.received
     → Worker (message_consumer) + Redis per-conversation lock
     → ConversationOrchestrator
         → LLMExtractionService (intent/slots JSON)
@@ -197,7 +197,7 @@ TRL thresholds are defined in `TRLValidationRunner.THRESHOLDS`:
 | `duplicate_webhook_idempotency_rate` | = 1.0 | **Hardcoded 1.0** — covered elsewhere in unit tests only |
 | `critical_security_tests_pass_rate` | = 1.0 | **Hardcoded 1.0** — not executed inside TRL run |
 
-**Latest archived validation run:** **None in repository.**  
+**Latest archived validation run:** **None in repository.**
 Use `python -m app.scripts.generate_trl_report` against a seeded database to export the latest run.
 
 **Important:** The TRL runner uses `RuleBasedTRLExtractionService`, not `LLMExtractionService`. TRL 5 evidence for LLM quality requires a separate OpenAI evaluation track.
@@ -206,7 +206,7 @@ Use `python -m app.scripts.generate_trl_report` against a seeded database to exp
 
 ## Known risks
 
-1. **TRL validation uses rule-based LLM substitute** — pass/fail does not prove OpenAI extraction quality on real Persian fashion DMs.
+1. **TRL validation uses rule-based LLM substitute** — pass/fail does not prove OpenAI extraction quality on real Persian commerce messages.
 2. **Stubbed TRL metrics** — security, idempotency, payment, and inventory double-reservation metrics are not computed from scenario execution.
 3. **Pilot readiness status mismatch** — `PilotService._criteria` checks `TRLValidationRun.status == "passed"`, but the runner sets `status = "completed"`. Real runs may fail readiness even when thresholds pass (see `pilot_service.py` line ~260).
 4. **No archived validation artifacts** — cannot audit TRL 5 claim without DB export or CI artifacts.
@@ -239,7 +239,7 @@ Use `python -m app.scripts.generate_trl_report` against a seeded database to exp
 - Integrated architecture with documented processing pipeline
 - 100-scenario labeled corpus and automated runner with threshold evaluation
 - ~190 backend tests including order E2E and TRL-specific tests
-- TRL demo seed with realistic fashion catalog (20 products, 500 variants, post mappings, aliases)
+- TRL demo seed with realistic generic catalog (20 products, 500 variants, post mappings, aliases)
 - Admin TRL validation dashboard
 
 **What blocks TRL 5 sign-off:**
@@ -250,7 +250,7 @@ Use `python -m app.scripts.generate_trl_report` against a seeded database to exp
 - No relevant-environment Compose smoke report with worker + real queue behavior
 - No browser E2E operator workflow evidence
 
-**Conditional path to TRL 5 pass:** Execute full 100-scenario TRL run on `trl-fashion-demo` in Docker Compose, export report, fix stubbed metrics and pilot status bug, and archive artifacts.
+**Conditional path to TRL 5 pass:** Execute full 100-scenario TRL run on `trl-commerce-demo` in Docker Compose, export report, fix stubbed metrics and pilot status bug, and archive artifacts.
 
 ---
 

@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 
+import { Button, Input } from '../ui';
 import { useToast } from '../../contexts/ToastContext';
 import { apiClient } from '../../services/apiClient';
 import type { ProductNormalized } from '../../types/catalog';
@@ -35,21 +36,25 @@ export function AliasEditor({
   }
 
   return (
-    <div className="cc-alias-editor">
-      <div className="cc-alias-editor__head">
-        <h3 className="cc-subhead">Aliases</h3>
-        <span className="cc-card__hint">{product.normalized_title}</span>
+    <div className="flex flex-col gap-3">
+      <div>
+        <h3 className="text-sm font-semibold text-fg">Aliases</h3>
+        <p className="text-xs text-muted">{product.normalized_title}</p>
       </div>
       {product.aliases.length === 0 ? (
-        <p className="cc-card__footnote">No aliases yet — add Persian/English synonyms below.</p>
+        <p className="text-xs text-muted">No aliases yet — add Persian/English synonyms below.</p>
       ) : (
-        <ul className="cc-alias-list">
+        <ul className="flex flex-wrap gap-2">
           {product.aliases.map((alias) => (
-            <li key={alias.id} className="cc-alias-chip" dir="auto">
-              <span className="cc-alias-chip__text">{alias.alias_text}</span>
+            <li
+              key={alias.id}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-sunken px-2 py-1 text-sm"
+              dir="auto"
+            >
+              <span>{alias.alias_text}</span>
               <button
                 type="button"
-                className="cc-alias-chip__remove"
+                className="rounded px-1 text-muted hover:bg-surface hover:text-danger"
                 aria-label={`Remove alias ${alias.alias_text}`}
                 onClick={() => patchMutation.mutate({ remove: [alias.alias_text] })}
               >
@@ -59,18 +64,18 @@ export function AliasEditor({
           ))}
         </ul>
       )}
-      <form className="cc-alias-form" onSubmit={handleAdd}>
-        <input
-          className="cc-alias-form__input"
+      <form className="flex flex-wrap gap-2" onSubmit={handleAdd}>
+        <Input
           value={newAlias}
           onChange={(e) => setNewAlias(e.target.value)}
           placeholder="Add Persian/English alias"
           aria-label="New alias"
           dir="auto"
+          className="min-w-[12rem] flex-1"
         />
-        <button className="button button--secondary" type="submit" disabled={patchMutation.isPending || !newAlias.trim()}>
+        <Button type="submit" variant="secondary" size="sm" disabled={patchMutation.isPending || !newAlias.trim()}>
           {patchMutation.isPending ? 'Saving…' : 'Add'}
-        </button>
+        </Button>
       </form>
     </div>
   );

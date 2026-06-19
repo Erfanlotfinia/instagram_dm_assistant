@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 
+import { LoadingState } from './data';
 import { useAuth } from '../contexts/AuthContext';
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -8,7 +9,11 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   if (isLoading) {
-    return <div className="loading-state">Loading...</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-canvas">
+        <LoadingState label="Loading session…" />
+      </div>
+    );
   }
 
   if (!isAuthenticated) {

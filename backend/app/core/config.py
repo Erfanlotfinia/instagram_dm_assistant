@@ -10,7 +10,9 @@ class Settings(BaseSettings):
 
     app_env: Literal["local", "development", "staging", "production", "test"] = "local"
     log_level: str = "INFO"
-    database_url: str = "postgresql+psycopg://postgres:postgres@postgres:5432/instagram_dm_assistant"
+    public_api_base_url: str = "http://localhost:8000"
+    frontend_base_url: str = "http://localhost:5173"
+    database_url: str = "postgresql+psycopg://postgres:postgres@postgres:5432/modira"
     redis_url: str = "redis://redis:6379/0"
     rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672/"
     qdrant_url: str = "http://qdrant:6333"
@@ -45,7 +47,7 @@ class Settings(BaseSettings):
     token_encryption_key: str = Field(
         default="local-dev-token-encryption-key-32b!",
         min_length=32,
-        description="Fernet-compatible key for encrypting Instagram access tokens",
+        description="Fernet-compatible key for encrypting channel access tokens",
     )
     cors_origins: list[str] = ["http://localhost:5173", "http://frontend:5173"]
     cors_allow_credentials: bool = True
@@ -53,21 +55,27 @@ class Settings(BaseSettings):
     rate_limit_login_per_minute: int = Field(default=10, ge=1)
     rate_limit_webhook_per_minute: int = Field(default=120, ge=1)
     rate_limit_outbound_message_per_minute: int = Field(default=30, ge=1)
-    instagram_app_secret: str = Field(
+    webhook_internal_secret: str = Field(
         default="",
-        description="Meta app secret for X-Hub-Signature-256 verification (empty disables check)",
+        description="Secret used for webhook endpoint verification",
     )
-    instagram_webhook_verify_token: str = Field(
-        default="local-instagram-verify-token",
-        description="Meta webhook verify token (VERIFY_TOKEN)",
+    oauth_state_secret: str = Field(
+        default="local-dev-oauth-state-secret",
+        description="Secret used to sign provider OAuth state",
     )
-    enable_real_instagram_send: bool = False
+    meta_app_id: str = ""
+    meta_app_secret: str = Field(
+        default="",
+        description="Meta app secret for X-Hub-Signature-256 verification",
+    )
     meta_graph_api_version: str = "v20.0"
     meta_graph_api_base_url: str = "https://graph.facebook.com"
+    enabled_channel_providers: str = "instagram,whatsapp,telegram,bale,rubika"
+    enable_real_provider_send: bool = False
     conversation_lock_ttl_seconds: int = Field(default=120, ge=1)
-    rabbitmq_queue_message_received: str = "instagram.message.received"
-    rabbitmq_queue_retry: str = "instagram.message.received.retry"
-    rabbitmq_queue_dlq: str = "instagram.message.received.dlq"
+    rabbitmq_queue_message_received: str = "channel.message.received"
+    rabbitmq_queue_retry: str = "channel.message.received.retry"
+    rabbitmq_queue_dlq: str = "channel.message.received.dlq"
     rabbitmq_queue_payment_callbacks: str = "payment_callbacks"
     rabbitmq_queue_reservation_expiry: str = "reservation_expiry"
     rabbitmq_queue_order_compensation: str = "order_compensation"
@@ -76,7 +84,6 @@ class Settings(BaseSettings):
     reservation_default_ttl_seconds: int = Field(default=1800, ge=60)
     rabbitmq_max_retries: int = Field(default=3, ge=0)
     rabbitmq_retry_delay_ms: int = Field(default=30_000, ge=1000)
-    api_public_base_url: str = "http://localhost:8000"
     order_expiration_minutes: int = Field(default=30, ge=1)
     background_job_interval_seconds: int = Field(default=60, ge=10)
     embedding_refresh_batch_size: int = Field(default=50, ge=1)
@@ -121,7 +128,6 @@ class Settings(BaseSettings):
         if self.app_env in {"staging", "production"}:
             default_jwt_values = {"change-me-in-production", "change-me-in-local-development"}
             default_token_values = {"local-dev-token-encryption-key-32b!"}
-            default_verify_tokens = {"local-instagram-verify-token"}
             if self.jwt_secret_key in default_jwt_values or len(self.jwt_secret_key) < 32:
                 raise ValueError(
                     f"JWT_SECRET_KEY must be a strong non-default secret in {self.app_env}"
@@ -130,15 +136,14 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"TOKEN_ENCRYPTION_KEY must be a strong non-default secret in {self.app_env}"
                 )
-            if not self.instagram_app_secret:
+            enabled_providers = {
+                provider.strip().lower()
+                for provider in self.enabled_channel_providers.split(",")
+                if provider.strip()
+            }
+            if enabled_providers.intersection({"instagram", "whatsapp"}) and not self.meta_app_secret:
                 raise ValueError(
-                    f"INSTAGRAM_APP_SECRET is required in {self.app_env} for webhook signature verification"
-                )
-            if not self.instagram_webhook_verify_token or (
-                self.instagram_webhook_verify_token in default_verify_tokens
-            ):
-                raise ValueError(
-                    f"INSTAGRAM_WEBHOOK_VERIFY_TOKEN must be set to a non-default value in {self.app_env}"
+                    f"META_APP_SECRET is required in {self.app_env} when Meta providers are enabled"
                 )
             if not self.cors_origins or "*" in self.cors_origins:
                 raise ValueError(f"CORS_ORIGINS must be explicit in {self.app_env}")

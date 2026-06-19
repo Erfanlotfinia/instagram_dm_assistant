@@ -14,7 +14,7 @@ alembic upgrade head
 ```bash
 docker compose up -d postgres
 cd backend
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/instagram_dm_assistant alembic upgrade head
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/modira alembic upgrade head
 ```
 
 ## Create migration

@@ -3,7 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { ShopSelector } from '../components/ShopSelector';
+import { HubPage } from '../components/shell/HubPage';
+import { Badge, Button, Card, CardBody, CardHeader, Field, Input, Select } from '../components/ui';
+import { DataTable, LoadingState } from '../components/data';
+import type { Column } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { queryKeys } from '../lib/queryClient';
@@ -26,6 +29,14 @@ const agentSettingsSchema = z.object({
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
 type AgentSettingsFormValues = z.infer<typeof agentSettingsSchema>;
+
+interface InstagramAccountRow {
+  id: string;
+  username: string;
+  status: string;
+  webhook_enabled: boolean;
+  token_expires_at: string | null;
+}
 
 export function SettingsPage() {
   const { selectedShopId } = useShop();
@@ -79,146 +90,125 @@ export function SettingsPage() {
     onError: (error) => showToast(error instanceof Error ? error.message : 'Save failed', 'error'),
   });
 
-  return (
-    <div className="page-stack page-stack--wide">
-      <section className="dashboard-card dashboard-card--wide">
-        <p className="dashboard-card__eyebrow">Configuration</p>
-        <h1>Settings</h1>
-        <p>Manage shop profile, Instagram connectivity, and agent behavior.</p>
-        <ShopSelector />
-      </section>
+  const accountColumns: Column<InstagramAccountRow>[] = [
+    { key: 'username', header: 'Username', render: (row) => `@${row.username}` },
+    { key: 'status', header: 'Status', render: (row) => <Badge tone="neutral">{row.status}</Badge> },
+    {
+      key: 'webhook',
+      header: 'Webhook',
+      render: (row) => <Badge tone={row.webhook_enabled ? 'success' : 'warning'}>{row.webhook_enabled ? 'enabled' : 'disabled'}</Badge>,
+    },
+    {
+      key: 'expires',
+      header: 'Token expires',
+      align: 'right',
+      render: (row) => (row.token_expires_at ? new Date(row.token_expires_at).toLocaleString() : '—'),
+    },
+  ];
 
-      {settingsQuery.isLoading ? <p className="loading-state">Loading settings...</p> : null}
+  return (
+    <HubPage
+      eyebrow="System"
+      title="Settings"
+      description="Manage shop profile, Instagram connectivity, and agent behavior."
+    >
+      {settingsQuery.isLoading ? (
+        <Card>
+          <CardBody>
+            <LoadingState label="Loading settings…" />
+          </CardBody>
+        </Card>
+      ) : null}
+
       {settingsQuery.error ? (
-        <section className="dashboard-card dashboard-card--wide">
-          <p className="form-error">
-            {settingsQuery.error instanceof Error ? settingsQuery.error.message : 'Failed to load settings'}
-          </p>
-        </section>
+        <Card>
+          <CardBody>
+            <p className="text-sm text-danger">
+              {settingsQuery.error instanceof Error ? settingsQuery.error.message : 'Failed to load settings'}
+            </p>
+          </CardBody>
+        </Card>
       ) : null}
 
       {settings ? (
         <>
-          <section className="dashboard-card dashboard-card--wide">
-            <h2>Shop profile</h2>
-            <form
-              className="inline-form"
-              onSubmit={profileForm.handleSubmit((values) => updateProfileMutation.mutate(values))}
-            >
-              <label className="form-field">
-                <span>Shop name</span>
-                <input {...profileForm.register('name')} />
-              </label>
-              <label className="form-field">
-                <span>Default currency</span>
-                <input {...profileForm.register('default_currency')} />
-              </label>
-              <button className="button button--primary" type="submit" disabled={updateProfileMutation.isPending}>
-                Save profile
-              </button>
-            </form>
-          </section>
+          <Card>
+            <CardHeader title="Shop profile" />
+            <CardBody>
+              <form
+                className="flex flex-wrap items-end gap-3"
+                onSubmit={profileForm.handleSubmit((values) => updateProfileMutation.mutate(values))}
+              >
+                <Field label="Shop name">
+                  <Input {...profileForm.register('name')} />
+                </Field>
+                <Field label="Default currency">
+                  <Input maxLength={3} {...profileForm.register('default_currency')} />
+                </Field>
+                <Button type="submit" disabled={updateProfileMutation.isPending}>
+                  Save profile
+                </Button>
+              </form>
+            </CardBody>
+          </Card>
 
-          <section className="dashboard-card dashboard-card--wide">
-            <h2>Instagram & webhook status</h2>
-            <p>
-              Webhook: <strong>{settings.webhook_active ? 'active' : 'inactive'}</strong>
-            </p>
-            {settings.instagram_accounts.length === 0 ? (
-              <p className="empty-state">No Instagram accounts connected.</p>
-            ) : (
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Username</th>
-                      <th>Status</th>
-                      <th>Webhook</th>
-                      <th>Token expires</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {settings.instagram_accounts.map((account) => (
-                      <tr key={account.id}>
-                        <td>{account.username}</td>
-                        <td>{account.status}</td>
-                        <td>{account.webhook_enabled ? 'enabled' : 'disabled'}</td>
-                        <td>
-                          {account.token_expires_at
-                            ? new Date(account.token_expires_at).toLocaleString()
-                            : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
+          <Card>
+            <CardHeader
+              title="Instagram & webhook status"
+              description={`Webhook: ${settings.webhook_active ? 'active' : 'inactive'}`}
+            />
+            <DataTable
+              columns={accountColumns}
+              rows={settings.instagram_accounts}
+              rowKey={(row) => row.id}
+              emptyTitle="No Instagram accounts connected"
+            />
+          </Card>
 
-          <section className="dashboard-card dashboard-card--wide">
-            <h2>Agent settings</h2>
-            <form
-              className="inline-form"
-              onSubmit={agentForm.handleSubmit((values) => updateAgentMutation.mutate(values))}
-            >
-              <label className="form-field form-field--checkbox">
-                <input type="checkbox" {...agentForm.register('auto_reply_enabled')} />
-                <span>Enable auto reply</span>
-              </label>
+          <Card>
+            <CardHeader title="Agent settings" />
+            <CardBody>
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={agentForm.handleSubmit((values) => updateAgentMutation.mutate(values))}
+              >
+                <label className="flex items-center gap-2 text-sm text-fg">
+                  <input type="checkbox" className="rounded border-border" {...agentForm.register('auto_reply_enabled')} />
+                  Enable auto reply
+                </label>
 
-              <div className="filter-grid">
-                <label className="form-field">
-                  <span>Intent confidence threshold</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="1"
-                    {...agentForm.register('intent_confidence_threshold', { valueAsNumber: true })}
-                  />
-                </label>
-                <label className="form-field">
-                  <span>Slots confidence threshold</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="1"
-                    {...agentForm.register('slots_confidence_threshold', { valueAsNumber: true })}
-                  />
-                </label>
-                <label className="form-field">
-                  <span>Handoff mode</span>
-                  <select {...agentForm.register('handoff_mode')}>
-                    <option value="automatic">Automatic</option>
-                    <option value="manual_only">Manual only</option>
-                  </select>
-                </label>
-                <label className="form-field">
-                  <span>Default language</span>
-                  <select {...agentForm.register('default_language')}>
-                    <option value="fa">Persian (fa)</option>
-                    <option value="en">English (en)</option>
-                  </select>
-                </label>
-                <label className="form-field">
-                  <span>Low stock threshold</span>
-                  <input
-                    type="number"
-                    min="0"
-                    {...agentForm.register('low_stock_threshold', { valueAsNumber: true })}
-                  />
-                </label>
-              </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <Field label="Intent confidence threshold">
+                    <Input type="number" step="0.01" min="0" max="1" {...agentForm.register('intent_confidence_threshold', { valueAsNumber: true })} />
+                  </Field>
+                  <Field label="Slots confidence threshold">
+                    <Input type="number" step="0.01" min="0" max="1" {...agentForm.register('slots_confidence_threshold', { valueAsNumber: true })} />
+                  </Field>
+                  <Field label="Handoff mode">
+                    <Select {...agentForm.register('handoff_mode')}>
+                      <option value="automatic">Automatic</option>
+                      <option value="manual_only">Manual only</option>
+                    </Select>
+                  </Field>
+                  <Field label="Default language">
+                    <Select {...agentForm.register('default_language')}>
+                      <option value="fa">Persian (fa)</option>
+                      <option value="en">English (en)</option>
+                    </Select>
+                  </Field>
+                  <Field label="Low stock threshold">
+                    <Input type="number" min="0" {...agentForm.register('low_stock_threshold', { valueAsNumber: true })} />
+                  </Field>
+                </div>
 
-              <button className="button button--primary" type="submit" disabled={updateAgentMutation.isPending}>
-                Save agent settings
-              </button>
-            </form>
-          </section>
+                <Button type="submit" disabled={updateAgentMutation.isPending}>
+                  Save agent settings
+                </Button>
+              </form>
+            </CardBody>
+          </Card>
         </>
       ) : null}
-    </div>
+    </HubPage>
   );
 }

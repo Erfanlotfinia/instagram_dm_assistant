@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
 import { OrderDraftPanel } from '../orders/OrderDraftPanel';
+import { Badge } from '../ui';
 import { queryKeys } from '../../lib/queryClient';
+import { cn } from '../../lib/cn';
 import { apiClient } from '../../services/apiClient';
 import type { ConversationDetail, ConversationEvent, CustomerUpdate } from '../../types/conversation';
 import { ConversationEventsTimeline } from './ConversationEventsTimeline';
@@ -30,6 +32,28 @@ function formatWorkflowLabel(value: string): string {
   return value.replace(/_/g, ' ');
 }
 
+function FactGrid({ children }: { children: React.ReactNode }) {
+  return <dl className="grid gap-3 text-sm sm:grid-cols-2">{children}</dl>;
+}
+
+function FactItem({ label, value, wide }: { label: string; value: React.ReactNode; wide?: boolean }) {
+  return (
+    <div className={cn('flex flex-col gap-0.5', wide && 'sm:col-span-2')}>
+      <dt className="text-xs font-medium text-muted">{label}</dt>
+      <dd className="text-fg">{value}</dd>
+    </div>
+  );
+}
+
+function ContextSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3 border-b border-border pb-4 last:border-0 last:pb-0">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
 export function ConversationContextPanel({
   conversation,
   shopId,
@@ -46,8 +70,8 @@ export function ConversationContextPanel({
   });
 
   return (
-    <aside className="conversation-context" aria-label="Conversation context">
-      <div className="conversation-context__tabs" role="tablist" aria-label="Context sections">
+    <aside className="flex h-full flex-col border-l border-border bg-surface" aria-label="Conversation context">
+      <div className="flex gap-0.5 overflow-x-auto border-b border-border px-2" role="tablist" aria-label="Context sections">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -56,7 +80,10 @@ export function ConversationContextPanel({
             id={`context-tab-${tab.id}`}
             aria-selected={activeTab === tab.id}
             aria-controls={`context-panel-${tab.id}`}
-            className={`conversation-context__tab${activeTab === tab.id ? ' conversation-context__tab--active' : ''}`}
+            className={cn(
+              '-mb-px whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-medium transition-colors',
+              activeTab === tab.id ? 'border-accent text-fg' : 'border-transparent text-muted hover:text-fg',
+            )}
             onClick={() => setActiveTab(tab.id)}
           >
             {tab.label}
@@ -69,7 +96,7 @@ export function ConversationContextPanel({
         role="tabpanel"
         aria-labelledby="context-tab-customer"
         hidden={activeTab !== 'customer'}
-        className="conversation-context__panel"
+        className="flex-1 overflow-y-auto p-4"
       >
         <CustomerProfilePanel
           profile={conversation.customer_profile ?? null}
@@ -83,42 +110,34 @@ export function ConversationContextPanel({
         role="tabpanel"
         aria-labelledby="context-tab-order"
         hidden={activeTab !== 'order'}
-        className="conversation-context__panel"
+        className="flex flex-1 flex-col gap-4 overflow-y-auto p-4"
       >
         {conversation.linked_order ? (
-          <div className="order-summary">
-            <div className="order-summary__identity">
-              <p className="order-summary__eyebrow">Linked order</p>
-              <p className="order-summary__id">#{conversation.linked_order.id.slice(0, 8)}</p>
-            </div>
-            <div className="order-summary__status">
-              <span className="status-pill status-pill--neutral">
-                {formatWorkflowLabel(conversation.linked_order.status)}
-              </span>
-              <span
-                className={`status-pill${
-                  conversation.linked_order.payment_status === 'paid'
-                    ? ' status-pill--success'
-                    : ' status-pill--warning'
-                }`}
-              >
-                {formatWorkflowLabel(conversation.linked_order.payment_status)}
-              </span>
+          <div className="rounded-lg border border-border bg-surface-sunken p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium text-muted">Linked order</p>
+                <p className="font-mono text-sm font-semibold text-fg">#{conversation.linked_order.id.slice(0, 8)}</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <Badge tone="neutral">{formatWorkflowLabel(conversation.linked_order.status)}</Badge>
+                <Badge tone={conversation.linked_order.payment_status === 'paid' ? 'success' : 'warning'}>
+                  {formatWorkflowLabel(conversation.linked_order.payment_status)}
+                </Badge>
+              </div>
             </div>
             <Link
-              className="order-summary__open"
+              className="mt-2 inline-block text-sm text-accent hover:underline"
               to={`/orders/${conversation.linked_order.id}?shopId=${shopId}`}
             >
               Open order →
             </Link>
           </div>
         ) : (
-          <p className="empty-state">No active order linked to this conversation.</p>
+          <p className="text-sm text-muted">No active order linked to this conversation.</p>
         )}
 
-        {correctnessQuery.data ? (
-          <OrderDraftPanel order={correctnessQuery.data} />
-        ) : null}
+        {correctnessQuery.data ? <OrderDraftPanel order={correctnessQuery.data} /> : null}
       </div>
 
       <div
@@ -126,90 +145,57 @@ export function ConversationContextPanel({
         role="tabpanel"
         aria-labelledby="context-tab-agent"
         hidden={activeTab !== 'agent'}
-        className="conversation-context__panel"
+        className="flex flex-1 flex-col gap-4 overflow-y-auto p-4"
       >
-        <div className="context-section">
-          <h3 className="context-section__title">Extracted slots</h3>
+        <ContextSection title="Extracted slots">
           {conversation.slots ? (
-            <dl className="context-facts">
-              <div className="context-facts__item">
-                <dt>Product</dt>
-                <dd>{conversation.linked_product?.title ?? conversation.slots.product_id ?? '—'}</dd>
-              </div>
-              <div className="context-facts__item">
-                <dt>Variant</dt>
-                <dd>{conversation.slots.product_variant_id ?? '—'}</dd>
-              </div>
-              <div className="context-facts__item">
-                <dt>Color</dt>
-                <dd>{conversation.slots.color ?? '—'}</dd>
-              </div>
-              <div className="context-facts__item">
-                <dt>Size</dt>
-                <dd>{conversation.slots.size ?? '—'}</dd>
-              </div>
-              <div className="context-facts__item">
-                <dt>Quantity</dt>
-                <dd>{conversation.slots.quantity ?? '—'}</dd>
-              </div>
-              <div className="context-facts__item context-facts__item--wide">
-                <dt>Missing fields</dt>
-                <dd>{conversation.slots.missing_fields.join(', ') || 'None'}</dd>
-              </div>
-            </dl>
+            <FactGrid>
+              <FactItem label="Product" value={conversation.linked_product?.title ?? conversation.slots.product_id ?? '—'} />
+              <FactItem label="Variant" value={conversation.slots.product_variant_id ?? '—'} />
+              <FactItem label="Color" value={conversation.slots.color ?? '—'} />
+              <FactItem label="Size" value={conversation.slots.size ?? '—'} />
+              <FactItem label="Quantity" value={conversation.slots.quantity ?? '—'} />
+              <FactItem
+                label="Missing fields"
+                value={conversation.slots.missing_fields.join(', ') || 'None'}
+                wide
+              />
+            </FactGrid>
           ) : (
-            <p className="empty-state">No extracted slots yet.</p>
+            <p className="text-sm text-muted">No extracted slots yet.</p>
           )}
-        </div>
+        </ContextSection>
 
-        <div className="context-section">
-          <h3 className="context-section__title">Inventory</h3>
+        <ContextSection title="Inventory">
           {conversation.inventory_status ? (
-            <dl className="context-facts">
-              <div className="context-facts__item">
-                <dt>Availability</dt>
-                <dd>
-                  <span
-                    className={`status-pill${
-                      conversation.inventory_status.in_stock ? ' status-pill--success' : ' status-pill--danger'
-                    }`}
-                  >
+            <FactGrid>
+              <FactItem
+                label="Availability"
+                value={
+                  <Badge tone={conversation.inventory_status.in_stock ? 'success' : 'danger'}>
                     {conversation.inventory_status.in_stock ? 'In stock' : 'Out of stock'}
-                  </span>
-                </dd>
-              </div>
-              <div className="context-facts__item">
-                <dt>Available qty</dt>
-                <dd>{conversation.inventory_status.available_quantity ?? '—'}</dd>
-              </div>
-            </dl>
+                  </Badge>
+                }
+              />
+              <FactItem label="Available qty" value={conversation.inventory_status.available_quantity ?? '—'} />
+            </FactGrid>
           ) : (
-            <p className="empty-state">No variant selected.</p>
+            <p className="text-sm text-muted">No variant selected.</p>
           )}
-        </div>
+        </ContextSection>
 
         {confidence ? (
-          <div className="context-section">
-            <h3 className="context-section__title">Confidence</h3>
-            <dl className="context-facts">
-              <div className="context-facts__item">
-                <dt>Intent</dt>
-                <dd>{String(confidence.intent ?? '—')}</dd>
-              </div>
-              <div className="context-facts__item">
-                <dt>Slots</dt>
-                <dd>{String(confidence.slots ?? '—')}</dd>
-              </div>
-            </dl>
-          </div>
+          <ContextSection title="Confidence">
+            <FactGrid>
+              <FactItem label="Intent" value={String(confidence.intent ?? '—')} />
+              <FactItem label="Slots" value={String(confidence.slots ?? '—')} />
+            </FactGrid>
+          </ContextSection>
         ) : null}
 
-        <div className="context-section">
-          <h3 className="context-section__title">Decision trace</h3>
-          <p className="context-section__body">
-            {conversation.decision_trace_summary ?? 'No agent actions yet.'}
-          </p>
-        </div>
+        <ContextSection title="Decision trace">
+          <p className="text-sm text-fg">{conversation.decision_trace_summary ?? 'No agent actions yet.'}</p>
+        </ContextSection>
       </div>
 
       <div
@@ -217,11 +203,11 @@ export function ConversationContextPanel({
         role="tabpanel"
         aria-labelledby="context-tab-activity"
         hidden={activeTab !== 'activity'}
-        className="conversation-context__panel conversation-context__panel--activity"
+        className="flex flex-1 flex-col overflow-y-auto p-4"
       >
-        <div className="activity-panel__head">
-          <h2 className="activity-panel__title">Activity</h2>
-          <span className="activity-panel__count">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-fg">Activity</h2>
+          <span className="text-xs text-muted">
             {(conversation.events ?? []).length} {(conversation.events ?? []).length === 1 ? 'event' : 'events'}
           </span>
         </div>

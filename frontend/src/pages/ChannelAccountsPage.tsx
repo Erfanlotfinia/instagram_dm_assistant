@@ -1,39 +1,25 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
+import { HubPage } from '../components/shell/HubPage';
+import { Callout, Card, CardBody, CardHeader } from '../components/ui';
+import { EmptyState, LoadingState } from '../components/data';
+import { ChannelAccountCard } from '../components/channels/ChannelAccountCard';
+import { ChannelAccountCreateForm } from '../components/channels/ChannelAccountCreateForm';
+import { ChannelCredentialsDialog } from '../components/channels/ChannelCredentialsDialog';
+import { useAuth } from '../contexts/AuthContext';
 import { useShop } from '../contexts/ShopContext';
 import { apiClient } from '../services/apiClient';
 import type { ChannelAccount, ChannelProvider } from '../types/channel';
 
-const PROVIDERS: Array<{ value: ChannelProvider; label: string; hint: string }> = [
-  { value: 'instagram', label: 'Instagram', hint: 'Meta webhook signature and Instagram Graph send APIs.' },
-  { value: 'whatsapp', label: 'WhatsApp', hint: 'Cloud API phone number ID, verify token, templates and 24h service window.' },
-  { value: 'telegram', label: 'Telegram', hint: 'Bot API token with optional X-Telegram-Bot-Api-Secret-Token webhook header.' },
-  { value: 'bale', label: 'Bale', hint: 'Telegram-like bot endpoint with Bale token and webhook limits.' },
-  { value: 'rubika', label: 'Rubika', hint: 'HTTPS endpoint mode, receiveUpdate and receiveInlineMessage support.' },
-];
-
-function providerLabel(provider: ChannelProvider) {
-  return PROVIDERS.find((item) => item.value === provider)?.label ?? provider;
-}
-
 export function ChannelAccountsPage() {
+  const { user } = useAuth();
   const { selectedShopId, selectedShop } = useShop();
   const [accounts, setAccounts] = useState<ChannelAccount[]>([]);
-  const [provider, setProvider] = useState<ChannelProvider>('instagram');
-  const [displayName, setDisplayName] = useState('');
-  const [externalAccountId, setExternalAccountId] = useState('');
-  const [phoneNumberId, setPhoneNumberId] = useState('');
-  const [botUsername, setBotUsername] = useState('');
-  const [botId, setBotId] = useState('');
-  const [webhookVerifyToken, setWebhookVerifyToken] = useState('');
-  const [webhookSecret, setWebhookSecret] = useState('');
-  const [accessToken, setAccessToken] = useState('');
-  const [botToken, setBotToken] = useState('');
-  const [defaultLanguageCode, setDefaultLanguageCode] = useState('en_US');
-  const [webhookInfo, setWebhookInfo] = useState<unknown | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const selectedProvider = useMemo(() => PROVIDERS.find((item) => item.value === provider)!, [provider]);
+  const [credentialsAccount, setCredentialsAccount] = useState<ChannelAccount | null>(null);
+
+  const canManageCredentials = user?.role === 'owner' || user?.role === 'admin';
 
   async function loadAccounts() {
     if (!selectedShopId) {
@@ -43,6 +29,7 @@ export function ChannelAccountsPage() {
     setIsLoading(true);
     try {
       setAccounts(await apiClient.listChannelAccounts(selectedShopId));
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load channel accounts');
     } finally {
@@ -54,154 +41,159 @@ export function ChannelAccountsPage() {
     void loadAccounts();
   }, [selectedShopId]);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedShopId) return;
+  async function handleCreate(payload: {
+    provider: ChannelProvider;
+    displayName: string;
+    externalAccountId: string;
+    phoneNumberId: string;
+    botUsername: string;
+    botId: string;
+    pageId: string;
+    webhookVerifyToken: string;
+    webhookSecret: string;
+    accessToken: string;
+    botToken: string;
+    defaultLanguageCode: string;
+    templateNamespace: string;
+  }) {
+    if (!selectedShopId) {
+      return;
+    }
     setError(null);
     try {
-      await apiClient.createChannelAccount(selectedShopId, {
-        provider,
-        display_name: displayName,
-        external_account_id: externalAccountId || undefined,
-        phone_number_id: phoneNumberId || undefined,
-        bot_username: botUsername || undefined,
-        bot_id: botId || undefined,
-        webhook_verify_token: webhookVerifyToken || undefined,
-        webhook_secret: webhookSecret || undefined,
-        access_token: accessToken || undefined,
-        bot_token: botToken || undefined,
-        app_secret: provider === 'whatsapp' ? webhookSecret || undefined : undefined,
-        default_language_code: provider === 'whatsapp' ? defaultLanguageCode : undefined,
-        settings_json: {
-          ...(provider === 'telegram' ? { allowed_updates_json: ['message', 'callback_query'], use_local_bot_api: false } : {}),
-          ...(provider === 'whatsapp' ? { message_template_namespace: null } : {}),
-        },
+      const settings: Record<string, unknown> = {};
+      if (payload.provider === 'instagram' && payload.pageId) {
+        settings.page_id = payload.pageId;
+      }
+      if (payload.provider === 'telegram') {
+        settings.allowed_updates_json = ['message', 'callback_query'];
+        settings.use_local_bot_api = false;
+      }
+      if (payload.provider === 'whatsapp') {
+        settings.default_language_code = payload.defaultLanguageCode;
+        if (payload.templateNamespace) {
+          settings.message_template_namespace = payload.templateNamespace;
+        }
+      }
+
+      const account = await apiClient.createChannelAccount(selectedShopId, {
+        provider: payload.provider,
+        display_name: payload.displayName,
+        external_account_id: payload.externalAccountId || undefined,
+        phone_number_id: payload.phoneNumberId || undefined,
+        bot_username: payload.botUsername || undefined,
+        bot_id: payload.botId || undefined,
+        webhook_verify_token: payload.webhookVerifyToken || undefined,
+        settings,
       });
-      setDisplayName('');
-      setExternalAccountId('');
-      setPhoneNumberId('');
-      setBotUsername('');
-      setBotId('');
-      setWebhookVerifyToken('');
-      setWebhookSecret('');
-      setAccessToken('');
-      setBotToken('');
-      setDefaultLanguageCode('en_US');
+
+      await apiClient.updateChannelCredentials(selectedShopId, account.id, {
+        webhook_secret: payload.webhookSecret || undefined,
+        access_token: payload.accessToken || undefined,
+        bot_token: payload.botToken || undefined,
+        webhook_verify_token: payload.webhookVerifyToken || undefined,
+      });
+
       await loadAccounts();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create channel account');
-    }
-  }
-
-  async function handleWebhookTest(account: ChannelAccount) {
-    if (!selectedShopId) return;
-    setError(null);
-    try {
-      await apiClient.testChannelWebhook(selectedShopId, account.id);
-      window.alert(`${providerLabel(account.provider)} webhook test accepted`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Webhook test failed');
-    }
-  }
-
-  async function handleTelegramWebhookInfo(account: ChannelAccount) {
-    if (!selectedShopId) return;
-    setError(null);
-    try {
-      setWebhookInfo(await apiClient.getTelegramWebhookInfo(selectedShopId, account.id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Webhook info failed');
-    }
-  }
-
-  async function handleSetTelegramWebhook(account: ChannelAccount) {
-    if (!selectedShopId) return;
-    setError(null);
-    try {
-      setWebhookInfo(await apiClient.setTelegramWebhook(selectedShopId, account.id));
-      await loadAccounts();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Set webhook failed');
-    }
-  }
-
-  async function handleDeleteTelegramWebhook(account: ChannelAccount) {
-    if (!selectedShopId) return;
-    setError(null);
-    try {
-      setWebhookInfo(await apiClient.deleteTelegramWebhook(selectedShopId, account.id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete webhook failed');
+      throw err;
     }
   }
 
   return (
-    <div className="page-stack">
-      <section className="dashboard-card">
-        <p className="dashboard-card__eyebrow">Multi-channel</p>
-        <h1>Channel Accounts</h1>
-        <p>Connect Instagram, WhatsApp, Telegram, Bale and Rubika to the same normalized order pipeline for {selectedShop?.name ?? 'your shop'}.</p>
-        {error && <div className="alert alert--error">{error}</div>}
-      </section>
+    <HubPage
+      eyebrow="Multi-channel"
+      title="Channel Accounts"
+      description={`Connect messaging channels to the same normalized order pipeline for ${selectedShop?.name ?? 'your shop'}.`}
+    >
+      <Callout title="Credential security">
+        <ul className="list-disc space-y-1 pl-4">
+          <li>Credentials are encrypted at rest in the database.</li>
+          <li>Tokens are write-only in this admin UI and are never shown again after save.</li>
+          <li>Only shop owners and admins can create or replace channel credentials.</li>
+        </ul>
+      </Callout>
 
-      <section className="dashboard-card">
-        <h2>Add channel account</h2>
-        <form className="form-grid" onSubmit={handleSubmit}>
-          <label className="form-field">
-            <span>Provider</span>
-            <select value={provider} onChange={(event) => setProvider(event.target.value as ChannelProvider)}>
-              {PROVIDERS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-            </select>
-            <small>{selectedProvider.hint}</small>
-          </label>
-          <label className="form-field"><span>Display name</span><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} required /></label>
-          {(provider === 'instagram' || provider === 'whatsapp') && <label className="form-field"><span>External account ID</span><input value={externalAccountId} onChange={(event) => setExternalAccountId(event.target.value)} /></label>}
-          {provider === 'whatsapp' && <label className="form-field"><span>Phone number ID</span><input value={phoneNumberId} onChange={(event) => setPhoneNumberId(event.target.value)} required /></label>}
-          {provider === 'whatsapp' && <label className="form-field"><span>Business account ID</span><input value={externalAccountId} onChange={(event) => setExternalAccountId(event.target.value)} placeholder="Optional WABA ID" /></label>}
-          {provider === 'whatsapp' && <label className="form-field"><span>Default language</span><input value={defaultLanguageCode} onChange={(event) => setDefaultLanguageCode(event.target.value)} placeholder="en_US" /></label>}
-          {provider !== 'instagram' && provider !== 'whatsapp' && <label className="form-field"><span>Bot username</span><input value={botUsername} onChange={(event) => setBotUsername(event.target.value)} /></label>}
-          {provider !== 'instagram' && provider !== 'whatsapp' && <label className="form-field"><span>Bot ID</span><input value={botId} onChange={(event) => setBotId(event.target.value)} /></label>}
-          <label className="form-field"><span>Webhook verify token</span><input value={webhookVerifyToken} onChange={(event) => setWebhookVerifyToken(event.target.value)} /></label>
-          <label className="form-field"><span>{provider === 'whatsapp' ? 'App secret' : 'Webhook secret token'}</span><input type="password" value={webhookSecret} onChange={(event) => setWebhookSecret(event.target.value)} /></label>
-          {(provider === 'instagram' || provider === 'whatsapp') && <label className="form-field"><span>Access token</span><input type="password" value={accessToken} onChange={(event) => setAccessToken(event.target.value)} /></label>}
-          {provider !== 'instagram' && <label className="form-field"><span>Bot token</span><input type="password" value={botToken} onChange={(event) => setBotToken(event.target.value)} /></label>}
-          <button className="button button--primary" type="submit" disabled={!selectedShopId}>Add channel</button>
-        </form>
-        {provider === 'whatsapp' && <div className="alert alert--info">Configure Meta webhook URL <code>/api/v1/channels/whatsapp/webhook</code>; use the verify token above and keep App Secret set in staging/production for X-Hub-Signature-256 validation. Use approved templates outside the 24-hour customer service window.</div>}
-        {provider === 'telegram' && <div className="alert alert--info">Configure Telegram webhook URL <code>/api/v1/channels/telegram/webhook</code>. If a secret token is set via setWebhook, Telegram sends it in <code>X-Telegram-Bot-Api-Secret-Token</code>.</div>}
-      </section>
+      {error ? (
+        <Card>
+          <CardBody>
+            <p className="text-sm text-danger">{error}</p>
+          </CardBody>
+        </Card>
+      ) : null}
 
-      <section className="dashboard-card">
-        <h2>Connected channels</h2>
-        {isLoading && <p>Loading channel accounts…</p>}
-        {!isLoading && accounts.length === 0 && <p>No channel accounts connected yet.</p>}
-        {accounts.length > 0 && (
-          <div className="table-card"><table><thead><tr><th>Provider</th><th>Name</th><th>Status</th><th>External ID</th><th>Capabilities</th><th>Webhook</th></tr></thead><tbody>
-            {accounts.map((account) => (
-              <tr key={account.id}>
-                <td><span className="status-pill">{providerLabel(account.provider)}</span></td>
-                <td>{account.display_name}</td>
-                <td>{account.status}</td>
-                <td>{account.external_account_id ?? account.phone_number_id ?? account.bot_id ?? '—'}</td>
-                <td>{Object.entries(account.capabilities_json).filter(([, enabled]) => enabled === true).slice(0, 4).map(([key]) => key.replace('supports_', '')).join(', ') || '—'}</td>
-                <td><div className="button-row"><button className="button button--secondary" type="button" onClick={() => void handleWebhookTest(account)}>Webhook test</button>{account.provider === 'telegram' && <><button className="button button--secondary" type="button" onClick={() => void handleSetTelegramWebhook(account)}>Set webhook</button><button className="button button--secondary" type="button" onClick={() => void handleDeleteTelegramWebhook(account)}>Delete webhook</button><button className="button button--secondary" type="button" onClick={() => void handleTelegramWebhookInfo(account)}>Webhook info</button></>}{account.provider === 'whatsapp' && <span className="status-pill status-pill--warning">Template picker enabled outside window</span>}</div></td>
-              </tr>
-            ))}
-          </tbody></table></div>
-        )}
-      </section>
+      {!selectedShopId ? (
+        <Card>
+          <CardBody>
+            <EmptyState title="Select a shop" description="Use the shop switcher in the top bar." />
+          </CardBody>
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <CardHeader
+              title="Add channel account"
+              description={
+                canManageCredentials
+                  ? 'Create a new channel connection and save encrypted credentials.'
+                  : 'View-only access. Contact an owner or admin to add channels.'
+              }
+            />
+            <CardBody>
+              {canManageCredentials ? (
+                <ChannelAccountCreateForm onSubmit={handleCreate} />
+              ) : (
+                <EmptyState
+                  title="Credential changes restricted"
+                  description="Operators can view channel status below but cannot add or edit credentials."
+                />
+              )}
+            </CardBody>
+          </Card>
 
-      <section className="dashboard-card">
-        <h2>WhatsApp Templates</h2>
-        <p>Create local template records in this sprint through the backend model. Sync with Meta Template APIs is prepared as a provider limitation until template-management credentials are enabled.</p>
-        <div className="button-row"><span className="status-pill">approved</span><span className="status-pill status-pill--warning">submitted</span><span className="status-pill status-pill--danger">rejected</span></div>
-        <p><strong>Filters:</strong> language, category and status are supported by the template data model.</p>
-      </section>
+          <div className="flex flex-col gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-fg">Connected channels</h2>
+              <p className="text-sm text-muted">Status, webhook readiness, and setup progress per account.</p>
+            </div>
 
-      <section className="dashboard-card">
-        <h2>Telegram webhook info panel</h2>
-        {webhookInfo ? <pre>{JSON.stringify(webhookInfo, null, 2)}</pre> : <p>Select Webhook info on a Telegram account to inspect Telegram's current webhook state.</p>}
-      </section>
-    </div>
+            {isLoading ? (
+              <Card>
+                <CardBody>
+                  <LoadingState label="Loading channel accounts…" />
+                </CardBody>
+              </Card>
+            ) : accounts.length === 0 ? (
+              <Card>
+                <CardBody>
+                  <EmptyState title="No channel accounts connected yet" />
+                </CardBody>
+              </Card>
+            ) : (
+              accounts.map((account) => (
+                <ChannelAccountCard
+                  key={account.id}
+                  account={account}
+                  shopId={selectedShopId}
+                  canManage={canManageCredentials}
+                  onRefresh={() => void loadAccounts()}
+                  onReplaceCredentials={setCredentialsAccount}
+                />
+              ))
+            )}
+          </div>
+
+          <ChannelCredentialsDialog
+            open={credentialsAccount !== null}
+            account={credentialsAccount}
+            shopId={selectedShopId}
+            canManage={canManageCredentials}
+            onClose={() => setCredentialsAccount(null)}
+            onSaved={() => void loadAccounts()}
+          />
+        </>
+      )}
+    </HubPage>
   );
 }

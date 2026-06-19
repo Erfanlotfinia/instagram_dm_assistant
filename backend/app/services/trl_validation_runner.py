@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.domain.enums import AgentIntent, MessageChannel, MessageDirection, MessageType
 from app.domain.models import (
     AgentDecisionTrace,
@@ -32,8 +33,8 @@ from app.schemas.agent import (
     ExtractionConfidence,
     SemanticSearchHit,
 )
-from app.core.config import get_settings
 from app.services.conversation_orchestrator import ConversationOrchestrator
+from app.services.legacy_channel_compat import get_instagram_channel_account_id
 
 THRESHOLDS = {
     "intent_accuracy": 0.90,
@@ -146,7 +147,7 @@ class TRLValidationRunner:
         if reset_demo_data:
             self.reset(shop_id)
             shop = self.db.get(Shop, shop_id)
-            if shop and shop.slug == "trl-fashion-demo":
+            if shop and shop.slug == "trl-commerce-demo":
                 from app.scripts.seed_trl_demo_data import seed_trl_demo_data
 
                 seed_trl_demo_data(reset=False, db=self.db)
@@ -254,9 +255,12 @@ class TRLValidationRunner:
         if customer is None:
             customer = Customer(shop_id=shop_id, instagram_user_id=customer_key, full_name="TRL Customer")
             self.db.add(customer); self.db.flush()
+        channel_account_id = get_instagram_channel_account_id(self.db, ig.id)
         conv = Conversation(
             shop_id=shop_id,
             instagram_account_id=ig.id,
+            channel_account_id=channel_account_id,
+            external_conversation_id=f"trl:{run_id}:{scenario['scenario_id']}",
             customer_id=customer.id,
             channel_provider="instagram",
             channel_conversation_id=f"trl:{run_id}:{scenario['scenario_id']}",
@@ -265,7 +269,11 @@ class TRLValidationRunner:
         )
         self.db.add(conv); self.db.flush()
         msg = Message(
+            shop_id=shop_id,
             conversation_id=conv.id,
+            customer_id=customer.id,
+            channel_provider=MessageChannel.INSTAGRAM.value,
+            channel_account_id=channel_account_id,
             direction=MessageDirection.INBOUND,
             channel=MessageChannel.INSTAGRAM,
             instagram_message_id=f"trl:{run_id}:{scenario['scenario_id']}",

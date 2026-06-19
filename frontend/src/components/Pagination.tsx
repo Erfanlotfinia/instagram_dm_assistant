@@ -1,11 +1,15 @@
+import { Button } from './ui';
+import { cn } from '../lib/cn';
+
 interface PaginationProps {
   page: number;
   pageSize: number;
   totalItems: number;
   onPageChange: (page: number) => void;
+  className?: string;
 }
 
-export function Pagination({ page, pageSize, totalItems, onPageChange }: PaginationProps) {
+export function Pagination({ page, pageSize, totalItems, onPageChange, className }: PaginationProps) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const start = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, totalItems);
@@ -15,30 +19,26 @@ export function Pagination({ page, pageSize, totalItems, onPageChange }: Paginat
   }
 
   return (
-    <div className="pagination">
-      <p className="pagination__info">
+    <div className={cn('flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3', className)}>
+      <p className="text-xs text-muted">
         Showing {start}–{end} of {totalItems}
       </p>
-      <div className="button-row">
-        <button
-          className="button button--ghost-dark"
-          type="button"
-          disabled={page <= 1}
-          onClick={() => onPageChange(page - 1)}
-        >
+      <div className="flex items-center gap-2">
+        <Button variant="secondary" size="sm" type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
           Previous
-        </button>
-        <span className="pagination__page">
+        </Button>
+        <span className="min-w-[5rem] text-center text-xs tabular-nums text-muted">
           Page {page} of {totalPages}
         </span>
-        <button
-          className="button button--ghost-dark"
+        <Button
+          variant="secondary"
+          size="sm"
           type="button"
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
         >
           Next
-        </button>
+        </Button>
       </div>
     </div>
   );
