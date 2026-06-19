@@ -1,5 +1,5 @@
 CATEGORY_PRESETS = [
-    ("fashion-clothing", "Fashion and clothing", ["color", "size", "material", "fit", "gender", "season"]),
+    ("clothing-apparel", "Clothing and apparel", ["color", "size", "material", "fit", "gender", "season"]),
     ("shoes-bags", "Shoes and bags", ["size", "color", "material", "style"]),
     ("electronics", "Electronics", ["model", "storage", "ram", "color", "warranty", "region", "voltage"]),
     ("cosmetics-beauty", "Cosmetics and beauty", ["shade", "skin_type", "volume", "scent", "ingredients", "expiration_date"]),

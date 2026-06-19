@@ -147,7 +147,7 @@ class TRLValidationRunner:
         if reset_demo_data:
             self.reset(shop_id)
             shop = self.db.get(Shop, shop_id)
-            if shop and shop.slug == "trl-fashion-demo":
+            if shop and shop.slug == "trl-commerce-demo":
                 from app.scripts.seed_trl_demo_data import seed_trl_demo_data
 
                 seed_trl_demo_data(reset=False, db=self.db)

@@ -35,7 +35,7 @@ If the agent repeatedly fails:
 1. Check product mapping for the Instagram post URL.
 2. Verify variant stock in **Products**.
 3. Review conversation slots in conversation detail.
-4. Contact admin if Instagram token or webhook is disconnected.
+4. Contact an admin if channel credentials or webhooks are disconnected.
 
 
 ## Fashion order operator guide

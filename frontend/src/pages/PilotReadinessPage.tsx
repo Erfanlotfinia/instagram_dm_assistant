@@ -292,7 +292,7 @@ export function PilotReadinessPage() {
     <HubPage
       eyebrow="Field pilot operations"
       title="TRL 6 Pilot Readiness"
-      description="Operational checklist, safeguards, live metrics, and event log for realistic Instagram fashion order pilots."
+      description="Operational checklist, safeguards, live metrics, and event log for realistic multi-channel commerce pilots."
     >
       {!selectedShopId ? (
         <Card>

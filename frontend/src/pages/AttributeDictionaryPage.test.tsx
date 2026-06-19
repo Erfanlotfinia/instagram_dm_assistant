@@ -26,6 +26,6 @@ describe('AttributeDictionaryPage', () => {
     expect(screen.getByRole('heading', { name: 'Attribute dictionary' })).toBeInTheDocument();
     expect(screen.getByText('storage: ۱۲۸ گیگ → 128GB')).toBeInTheDocument();
     expect(screen.getByText('warranty: گارانتی دار → with_warranty')).toBeInTheDocument();
-    expect(screen.queryByText(/Fashion Dictionary/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Legacy Dictionary/i)).not.toBeInTheDocument();
   });
 });

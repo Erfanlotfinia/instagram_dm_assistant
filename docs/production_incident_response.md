@@ -4,7 +4,7 @@
 
 1. Disable auto-send in shop agent settings.
 2. Pause worker/scheduler containers if message processing must stop immediately.
-3. Revoke compromised Instagram tokens and rotate secrets if suspected leak.
+3. Revoke compromised channel credentials and rotate secrets if a leak is suspected.
 
 ## Failed webhook spike
 

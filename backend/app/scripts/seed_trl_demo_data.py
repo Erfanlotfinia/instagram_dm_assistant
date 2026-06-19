@@ -23,7 +23,7 @@ from app.domain.models import (
     User,
 )
 
-DEMO_SHOP_SLUG = "trl-fashion-demo"
+DEMO_SHOP_SLUG = "trl-commerce-demo"
 DEMO_ADMIN_EMAIL = "trl-admin@example.com"
 DEMO_OPERATOR_EMAIL = "trl-operator@example.com"
 

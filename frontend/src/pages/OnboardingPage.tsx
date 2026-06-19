@@ -19,9 +19,9 @@ export function OnboardingPage() {
 
   return (
     <HubPage
-      eyebrow="Fashion agent setup"
+      eyebrow="Modira setup"
       title="Onboarding checklist"
-      description="Complete these steps before enabling autonomous Instagram fashion ordering."
+      description="Complete these steps before enabling autonomous multi-channel commerce operations."
     >
       {!selectedShopId ? (
         <Card>
