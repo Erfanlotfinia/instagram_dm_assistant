@@ -14,6 +14,7 @@ from app.core.config import Settings, get_settings
 from app.domain.enums import (
     ChannelAccountStatus,
     ChannelMessageType,
+    ChannelProvider,
     FailedJobStatus,
     MessageChannel,
     MessageDirection,
@@ -314,7 +315,7 @@ class ChannelOutboundService:
             raise ValueError(f"Conversation {conversation_id} does not exist")
         if not conversation.channel_account_id or not conversation.external_conversation_id:
             raise ValueError("Conversation is missing channel routing information")
-        provider = conversation.channel_provider
+        provider = ChannelProvider(conversation.channel_provider)
         result = asyncio.run(
             self.send(
                 NormalizedOutboundMessage(

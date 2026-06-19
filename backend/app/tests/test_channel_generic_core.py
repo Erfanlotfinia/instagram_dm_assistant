@@ -6,6 +6,7 @@ from app.domain.enums import ChannelAccountStatus, ChannelProvider
 from app.domain.models import ChannelAccount, ChannelContactIdentity, Customer, Shop
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.customer_repository import CustomerRepository
+from app.schemas.conversation import ConversationRead
 
 
 @pytest.mark.parametrize(
@@ -153,3 +154,33 @@ def test_create_conversation_without_instagram_account(db_session) -> None:
     assert conversation.instagram_account_id is None
     assert conversation.channel_account_id == account.id
     assert conversation.external_conversation_id == "chat-1"
+
+
+def test_channel_conversation_without_instagram_ids_serializes(db_session) -> None:
+    shop = Shop(name="Serializable", slug=f"serializable-{uuid4()}")
+    db_session.add(shop)
+    db_session.flush()
+    account = ChannelAccount(
+        shop_id=shop.id,
+        provider=ChannelProvider.WHATSAPP,
+        display_name="WhatsApp",
+        external_account_id=str(uuid4()),
+    )
+    customer = Customer(shop_id=shop.id, display_name="WhatsApp Customer")
+    db_session.add_all([account, customer])
+    db_session.flush()
+
+    conversation = ConversationRepository(db_session).get_or_create_conversation_by_channel(
+        shop_id=shop.id,
+        customer_id=customer.id,
+        provider=ChannelProvider.WHATSAPP,
+        channel_account_id=account.id,
+        external_conversation_id="wa-chat-1",
+    )
+    conversation.customer = customer
+
+    serialized = ConversationRead.model_validate(conversation)
+
+    assert serialized.instagram_account_id is None
+    assert serialized.customer is not None
+    assert serialized.customer.instagram_user_id is None

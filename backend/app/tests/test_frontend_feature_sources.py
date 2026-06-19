@@ -21,28 +21,30 @@ def test_frontend_competitive_pages_render_core_labels():
 
     onboarding = onboarding_path.read_text(encoding="utf-8")
     simulator = (REPO_ROOT / "frontend/src/pages/DMSimulatorPage.tsx").read_text(encoding="utf-8")
-    analytics = (REPO_ROOT / "frontend/src/pages/AnalyticsPage.tsx").read_text(encoding="utf-8")
+    analytics_overview = (REPO_ROOT / "frontend/src/pages/AnalyticsOverviewPage.tsx").read_text(encoding="utf-8")
+    unavailable_demand = (REPO_ROOT / "frontend/src/pages/UnavailableDemandPage.tsx").read_text(encoding="utf-8")
     conversation = (REPO_ROOT / "frontend/src/pages/ConversationDetailPage.tsx").read_text(encoding="utf-8")
     orders = (REPO_ROOT / "frontend/src/pages/OrdersPage.tsx").read_text(encoding="utf-8")
 
     assert "Onboarding checklist" in onboarding
     assert "DM Simulator" in simulator
     assert "Suggested reply" in simulator
-    assert "Funnel cards" in analytics
-    assert "Unavailable demand" in analytics
+    assert "Conversion funnel" in analytics_overview
+    assert "Unavailable demand" in unavailable_demand
     suggested_reply_panel = (
         REPO_ROOT / "frontend/src/components/conversations/SuggestedReplyPanel.tsx"
     ).read_text(encoding="utf-8")
     assert "SuggestedReplyPanel" in conversation
     assert "Approve and send" in suggested_reply_panel
-    assert "Risk" in orders
+    assert "Orders" in orders
 
 
 def test_attribute_dictionary_route_replaces_fashion_dictionary():
     routes = (REPO_ROOT / "frontend/src/routes/AppRoutes.tsx").read_text(encoding="utf-8")
+    nav_config = (REPO_ROOT / "frontend/src/components/shell/navConfig.tsx").read_text(encoding="utf-8")
     page = (REPO_ROOT / "frontend/src/pages/AttributeDictionaryPage.tsx").read_text(encoding="utf-8")
 
     assert 'path="attributes" element={<AttributeDictionaryPage />}' in routes
-    assert "/catalog/attributes" in routes
+    assert "/catalog/attributes" in nav_config
     assert 'title="Attribute dictionary"' in page
     assert "Legacy Dictionary" not in page

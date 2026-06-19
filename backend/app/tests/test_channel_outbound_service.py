@@ -103,7 +103,6 @@ def test_send_text_message_commit_false_preserves_caller_transaction(monkeypatch
         channel_provider=ChannelProvider.TELEGRAM.value,
         external_conversation_id="chat-1",
     )
-    conversation.channel_provider = ChannelProvider.TELEGRAM
     session = WrapperSession(conversation)
     service = ChannelOutboundService(session)
     observed_commit = None

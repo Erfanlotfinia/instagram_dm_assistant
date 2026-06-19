@@ -22,7 +22,7 @@ class CustomerSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    instagram_user_id: str
+    instagram_user_id: str | None = None
     full_name: str | None = None
 
 
@@ -30,7 +30,7 @@ class CustomerRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    instagram_user_id: str
+    instagram_user_id: str | None = None
     full_name: str | None = None
     phone: str | None = None
     city: str | None = None
@@ -78,7 +78,7 @@ class ConversationRead(BaseModel):
 
     id: UUID
     shop_id: UUID
-    instagram_account_id: UUID
+    instagram_account_id: UUID | None = None
     channel_provider: str = "instagram"
     channel_conversation_id: str | None = None
     channel_customer_id: str | None = None
