@@ -32,6 +32,9 @@ from app.domain.enums import (
     ChannelConnectionMethod,
     ChannelConnectionProvider,
     ChannelConnectionSessionStatus,
+    ConversationResponseMode,
+    TelegramConnectionMode,
+    TelegramConnectionSessionStatus,
     ChannelConversationStatus,
     ChannelMessageType,
     ChannelProvider,
@@ -246,6 +249,53 @@ class ChannelAccount(Base, TimestampMixin):
     settings_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     last_validation_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    connection_mode: Mapped[TelegramConnectionMode | None] = mapped_column(
+        pg_enum(TelegramConnectionMode, name="telegram_connection_mode"),
+        nullable=True,
+        index=True,
+    )
+    telegram_business_connection_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    telegram_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    telegram_username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    telegram_chat_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    telegram_rights_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    telegram_capabilities_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    telegram_last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    telegram_business_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    managed_bot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    manager_bot_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    managed_bot_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+
+
+class TelegramConnectionSession(Base, TimestampMixin):
+    __tablename__ = "telegram_connection_sessions"
+    __table_args__ = (UniqueConstraint("state", name="uq_telegram_connection_sessions_state"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    channel_account_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("channel_accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    mode: Mapped[TelegramConnectionMode] = mapped_column(
+        pg_enum(TelegramConnectionMode, name="telegram_connection_mode"),
+        nullable=False,
+    )
+    status: Mapped[TelegramConnectionSessionStatus] = mapped_column(
+        pg_enum(TelegramConnectionSessionStatus, name="telegram_connection_session_status"),
+        nullable=False,
+        default=TelegramConnectionSessionStatus.PENDING,
+        index=True,
+    )
+    state: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    created_by: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
 
 class ChannelConnectionSession(Base, TimestampMixin):
@@ -457,6 +507,12 @@ class Conversation(Base, TimestampMixin):
     )
     agent_failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     agent_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    response_mode: Mapped[ConversationResponseMode] = mapped_column(
+        pg_enum(ConversationResponseMode, name="conversation_response_mode"),
+        nullable=False,
+        default=ConversationResponseMode.AI,
+        index=True,
+    )
     is_simulation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     suggested_outbound: Mapped[str | None] = mapped_column(Text, nullable=True)
     preview_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

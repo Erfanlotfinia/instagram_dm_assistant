@@ -15,6 +15,7 @@ from app.domain.enums import (
     AgentRunStatus,
     AgentWorkflowState,
     ConversationEventType,
+    ConversationResponseMode,
     ConversationState,
     PilotOperatingMode,
     TraceEventType,
@@ -151,7 +152,14 @@ class ConversationOrchestrator:
             description=(message.text or "")[:200] or None,
             metadata={"message_id": str(message.id)},
         )
-        if conversation.agent_paused or conversation.assigned_operator_id is not None:
+        if (
+            conversation.agent_paused
+            or conversation.assigned_operator_id is not None
+            or conversation.response_mode in {
+                ConversationResponseMode.HUMAN,
+                ConversationResponseMode.PAUSED,
+            }
+        ):
             logger.info("Conversation %s is under human control; skipping agent", conversation_id)
             ConversationPriorityService(self.db).refresh(conversation_id)
             self.db.commit()

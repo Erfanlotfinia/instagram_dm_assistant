@@ -13,6 +13,8 @@ export type AgentWorkflowState =
   | 'cancelled'
   | 'human_handoff';
 
+export type ConversationResponseMode = 'ai' | 'human' | 'hybrid' | 'paused';
+
 export type ConversationPriorityLevel = 'urgent' | 'high' | 'medium' | 'low';
 
 export type ConversationEventType =
@@ -193,6 +195,7 @@ export interface Conversation {
   state: ConversationState;
   workflow_state: AgentWorkflowState;
   agent_paused: boolean;
+  response_mode?: ConversationResponseMode;
   is_simulation?: boolean;
   suggested_outbound?: string | null;
   preview_required?: boolean;
@@ -269,6 +272,7 @@ export interface ConversationHandoffResponse {
   handoff_required: boolean;
   handoff_reason: string | null;
   agent_paused: boolean;
+  response_mode?: ConversationResponseMode;
   suggested_outbound?: string | null;
   preview_required?: boolean;
   preview_reason?: string | null;

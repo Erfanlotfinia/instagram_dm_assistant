@@ -3,7 +3,8 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 from app.core.security import encrypt_secret
-from app.domain.enums import InstagramAccountStatus, WebhookProcessingStatus
+from app.domain.enums import MessageChannel, MessageDirection, MessageType, WebhookProvider
+from app.domain.enums import ChannelProvider, InstagramAccountStatus, WebhookProcessingStatus
 from app.domain.models import (
     Conversation,
     Customer,
@@ -11,10 +12,10 @@ from app.domain.models import (
     Message,
     WebhookEvent,
 )
-from app.domain.enums import MessageChannel, MessageDirection, MessageType, WebhookProvider
 from app.integrations.redis_lock import ConversationLockService
 from app.schemas.queue_events import InvalidJobPayloadError, MessageReceivedJob, validate_message_received_payload
 from app.services.webhook_ingestion_service import WebhookIngestionService
+from app.tests.fixtures.instagram import build_instagram_conversation, seed_instagram_channel_account
 from app.tests.fixtures.instagram_webhook import SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD
 from app.workers.message_consumer import MessageConsumer, handle_delivery
 
@@ -59,28 +60,25 @@ def test_message_consumer_marks_webhook_processed(db_session, demo_shop) -> None
 
 
 def test_message_consumer_is_idempotent_for_processed_event(db_session, demo_shop) -> None:
-    account = InstagramAccount(
-        shop_id=demo_shop.id,
-        ig_user_id="17841400000000001",
-        username="demo_shop",
-        access_token_encrypted=encrypt_secret("token"),
-        status=InstagramAccountStatus.CONNECTED,
-    )
-    db_session.add(account)
-    db_session.commit()
+    account, channel_account = seed_instagram_channel_account(db_session, demo_shop)
 
     customer = Customer(shop_id=demo_shop.id, instagram_user_id="cust")
     db_session.add(customer)
     db_session.flush()
-    conversation = Conversation(
-        shop_id=demo_shop.id,
-        instagram_account_id=account.id,
-        customer_id=customer.id,
+    conversation = build_instagram_conversation(
+        db_session,
+        demo_shop,
+        account,
+        channel_account,
+        customer,
+        external_id="cust",
     )
-    db_session.add(conversation)
-    db_session.flush()
     message = Message(
+        shop_id=demo_shop.id,
         conversation_id=conversation.id,
+        customer_id=customer.id,
+        channel_provider=ChannelProvider.INSTAGRAM,
+        channel_account_id=channel_account.id,
         direction=MessageDirection.INBOUND,
         channel=MessageChannel.INSTAGRAM,
         message_type=MessageType.TEXT,

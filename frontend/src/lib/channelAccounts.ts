@@ -149,6 +149,11 @@ export function getSetupChecklist(account: ChannelAccount): SetupChecklistItem[]
     case 'rubika':
       items.push(
         {
+          id: 'connection_mode',
+          label: 'Connection mode',
+          done: Boolean(account.connection_mode),
+        },
+        {
           id: 'bot_username',
           label: 'Bot username',
           done: Boolean(account.bot_username),
@@ -164,6 +169,13 @@ export function getSetupChecklist(account: ChannelAccount): SetupChecklistItem[]
           done: account.webhook_secret_configured,
         },
       );
+      if (account.provider === 'telegram' && account.connection_mode !== 'bot') {
+        items.push({
+          id: 'business_connection',
+          label: 'Business connection',
+          done: Boolean(account.telegram_business_enabled && account.telegram_business_connection_id),
+        });
+      }
       if (account.provider === 'telegram') {
         items.push({
           id: 'webhook_verify_token',
@@ -195,6 +207,7 @@ export function getStatusTone(status: ChannelAccount['status']): 'success' | 'wa
     case 'connected':
     case 'webhook_configured':
       return 'success';
+    case 'disconnected':
     case 'error':
       return 'danger';
     case 'disabled':
@@ -212,4 +225,51 @@ export function getCapabilityLabels(account: ChannelAccount): string[] {
 
 export function configuredLabel(configured: boolean): string {
   return configured ? 'Configured' : 'Not configured';
+}
+
+const TELEGRAM_RIGHT_LABELS: Record<string, string> = {
+  can_reply: 'Reply to messages',
+  can_read_messages: 'Read messages',
+  can_delete_sent_messages: 'Delete sent messages',
+  can_delete_all_messages: 'Delete all messages',
+  can_edit_name: 'Edit name',
+  can_edit_bio: 'Edit bio',
+  can_edit_profile_photo: 'Edit profile photo',
+  can_edit_username: 'Edit username',
+  can_view_gifts_and_stars: 'View gifts and stars',
+};
+
+export function formatTelegramRights(rights: Record<string, unknown> | undefined | null): string {
+  if (!rights || Object.keys(rights).length === 0) {
+    return 'No rights reported';
+  }
+  const enabled = Object.entries(rights)
+    .filter(([, value]) => value === true)
+    .map(([key]) => TELEGRAM_RIGHT_LABELS[key] ?? key.replace(/_/g, ' '));
+  return enabled.length > 0 ? enabled.join(', ') : 'No active rights';
+}
+
+export function formatTelegramLastSync(iso: string | null | undefined): string {
+  if (!iso) {
+    return 'Never synced';
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  return date.toLocaleString();
+}
+
+export function getTelegramAccountLabel(account: ChannelAccount): string | null {
+  if (account.telegram_username) {
+    return `@${account.telegram_username}`;
+  }
+  if (account.telegram_user_id) {
+    return `User ${account.telegram_user_id}`;
+  }
+  return null;
+}
+
+export function isTelegramBusinessActive(account: ChannelAccount): boolean {
+  return Boolean(account.telegram_business_enabled && account.telegram_business_connection_id);
 }

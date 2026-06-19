@@ -6,6 +6,7 @@ import { ChannelAccountCreateForm } from '../components/channels/ChannelAccountC
 import { ChannelCredentialsDialog } from '../components/channels/ChannelCredentialsDialog';
 import { InstagramAdvancedSetup } from '../components/channels/InstagramAdvancedSetup';
 import { InstagramConnectCard } from '../components/channels/InstagramConnectCard';
+import { TelegramConnectCard } from '../components/channels/TelegramConnectCard';
 import { InstagramReadinessPanel } from '../components/channels/InstagramReadinessPanel';
 import { Callout, Card, CardBody, CardHeader } from '../components/ui';
 import { EmptyState, LoadingState } from '../components/data';
@@ -32,7 +33,24 @@ export function ChannelAccountsPage() {
     ) ??
     accounts.find((account) => account.provider === 'instagram' && account.status !== 'disabled') ??
     null;
-  const otherAccounts = accounts.filter((account) => account.provider !== 'instagram');
+  const telegramAccount =
+    accounts.find(
+      (account) =>
+        account.provider === 'telegram' &&
+        account.status !== 'disabled' &&
+        account.status !== 'disconnected' &&
+        account.bot_token_configured,
+    ) ??
+    accounts.find(
+      (account) =>
+        account.provider === 'telegram' &&
+        account.status !== 'disabled' &&
+        account.status !== 'disconnected',
+    ) ??
+    null;
+  const otherAccounts = accounts.filter(
+    (account) => account.provider !== 'instagram' && account.provider !== 'telegram',
+  );
 
   async function loadAccounts() {
     if (!selectedShopId) {
@@ -156,6 +174,15 @@ export function ChannelAccountsPage() {
             />
           )}
 
+          {!isLoading ? (
+            <TelegramConnectCard
+              shopId={selectedShopId}
+              account={telegramAccount}
+              canManage={canManageCredentials}
+              onRefresh={() => void loadAccounts()}
+            />
+          ) : null}
+
           {canManageCredentials ? (
             <InstagramAdvancedSetup shopId={selectedShopId} onSaved={() => void loadAccounts()} />
           ) : null}
@@ -167,7 +194,7 @@ export function ChannelAccountsPage() {
               title="Add other channel accounts"
               description={
                 canManageCredentials
-                  ? 'Connect WhatsApp, Telegram, Bale, or Rubika with encrypted credentials.'
+                  ? 'Connect WhatsApp, Bale, or Rubika with encrypted credentials.'
                   : 'View-only access. Contact an owner or admin to add channels.'
               }
             />

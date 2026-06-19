@@ -5,11 +5,12 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.domain.enums import AgentMode, ChannelAccountStatus, ChannelProvider
+from app.domain.enums import AgentMode, ChannelAccountStatus, ChannelProvider, InstagramAccountStatus
 from app.domain.models import (
     ChannelAccount,
     ColorAlias,
     Conversation,
+    InstagramAccount,
     InstagramProductMap,
     Product,
     ProductVariant,
@@ -62,6 +63,12 @@ class OnboardingStatusService:
                 ChannelAccount.status != ChannelAccountStatus.DISABLED,
             )
         ) or 0
+        legacy_instagram_count = self.db.scalar(
+            select(func.count(InstagramAccount.id)).where(
+                InstagramAccount.shop_id == shop_id,
+                InstagramAccount.status != InstagramAccountStatus.DISCONNECTED,
+            )
+        ) or 0
         product_count = self.db.scalar(
             select(func.count(Product.id)).where(Product.shop_id == shop_id)
         ) or 0
@@ -87,7 +94,7 @@ class OnboardingStatusService:
 
         completion_checks: dict[str, bool] = {
             "shop_profile": bool(shop.name and shop.slug),
-            "connect_instagram": account_count > 0,
+            "connect_instagram": account_count > 0 or legacy_instagram_count > 0,
             "first_product": product_count > 0,
             "first_variant": variant_count > 0,
             "map_post": map_count > 0,

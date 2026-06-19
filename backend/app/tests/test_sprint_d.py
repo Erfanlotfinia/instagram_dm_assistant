@@ -6,6 +6,7 @@ from decimal import Decimal
 import pytest
 
 from app.domain.enums import (
+    ChannelProvider,
     MessageChannel,
     MessageDirection,
     MessageType,
@@ -87,8 +88,13 @@ def _recovery_rule(db_session, shop_id, *, trigger_after_minutes: int = 30, max_
 
 
 def _inbound_message(db_session, conversation_id) -> Message:
+    conversation = db_session.get(Conversation, conversation_id)
     message = Message(
+        shop_id=conversation.shop_id,
         conversation_id=conversation_id,
+        customer_id=conversation.customer_id,
+        channel_provider=ChannelProvider.INSTAGRAM,
+        channel_account_id=conversation.channel_account_id,
         direction=MessageDirection.INBOUND,
         channel=MessageChannel.INSTAGRAM,
         message_type=MessageType.TEXT,

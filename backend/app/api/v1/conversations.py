@@ -17,6 +17,7 @@ from app.schemas.conversation import (
     ConversationListFilters,
     ConversationRead,
     ConversationResolveResponse,
+    ConversationResponseModeRequest,
     CustomerRead,
     MessageCreate,
     MessageRead,
@@ -82,14 +83,20 @@ def list_conversations(
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetailRead)
-def get_conversation(
+async def get_conversation(
     shop_id: UUID,
     conversation_id: UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     _membership: Annotated[ShopMember, Depends(get_shop_membership)],
     db: Annotated[Session, Depends(get_db_session)],
 ) -> ConversationDetailRead:
-    return ConversationService(db).get_conversation_detail(shop_id, conversation_id, current_user)
+    service = ConversationService(db)
+    detail = service.get_conversation_detail(shop_id, conversation_id, current_user)
+    try:
+        await service.mark_telegram_business_read(shop_id, conversation_id)
+    except Exception:
+        pass
+    return detail
 
 
 @router.post("/{conversation_id}/messages", response_model=MessageRead, status_code=201)
@@ -129,6 +136,22 @@ def take_over_conversation(
     db: Annotated[Session, Depends(get_db_session)],
 ) -> ConversationHandoffResponse:
     result = ConversationService(db).take_over(shop_id, conversation_id, current_user)
+    publish_event(shop_id, "conversation.updated", {"conversation_id": str(conversation_id)})
+    return result
+
+
+@router.post("/{conversation_id}/response-mode", response_model=ConversationHandoffResponse)
+def set_conversation_response_mode(
+    shop_id: UUID,
+    conversation_id: UUID,
+    payload: ConversationResponseModeRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    _membership: Annotated[ShopMember, Depends(require_shop_role(UserRole.OPERATOR))],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> ConversationHandoffResponse:
+    result = ConversationService(db).set_response_mode(
+        shop_id, conversation_id, payload.response_mode, current_user
+    )
     publish_event(shop_id, "conversation.updated", {"conversation_id": str(conversation_id)})
     return result
 

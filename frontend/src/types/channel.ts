@@ -1,5 +1,16 @@
 export type ChannelProvider = 'instagram' | 'whatsapp' | 'telegram' | 'bale' | 'rubika';
-export type ChannelAccountStatus = 'draft' | 'connected' | 'webhook_configured' | 'disabled' | 'error';
+export type ChannelAccountStatus = 'draft' | 'connected' | 'webhook_configured' | 'disconnected' | 'disabled' | 'error';
+
+export type TelegramConnectionMode = 'bot' | 'business' | 'hybrid';
+
+export type TelegramConnectionSessionStatus =
+  | 'pending'
+  | 'waiting_bot_token'
+  | 'waiting_managed_bot_approval'
+  | 'waiting_business_connection'
+  | 'connected'
+  | 'failed'
+  | 'expired';
 
 export interface ChannelCapabilities {
   supports_webhook: boolean;
@@ -37,6 +48,18 @@ export interface ChannelAccount {
   status: ChannelAccountStatus;
   capabilities_json: Partial<ChannelCapabilities>;
   settings_json: Record<string, unknown>;
+  connection_mode?: TelegramConnectionMode | null;
+  telegram_business_connection_id?: string | null;
+  telegram_user_id?: string | null;
+  telegram_username?: string | null;
+  telegram_chat_id?: string | null;
+  telegram_rights_json?: Record<string, unknown>;
+  telegram_capabilities_json?: Record<string, unknown>;
+  telegram_last_sync_at?: string | null;
+  telegram_business_enabled?: boolean;
+  managed_bot?: boolean;
+  manager_bot_id?: string | null;
+  managed_bot_id?: string | null;
   token_configured: boolean;
   bot_token_configured: boolean;
   webhook_secret_configured: boolean;
@@ -56,6 +79,7 @@ export interface ChannelAccountCreate {
   bot_id?: string;
   webhook_verify_token?: string;
   settings?: Record<string, unknown>;
+  connection_mode?: TelegramConnectionMode;
 }
 
 export interface ChannelAccountUpdate {
@@ -67,6 +91,7 @@ export interface ChannelAccountUpdate {
   webhook_verify_token?: string;
   settings?: Record<string, unknown>;
   status?: ChannelAccountStatus;
+  connection_mode?: TelegramConnectionMode;
 }
 
 export interface ChannelAccountCredentials {
@@ -134,6 +159,40 @@ export interface InstagramReadiness {
   webhook_callback_reachable: boolean;
   webhook_callback_url: string;
   app_review_status: string;
+}
+
+export interface TelegramConnectStartResponse {
+  session_id: string;
+  expires_at: string;
+  status: TelegramConnectionSessionStatus;
+  deep_link?: string | null;
+  suggested_bot_username?: string | null;
+  managed_bot?: boolean;
+}
+
+export interface TelegramConnectSession {
+  id: string;
+  shop_id: string;
+  mode: TelegramConnectionMode;
+  status: TelegramConnectionSessionStatus;
+  expires_at: string;
+  completed_at?: string | null;
+  error_message?: string | null;
+  channel_account_id?: string | null;
+  bot_username?: string | null;
+  bot_id?: string | null;
+  telegram_business_enabled?: boolean;
+  deep_link?: string | null;
+  suggested_bot_username?: string | null;
+  managed_bot?: boolean;
+  metadata_json?: Record<string, unknown>;
+}
+
+export interface TelegramConnectStartRequest {
+  mode: TelegramConnectionMode;
+  display_name?: string;
+  channel_account_id?: string;
+  managed_bot?: boolean;
 }
 
 export interface TelegramWebhookInfo {

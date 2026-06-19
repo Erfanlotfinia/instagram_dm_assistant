@@ -126,6 +126,22 @@ class Settings(BaseSettings):
         default="Platform Admin",
         description="Display name for the bootstrap admin created on startup (local/dev)",
     )
+    telegram_manager_bot_token: str = Field(
+        default="",
+        description="Platform Telegram manager bot token for managed bot provisioning",
+    )
+    telegram_manager_bot_username: str = Field(
+        default="",
+        description="Platform Telegram manager bot username (without @)",
+    )
+    telegram_manager_bot_id: str = Field(
+        default="",
+        description="Platform Telegram manager bot user id",
+    )
+    telegram_manager_webhook_secret: str = Field(
+        default="",
+        description="Secret token for verifying manager bot webhook requests",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

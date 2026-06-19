@@ -94,13 +94,18 @@ def test_trl_reset_only_deletes_trl_owned_simulation_records(db_session: Session
     run = runner.run(shop_id, scenario_limit=1)
 
     ig = db_session.scalar(select(InstagramAccount).where(InstagramAccount.shop_id == shop_id).limit(1))
+    from app.services.legacy_channel_compat import ensure_channel_account_for_legacy_instagram
+
+    channel_account = ensure_channel_account_for_legacy_instagram(db_session, ig)
     customer = Customer(shop_id=shop_id, instagram_user_id="simulator_customer", full_name="Simulator Customer")
     db_session.add(customer); db_session.flush()
     simulator_conversation = Conversation(
         shop_id=shop_id,
         instagram_account_id=ig.id,
+        channel_account_id=channel_account.id,
         customer_id=customer.id,
         channel_provider="instagram",
+        external_conversation_id="simulator:unrelated",
         channel_conversation_id="simulator:unrelated",
         channel_customer_id=customer.instagram_user_id,
         is_simulation=True,

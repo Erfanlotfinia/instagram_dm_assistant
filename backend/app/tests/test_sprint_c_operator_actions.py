@@ -7,6 +7,7 @@ from app.domain.models import InstagramAccount
 from app.services.order_service import OrderService
 from app.services.webhook_ingestion_service import WebhookIngestionService
 from app.tests.fixtures.agent import seed_order_flow_data
+from app.tests.fixtures.instagram import build_instagram_conversation
 from app.tests.fixtures.instagram_webhook import SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD
 from app.tests.fixtures.orders import seed_draft_order
 
@@ -46,14 +47,18 @@ def test_manual_message_creates_audit_and_event(
 ) -> None:
     from uuid import uuid4
 
-    from app.domain.models import Message
-    from app.domain.enums import MessageDirection, MessageType, MessageChannel
+    from app.domain.enums import ChannelProvider, MessageDirection, MessageType, MessageChannel
+    from app.domain.models import Conversation, Message
 
     conversation_id = _create_conversation(client, auth_headers, db_session, demo_shop)
 
     def _persist_outbound_message(conv_id, text, **_kwargs):
+        conv = db_session.get(Conversation, conv_id)
         message = Message(
             id=uuid4(),
+            shop_id=conv.shop_id,
+            channel_account_id=conv.channel_account_id,
+            channel_provider=ChannelProvider.INSTAGRAM,
             conversation_id=conv_id,
             direction=MessageDirection.OUTBOUND,
             channel=MessageChannel.INSTAGRAM,
@@ -160,13 +165,14 @@ def test_mark_paid_and_cancel_order(client, auth_headers, db_session, demo_shop,
     customer2 = Customer(shop_id=demo_shop.id, instagram_user_id="cust-cancel-2")
     db_session.add(customer2)
     db_session.flush()
-    conversation2 = Conversation(
-        shop_id=demo_shop.id,
-        instagram_account_id=data["account"].id,
-        customer_id=customer2.id,
+    conversation2 = build_instagram_conversation(
+        db_session,
+        demo_shop,
+        data["account"],
+        data["channel_account"],
+        customer2,
+        external_id="cust-cancel-2",
     )
-    db_session.add(conversation2)
-    db_session.flush()
     order2 = seed_draft_order(
         db_session,
         shop_id=demo_shop.id,

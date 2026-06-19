@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.core.security import decrypt_secret
 from app.domain.enums import (
     ChannelAccountStatus,
     ChannelMessageType,
@@ -32,6 +33,7 @@ from app.schemas.channels import NormalizedOutboundMessage, ProviderSendResult
 from app.services.channel_account_service import ChannelAccountService, adapter_for_provider
 from app.services.channel_policy_service import ChannelPolicyService
 from app.services.pilot_service import PilotService
+from app.services.telegram_outbound_router import TelegramOutboundRouter
 
 logger = logging.getLogger(__name__)
 
@@ -239,7 +241,10 @@ class ChannelOutboundService:
             )
         else:
             try:
-                result = await adapter.send_message(message, account)
+                if message.provider == ChannelProvider.TELEGRAM:
+                    result = await TelegramOutboundRouter.send(account, message, self.db)
+                else:
+                    result = await adapter.send_message(message, account)
             except Exception as exc:  # noqa: BLE001
                 result = self._result(
                     message,
@@ -249,7 +254,10 @@ class ChannelOutboundService:
                     retryable=True,
                 )
 
-        credentials = [ChannelAccountService(self.db).decrypt_access_token(account)]
+        credentials = [
+            ChannelAccountService(self.db).decrypt_access_token(account),
+            decrypt_secret(account.bot_token_encrypted) if account.bot_token_encrypted else None,
+        ]
         result.error_message = self._safe_error(result.error_message, credentials)
         intent.external_message_id = result.external_message_id
         intent.raw_payload_json = result.raw_response or {}
@@ -270,6 +278,9 @@ class ChannelOutboundService:
                         "channel_message_id": str(intent.id),
                         "channel_account_id": str(account.id),
                         "provider": message.provider.value,
+                        "connection_mode": (
+                            account.connection_mode.value if account.connection_mode else None
+                        ),
                         "external_chat_id": message.external_chat_id,
                         "conversation_id": str(conversation.id),
                         "idempotency_key": idempotency_key,

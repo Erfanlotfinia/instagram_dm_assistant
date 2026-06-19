@@ -3,12 +3,21 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.roles import has_minimum_role
-from app.domain.enums import ConversationState, SuggestedReplyStatus, UserRole
-from app.domain.enums import AgentWorkflowState
-from app.domain.models import SuggestedReply, User
+from app.domain.enums import (
+    AgentWorkflowState,
+    ChannelProvider,
+    ConversationEventType,
+    ConversationResponseMode,
+    ConversationState,
+    MessageDirection,
+    SuggestedReplyStatus,
+    UserRole,
+)
+from app.domain.models import Message, SuggestedReply, User
 from app.repositories.agent_action_repository import AgentActionRepository
 from app.repositories.agent_run_repository import AgentRunRepository
 from app.repositories.conversation_repository import ConversationRepository
@@ -46,7 +55,6 @@ from app.services.customer_service import CustomerService
 from app.services.channel_outbound_service import ChannelOutboundService
 from app.services.order_service import OrderService
 from app.services.shop_service import ShopService
-from app.domain.enums import ConversationEventType
 
 
 class ConversationService:
@@ -179,6 +187,56 @@ class ConversationService:
         detail.decision_trace_summary = self._build_decision_trace_summary(detail.agent_actions)
         return detail
 
+    async def mark_telegram_business_read(
+        self,
+        shop_id: UUID,
+        conversation_id: UUID,
+    ) -> None:
+        conversation = self.conversations.get_for_shop(shop_id, conversation_id)
+        if conversation is None or conversation.channel_provider != ChannelProvider.TELEGRAM.value:
+            return
+
+        from app.domain.enums import TelegramConnectionMode
+        from app.services.channel_account_service import ChannelAccountService
+        from app.services.telegram_business_connection_service import (
+            TelegramBusinessConnectionService,
+        )
+
+        account = ChannelAccountService(self.db).get(conversation.shop_id, conversation.channel_account_id)
+        if account is None:
+            return
+        mode = account.connection_mode or TelegramConnectionMode.BOT
+        if mode not in {TelegramConnectionMode.BUSINESS, TelegramConnectionMode.HYBRID}:
+            return
+        if not account.telegram_business_enabled:
+            return
+
+        last_inbound = self.db.scalar(
+            select(Message)
+            .where(
+                Message.conversation_id == conversation.id,
+                Message.direction == MessageDirection.INBOUND,
+            )
+            .order_by(Message.created_at.desc())
+            .limit(1)
+        )
+        if last_inbound is None or not last_inbound.external_message_id:
+            return
+
+        connection_id = None
+        meta = last_inbound.normalized_payload_json or {}
+        if isinstance(meta.get("business_connection_id"), str):
+            connection_id = meta["business_connection_id"]
+        elif isinstance(meta.get("raw_payload"), dict):
+            connection_id = meta["raw_payload"].get("business_connection_id")
+
+        await TelegramBusinessConnectionService(self.db).mark_read(
+            account,
+            conversation.external_conversation_id,
+            last_inbound.external_message_id,
+            connection_id=connection_id,
+        )
+
     def send_manual_message(
         self,
         shop_id: UUID,
@@ -226,6 +284,7 @@ class ConversationService:
         conversation = self._get_conversation_or_404(shop_id, conversation_id)
         conversation.agent_paused = True
         conversation.assigned_operator_id = user.id
+        conversation.response_mode = ConversationResponseMode.HUMAN
         conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
         conversation.handoff_required = True
         conversation.last_operator_action_at = datetime.now(UTC)
@@ -258,6 +317,7 @@ class ConversationService:
         conversation = self._get_conversation_or_404(shop_id, conversation_id)
         conversation.agent_paused = False
         conversation.assigned_operator_id = None
+        conversation.response_mode = ConversationResponseMode.AI
         conversation.handoff_required = False
         conversation.handoff_reason = None
         conversation.workflow_state = AgentWorkflowState.IDLE
@@ -275,6 +335,49 @@ class ConversationService:
             shop_id=shop_id,
             actor_user_id=user.id,
             entity_id=str(conversation.id),
+        )
+        self.priority_service.refresh(conversation.id)
+        self.db.commit()
+        self.db.refresh(conversation)
+        return self._handoff_response(conversation)
+
+    def set_response_mode(
+        self,
+        shop_id: UUID,
+        conversation_id: UUID,
+        mode: ConversationResponseMode,
+        user,
+    ) -> ConversationHandoffResponse:
+        self.shop_service.get_shop(shop_id, user)
+        conversation = self._get_conversation_or_404(shop_id, conversation_id)
+        previous = conversation.response_mode
+        conversation.response_mode = mode
+        if mode == ConversationResponseMode.HUMAN:
+            conversation.agent_paused = True
+            conversation.assigned_operator_id = user.id
+            conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
+            conversation.handoff_required = True
+        elif mode == ConversationResponseMode.AI:
+            conversation.agent_paused = False
+            conversation.assigned_operator_id = None
+            conversation.handoff_required = False
+            conversation.handoff_reason = None
+            conversation.workflow_state = AgentWorkflowState.IDLE
+        elif mode == ConversationResponseMode.HYBRID:
+            conversation.agent_paused = False
+            conversation.preview_required = True
+            conversation.preview_reason = "hybrid_response_mode"
+        elif mode == ConversationResponseMode.PAUSED:
+            conversation.agent_paused = True
+            conversation.preview_required = False
+        conversation.last_operator_action_at = datetime.now(UTC)
+        AuditService(self.db).log(
+            action="conversation_response_mode_changed",
+            entity_type="conversation",
+            shop_id=shop_id,
+            actor_user_id=user.id,
+            entity_id=str(conversation.id),
+            metadata={"from": previous.value, "to": mode.value},
         )
         self.priority_service.refresh(conversation.id)
         self.db.commit()
@@ -421,6 +524,7 @@ class ConversationService:
             handoff_required=conversation.handoff_required,
             handoff_reason=conversation.handoff_reason,
             agent_paused=conversation.agent_paused,
+            response_mode=conversation.response_mode,
             assigned_operator_id=conversation.assigned_operator_id,
             priority_score=conversation.priority_score,
             priority_level=conversation.priority_level,

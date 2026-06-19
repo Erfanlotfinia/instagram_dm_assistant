@@ -1,31 +1,31 @@
 from app.domain.enums import MessageChannel, SuggestedReplyGeneratedBy, SuggestedReplyStatus
-from app.domain.models import AdminAuditLog, Conversation, Customer, InstagramAccount, SuggestedReply
+from app.domain.models import AdminAuditLog, Customer, SuggestedReply
 from app.schemas.suggested_reply import SuggestedReplyEditAndSend, SuggestedReplyReject
 from app.services.agent_settings_service import AgentSettingsService
 from app.schemas.agent_settings import ShopAgentStudioSettingsUpdate
 from app.domain.enums import AgentMode
 from app.services.suggested_reply_service import SuggestedReplyService
+from app.tests.fixtures.instagram import build_instagram_conversation, seed_instagram_channel_account
 
 
 def _conversation(db_session, demo_shop):
-    account = InstagramAccount(
-        shop_id=demo_shop.id,
+    account, channel_account = seed_instagram_channel_account(
+        db_session,
+        demo_shop,
         ig_user_id="ig-shop",
         username="demo_shop",
-        access_token_encrypted="token",
     )
     customer = Customer(shop_id=demo_shop.id, instagram_user_id="ig-customer")
-    db_session.add_all([account, customer])
+    db_session.add(customer)
     db_session.flush()
-    conversation = Conversation(
-        shop_id=demo_shop.id,
-        instagram_account_id=account.id,
-        customer_id=customer.id,
-        channel_provider=MessageChannel.INSTAGRAM.value,
+    return build_instagram_conversation(
+        db_session,
+        demo_shop,
+        account,
+        channel_account,
+        customer,
+        external_id="ig-customer",
     )
-    db_session.add(conversation)
-    db_session.flush()
-    return conversation
 
 
 def _reply(db_session, demo_shop, conversation):

@@ -14,9 +14,10 @@ from app.channels.adapters import (
     BaleProviderAdapter,
     InstagramProviderAdapter,
     RubikaProviderAdapter,
-    TelegramProviderAdapter,
     WhatsAppProviderAdapter,
 )
+from app.services.channel_account_service import adapter_for_provider
+from app.services.telegram_business_update_service import TelegramBusinessUpdateService
 from app.core.config import get_settings
 from app.core.request_context import get_request_id
 from app.domain.enums import (
@@ -76,11 +77,13 @@ class ChannelWebhookIngestionService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def adapter_for_provider(self, provider: ChannelProvider):
+    def adapter_for_provider(self, provider: ChannelProvider, account: ChannelAccount | None = None):
+        if account is not None:
+            return adapter_for_provider(provider, account)
         return {
             ChannelProvider.INSTAGRAM: InstagramProviderAdapter(),
             ChannelProvider.WHATSAPP: WhatsAppProviderAdapter(),
-            ChannelProvider.TELEGRAM: TelegramProviderAdapter(),
+            ChannelProvider.TELEGRAM: adapter_for_provider(ChannelProvider.TELEGRAM),
             ChannelProvider.BALE: BaleProviderAdapter(),
             ChannelProvider.RUBIKA: RubikaProviderAdapter(),
         }[provider]
@@ -124,7 +127,10 @@ class ChannelWebhookIngestionService:
             self.db.rollback()
             return WebhookAckResponse(dedupe_outcome=WebhookDedupeOutcome.DUPLICATE.value)
 
-        messages = self.adapter_for_provider(provider).parse_inbound_update(payload, headers)
+        if provider == ChannelProvider.TELEGRAM:
+            TelegramBusinessUpdateService(self.db).handle_update(account, payload)
+
+        messages = self.adapter_for_provider(provider, account).parse_inbound_update(payload, headers)
         if not messages:
             webhook_event.processing_status = WebhookProcessingStatus.PROCESSED
             webhook_event.dedupe_outcome = WebhookDedupeOutcome.IGNORED

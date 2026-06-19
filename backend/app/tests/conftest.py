@@ -45,6 +45,7 @@ os.environ["APP_ENV"] = "development"
 os.environ["WEBHOOK_SIGNATURE_BYPASS"] = "true"
 os.environ["LLM_MODE"] = "mock"
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
+os.environ.setdefault("WEBHOOK_INTERNAL_SECRET", "test-webhook-internal-secret")
 
 
 def _apply_test_env() -> None:
@@ -81,6 +82,7 @@ def _ensure_test_settings(monkeypatch: pytest.MonkeyPatch) -> Generator[None, No
     monkeypatch.setenv("WEBHOOK_SIGNATURE_BYPASS", "true")
     monkeypatch.setenv("LLM_MODE", "mock")
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
+    monkeypatch.setenv("WEBHOOK_INTERNAL_SECRET", "test-webhook-internal-secret")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()

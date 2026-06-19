@@ -41,7 +41,10 @@ def test_create_customer_from_channel_identity(db_session, provider) -> None:
         display_name="Provider Customer",
     )
 
-    assert customer.instagram_user_id is None
+    if provider == ChannelProvider.INSTAGRAM:
+        assert customer.instagram_user_id == "provider-user"
+    else:
+        assert customer.instagram_user_id is None
     assert customer.primary_channel_provider == provider
     assert customer.primary_external_user_id == "provider-user"
     assert CustomerRepository(db_session).get_customer_by_channel_identity(

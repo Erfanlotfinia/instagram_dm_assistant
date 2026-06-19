@@ -111,6 +111,64 @@ def ensure_legacy_instagram_accounts_for_shop(db: Session, shop_id: UUID) -> Non
         db.commit()
 
 
+def ensure_channel_account_for_legacy_instagram(
+    db: Session, legacy: InstagramAccount
+) -> ChannelAccount:
+    """Ensure a canonical ChannelAccount exists for a legacy InstagramAccount row."""
+    account_id = db.scalar(
+        select(ChannelAccount.id).where(
+            ChannelAccount.provider == ChannelProvider.INSTAGRAM,
+            ChannelAccount.settings_json["legacy_instagram_account_id"].astext
+            == str(legacy.id),
+        )
+    )
+    if account_id is not None:
+        return db.get(ChannelAccount, account_id)
+
+    channel_account = db.scalar(
+        select(ChannelAccount).where(
+            ChannelAccount.shop_id == legacy.shop_id,
+            ChannelAccount.provider == ChannelProvider.INSTAGRAM,
+            ChannelAccount.external_account_id == legacy.ig_user_id,
+        )
+    )
+    if channel_account is None:
+        channel_account = ChannelAccount(
+            shop_id=legacy.shop_id,
+            provider=ChannelProvider.INSTAGRAM,
+            display_name=legacy.username,
+            external_account_id=legacy.ig_user_id,
+            bot_username=legacy.username,
+            access_token_encrypted=legacy.access_token_encrypted,
+            token_expires_at=legacy.token_expires_at,
+            status=(
+                ChannelAccountStatus.WEBHOOK_CONFIGURED
+                if legacy.webhook_enabled
+                else ChannelAccountStatus.CONNECTED
+            ),
+            capabilities_json={
+                "supports_webhook": True,
+                "supports_text": True,
+                "supports_images": True,
+            },
+            settings_json={"legacy_instagram_account_id": str(legacy.id)},
+        )
+        db.add(channel_account)
+        db.flush()
+    else:
+        sync_legacy_instagram_account_from_channel(db, channel_account)
+
+    settings = dict(channel_account.settings_json or {})
+    if settings.get("legacy_instagram_account_id") != str(legacy.id):
+        settings["legacy_instagram_account_id"] = str(legacy.id)
+        channel_account.settings_json = settings
+    if legacy.access_token_encrypted and not channel_account.access_token_encrypted:
+        channel_account.access_token_encrypted = legacy.access_token_encrypted
+    db.commit()
+    db.refresh(channel_account)
+    return channel_account
+
+
 def get_instagram_channel_account_id(db: Session, instagram_account_id: UUID) -> UUID:
     account_id = db.scalar(
         select(ChannelAccount.id).where(
@@ -135,9 +193,7 @@ def get_instagram_channel_account_id(db: Session, instagram_account_id: UUID) ->
         )
     )
     if channel_account is None:
-        raise ValueError(
-            f"Instagram account {instagram_account_id} has no matching channel account"
-        )
+        return ensure_channel_account_for_legacy_instagram(db, legacy).id
     sync_legacy_instagram_account_from_channel(db, channel_account)
     db.commit()
     db.refresh(channel_account)

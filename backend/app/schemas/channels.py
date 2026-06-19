@@ -10,6 +10,7 @@ from app.domain.enums import (
     ChannelAccountStatus,
     ChannelMessageType,
     ChannelProvider,
+    TelegramConnectionMode,
     WebhookSecurityType,
 )
 
@@ -35,6 +36,13 @@ class ChannelCapabilities(BaseModel):
     webhook_security_type: WebhookSecurityType = WebhookSecurityType.UNKNOWN
     supports_customer_service_window: bool = False
     default_customer_service_window_hours: int | None = None
+    supports_private_chats: bool = False
+    supports_groups: bool = False
+    supports_supergroups: bool = False
+    supports_channels: bool = False
+    supports_business_chats: bool = False
+    chat_types: list[str] = Field(default_factory=list)
+    rights: dict[str, Any] = Field(default_factory=dict)
 
 
 class MediaItem(BaseModel):
@@ -146,6 +154,7 @@ class ChannelAccountCreate(BaseModel):
     scopes: list[str] | None = None
     capabilities: dict[str, Any] | None = None
     settings: dict[str, Any] = Field(default_factory=dict)
+    connection_mode: TelegramConnectionMode | None = None
 
 
 class ChannelAccountUpdate(BaseModel):
@@ -161,6 +170,7 @@ class ChannelAccountUpdate(BaseModel):
     capabilities: dict[str, Any] | None = None
     settings: dict[str, Any] | None = None
     status: ChannelAccountStatus | None = None
+    connection_mode: TelegramConnectionMode | None = None
 
 
 class ChannelAccountCredentials(BaseModel):
@@ -185,6 +195,18 @@ class ChannelAccountRead(BaseModel):
     status: ChannelAccountStatus
     capabilities_json: dict[str, Any]
     settings_json: dict[str, Any]
+    connection_mode: TelegramConnectionMode | None = None
+    telegram_business_connection_id: str | None = None
+    telegram_user_id: str | None = None
+    telegram_username: str | None = None
+    telegram_chat_id: str | None = None
+    telegram_rights_json: dict[str, Any] = Field(default_factory=dict)
+    telegram_capabilities_json: dict[str, Any] = Field(default_factory=dict)
+    telegram_last_sync_at: datetime | None = None
+    telegram_business_enabled: bool = False
+    managed_bot: bool = False
+    manager_bot_id: str | None = None
+    managed_bot_id: str | None = None
     token_configured: bool = False
     bot_token_configured: bool = False
     webhook_secret_configured: bool = False

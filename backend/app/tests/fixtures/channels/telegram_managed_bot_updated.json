@@ -1,0 +1,17 @@
+{
+  "update_id": 900001,
+  "managed_bot": {
+    "user": {
+      "id": 777001,
+      "is_bot": false,
+      "first_name": "Shop",
+      "username": "shopowner"
+    },
+    "bot": {
+      "id": 888001,
+      "is_bot": true,
+      "first_name": "Modira Shop Bot",
+      "username": "modira_demo_abc123_bot"
+    }
+  }
+}

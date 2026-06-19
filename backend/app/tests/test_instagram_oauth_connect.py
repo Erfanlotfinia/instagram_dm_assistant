@@ -422,4 +422,4 @@ def test_cross_shop_session_access_blocked(client, auth_headers, demo_shop, db_s
         f"/api/v1/shops/{other.id}/channels/instagram/connect/sessions/{body['session_id']}",
         headers=auth_headers,
     )
-    assert response.status_code == 404
+    assert response.status_code == 403

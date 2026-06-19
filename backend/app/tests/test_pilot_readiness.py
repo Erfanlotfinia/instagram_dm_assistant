@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from app.domain.enums import (
     AgentMode,
+    ChannelProvider,
     FailedJobStatus,
     InstagramAccountStatus,
     InventoryMovementType,
@@ -16,6 +17,7 @@ from app.domain.enums import (
     SellingStyle,
     UserRole,
 )
+from app.tests.fixtures.instagram import build_instagram_conversation, seed_instagram_channel_account
 from app.domain.models import (
     AdminAuditLog,
     Conversation,
@@ -106,13 +108,35 @@ def test_pilot_metrics_and_shop_isolation(client, auth_headers, db_session, demo
     db_session.add(other_shop)
     db_session.flush()
     customer = Customer(shop_id=demo_shop.id, instagram_user_id="c1", full_name="Customer")
-    account = InstagramAccount(shop_id=demo_shop.id, ig_user_id="ig1", username="demo", access_token_encrypted="x", status=InstagramAccountStatus.CONNECTED)
-    db_session.add_all([customer, account])
+    account, channel_account = seed_instagram_channel_account(
+        db_session,
+        demo_shop,
+        ig_user_id="ig1",
+        username="demo",
+    )
+    db_session.add(customer)
     db_session.flush()
-    conv = Conversation(shop_id=demo_shop.id, instagram_account_id=account.id, customer_id=customer.id)
-    db_session.add(conv)
-    db_session.flush()
-    db_session.add(Message(conversation_id=conv.id, direction=MessageDirection.INBOUND, channel=MessageChannel.INSTAGRAM, message_type=MessageType.TEXT, text="Hi"))
+    conv = build_instagram_conversation(
+        db_session,
+        demo_shop,
+        account,
+        channel_account,
+        customer,
+        external_id="c1",
+    )
+    db_session.add(
+        Message(
+            shop_id=demo_shop.id,
+            conversation_id=conv.id,
+            customer_id=customer.id,
+            channel_provider=ChannelProvider.INSTAGRAM,
+            channel_account_id=channel_account.id,
+            direction=MessageDirection.INBOUND,
+            channel=MessageChannel.INSTAGRAM,
+            message_type=MessageType.TEXT,
+            text="Hi",
+        )
+    )
     db_session.add(AdminAuditLog(shop_id=demo_shop.id, action="message_auto_sent", entity_type="conversation", details={}))
     db_session.add(AdminAuditLog(shop_id=other_shop.id, action="message_auto_sent", entity_type="conversation", details={}))
     db_session.add(FailedJob(shop_id=demo_shop.id, queue_name="q", job_type="message", payload={}, status=FailedJobStatus.FAILED, resolved=False))

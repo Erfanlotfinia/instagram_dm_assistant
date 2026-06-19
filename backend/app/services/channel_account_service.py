@@ -10,11 +10,11 @@ from app.channels.adapters import (
     BaleProviderAdapter,
     InstagramProviderAdapter,
     RubikaProviderAdapter,
-    TelegramProviderAdapter,
     WhatsAppProviderAdapter,
 )
+from app.channels.telegram import telegram_adapter_for_mode
 from app.core.security import decrypt_secret, encrypt_secret
-from app.domain.enums import ChannelAccountStatus, ChannelProvider
+from app.domain.enums import ChannelAccountStatus, ChannelProvider, TelegramConnectionMode
 from app.domain.models import ChannelAccount
 from app.schemas.channels import (
     ChannelAccountCreate,
@@ -42,7 +42,8 @@ def adapter_for_provider(provider: ChannelProvider, account: ChannelAccount | No
             verify_token=account.webhook_verify_token if account else None,
             app_secret=webhook_secret,
         ),
-        ChannelProvider.TELEGRAM: TelegramProviderAdapter(
+        ChannelProvider.TELEGRAM: telegram_adapter_for_mode(
+            account.connection_mode if account else TelegramConnectionMode.BOT,
             bot_token=bot_token,
             webhook_secret=webhook_secret,
             local_base_url=(account.settings_json or {}).get("local_bot_api_base_url")
@@ -104,7 +105,12 @@ class ChannelAccountService:
             scopes_json=payload.scopes,
             capabilities_json=payload.capabilities or capabilities,
             settings_json=payload.settings,
+            connection_mode=payload.connection_mode
+            if payload.provider == ChannelProvider.TELEGRAM
+            else None,
         )
+        if account.provider == ChannelProvider.TELEGRAM and account.connection_mode is None:
+            account.connection_mode = TelegramConnectionMode.BOT
         self.db.add(account)
         self.db.commit()
         self.db.refresh(account)
@@ -192,10 +198,24 @@ class ChannelAccountService:
         if account.provider == ChannelProvider.INSTAGRAM and token:
             await InstagramMetaConnectService(self.db).revoke_token_if_supported(token)
 
-        account.status = ChannelAccountStatus.DISABLED
+        if account.provider == ChannelProvider.TELEGRAM:
+            account.status = ChannelAccountStatus.DISCONNECTED
+        else:
+            account.status = ChannelAccountStatus.DISABLED
         account.access_token_encrypted = None
         account.refresh_token_encrypted = None
         account.bot_token_encrypted = None
+        account.telegram_business_connection_id = None
+        account.telegram_user_id = None
+        account.telegram_username = None
+        account.telegram_chat_id = None
+        account.telegram_rights_json = {}
+        account.telegram_capabilities_json = {}
+        account.telegram_business_enabled = False
+        account.telegram_last_sync_at = None
+        account.managed_bot = False
+        account.manager_bot_id = None
+        account.managed_bot_id = None
         account.last_error = None
         if account.provider == ChannelProvider.INSTAGRAM:
             from app.services.legacy_channel_compat import sync_legacy_instagram_account_from_channel
@@ -215,6 +235,17 @@ class ChannelAccountService:
 
     @staticmethod
     def _missing_required_credentials(account: ChannelAccount) -> list[str]:
+        if account.provider == ChannelProvider.TELEGRAM:
+            missing: list[str] = []
+            if not account.bot_token_encrypted:
+                missing.append("bot_token")
+            mode = account.connection_mode or TelegramConnectionMode.BOT
+            if mode in {TelegramConnectionMode.BUSINESS, TelegramConnectionMode.HYBRID}:
+                if not account.telegram_business_connection_id:
+                    missing.append("telegram_business_connection_id")
+                if not account.telegram_business_enabled:
+                    missing.append("telegram_business_enabled")
+            return missing
         required = {
             ChannelProvider.INSTAGRAM: (("access_token_encrypted", "access_token"),),
             ChannelProvider.WHATSAPP: (
@@ -222,7 +253,6 @@ class ChannelAccountService:
                 ("phone_number_id", "phone_number_id"),
                 ("webhook_secret_encrypted", "app_secret"),
             ),
-            ChannelProvider.TELEGRAM: (("bot_token_encrypted", "bot_token"),),
             ChannelProvider.BALE: (("bot_token_encrypted", "bot_token"),),
             ChannelProvider.RUBIKA: (("bot_token_encrypted", "bot_token"),),
         }[account.provider]

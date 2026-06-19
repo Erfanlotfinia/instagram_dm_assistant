@@ -99,8 +99,32 @@ class ChannelAccountStatus(str, enum.Enum):
     DRAFT = "draft"
     CONNECTED = "connected"
     WEBHOOK_CONFIGURED = "webhook_configured"
+    DISCONNECTED = "disconnected"
     DISABLED = "disabled"
     ERROR = "error"
+
+
+class TelegramConnectionMode(str, enum.Enum):
+    BOT = "bot"
+    BUSINESS = "business"
+    HYBRID = "hybrid"
+
+
+class TelegramConnectionSessionStatus(str, enum.Enum):
+    PENDING = "pending"
+    WAITING_BOT_TOKEN = "waiting_bot_token"
+    WAITING_MANAGED_BOT_APPROVAL = "waiting_managed_bot_approval"
+    WAITING_BUSINESS_CONNECTION = "waiting_business_connection"
+    CONNECTED = "connected"
+    FAILED = "failed"
+    EXPIRED = "expired"
+
+
+class ConversationResponseMode(str, enum.Enum):
+    AI = "ai"
+    HUMAN = "human"
+    HYBRID = "hybrid"
+    PAUSED = "paused"
 
 
 class ChannelConnectionProvider(str, enum.Enum):

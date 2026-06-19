@@ -9,6 +9,7 @@ from app.domain.enums import (
     AgentWorkflowState,
     ConversationEventType,
     ConversationPriorityLevel,
+    ConversationResponseMode,
     ConversationState,
     MessageDirection,
     MessageType,
@@ -90,6 +91,7 @@ class ConversationRead(BaseModel):
     handoff_reason: str | None
     workflow_state: AgentWorkflowState
     agent_paused: bool
+    response_mode: ConversationResponseMode = ConversationResponseMode.AI
     is_simulation: bool = False
     suggested_outbound: str | None = None
     preview_required: bool = False
@@ -192,6 +194,7 @@ class ConversationHandoffResponse(BaseModel):
     handoff_required: bool
     handoff_reason: str | None
     agent_paused: bool
+    response_mode: ConversationResponseMode = ConversationResponseMode.AI
     suggested_outbound: str | None = None
     preview_required: bool = False
     preview_reason: str | None = None
@@ -208,6 +211,10 @@ class ConversationResolveResponse(BaseModel):
 
 class ConversationAssignRequest(BaseModel):
     operator_id: UUID
+
+
+class ConversationResponseModeRequest(BaseModel):
+    response_mode: ConversationResponseMode
 
 
 class ConversationAssignResponse(BaseModel):

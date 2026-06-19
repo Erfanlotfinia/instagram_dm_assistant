@@ -10,6 +10,7 @@ from app.domain.models import ChannelAccount, InstagramAccount, User
 from app.repositories.instagram_account_repository import InstagramAccountRepository
 from app.schemas.instagram_account import InstagramAccountCreate, InstagramAccountRead
 from app.services.legacy_channel_compat import ensure_legacy_instagram_accounts_for_shop
+from app.services.shop_service import ShopService
 
 
 class InstagramAccountService:

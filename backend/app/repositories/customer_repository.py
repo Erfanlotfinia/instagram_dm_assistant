@@ -115,6 +115,7 @@ class CustomerRepository:
             email=email,
             primary_channel_provider=provider,
             primary_external_user_id=external_user_id,
+            instagram_user_id=external_user_id if provider == ChannelProvider.INSTAGRAM else None,
         )
         self.create(customer)
         self.get_or_create_channel_contact_identity(

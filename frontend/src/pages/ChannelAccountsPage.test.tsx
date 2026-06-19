@@ -17,6 +17,11 @@ const mocks = vi.hoisted(() => ({
   validateChannelCredentials: vi.fn(),
   testChannelWebhook: vi.fn(),
   setTelegramWebhook: vi.fn(),
+  startTelegramConnect: vi.fn(),
+  getTelegramConnectSession: vi.fn(),
+  submitTelegramBotToken: vi.fn(),
+  completeTelegramConnect: vi.fn(),
+  cancelTelegramConnect: vi.fn(),
   startInstagramConnect: vi.fn(),
   reconnectInstagram: vi.fn(),
   disconnectChannel: vi.fn(),
@@ -54,6 +59,11 @@ vi.mock('../services/apiClient', () => ({
     validateChannelCredentials: mocks.validateChannelCredentials,
     testChannelWebhook: mocks.testChannelWebhook,
     setTelegramWebhook: mocks.setTelegramWebhook,
+    startTelegramConnect: mocks.startTelegramConnect,
+    getTelegramConnectSession: mocks.getTelegramConnectSession,
+    submitTelegramBotToken: mocks.submitTelegramBotToken,
+    completeTelegramConnect: mocks.completeTelegramConnect,
+    cancelTelegramConnect: mocks.cancelTelegramConnect,
     startInstagramConnect: mocks.startInstagramConnect,
     reconnectInstagram: mocks.reconnectInstagram,
     disconnectChannel: mocks.disconnectChannel,
@@ -139,8 +149,11 @@ describe('ChannelAccountsPage', () => {
   }
 
   it('renders other supported providers in connected channels', async () => {
-    const providers: ChannelProvider[] = ['whatsapp', 'telegram', 'bale', 'rubika'];
-    mocks.listChannelAccounts.mockResolvedValue(providers.map((provider) => makeAccount(provider)));
+    const providers: ChannelProvider[] = ['whatsapp', 'bale', 'rubika'];
+    mocks.listChannelAccounts.mockResolvedValue([
+      ...providers.map((provider) => makeAccount(provider)),
+      makeAccount('telegram', { bot_token_configured: true, status: 'connected' }),
+    ]);
 
     renderPage();
     await waitForShopReady();
@@ -171,7 +184,7 @@ describe('ChannelAccountsPage', () => {
 
   it('renders configured and not configured credential badges', async () => {
     mocks.listChannelAccounts.mockResolvedValue([
-      makeAccount('telegram', {
+      makeAccount('bale', {
         bot_token_configured: true,
         webhook_secret_configured: false,
       }),
@@ -179,7 +192,7 @@ describe('ChannelAccountsPage', () => {
 
     renderPage();
 
-    await screen.findByText('telegram main');
+    await screen.findByText('bale main');
     expect(screen.getByText('Configured')).toBeInTheDocument();
     expect(screen.getByText('Not configured')).toBeInTheDocument();
   });
@@ -206,12 +219,12 @@ describe('ChannelAccountsPage', () => {
       full_name: 'Operator',
       role: 'operator',
     });
-    mocks.listChannelAccounts.mockResolvedValue([makeAccount('telegram')]);
+    mocks.listChannelAccounts.mockResolvedValue([makeAccount('whatsapp')]);
 
     renderPage();
     await waitForShopReady();
 
-    await screen.findByText('telegram main');
+    await screen.findByText('whatsapp main');
     expect(screen.getByText('Credential changes restricted')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Replace token' })).not.toBeInTheDocument();
     expect(document.querySelector('input[type="password"]')).toBeNull();
@@ -241,9 +254,9 @@ describe('ChannelAccountsPage', () => {
   });
 
   it('calls validate credentials API from account card', async () => {
-    mocks.listChannelAccounts.mockResolvedValue([makeAccount('telegram')]);
+    mocks.listChannelAccounts.mockResolvedValue([makeAccount('bale')]);
     mocks.validateChannelCredentials.mockResolvedValue(
-      makeAccount('telegram', { last_validation_at: '2026-06-19T00:00:00Z' }),
+      makeAccount('bale', { last_validation_at: '2026-06-19T00:00:00Z' }),
     );
     const user = userEvent.setup();
     renderPage();
@@ -252,7 +265,7 @@ describe('ChannelAccountsPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Validate credentials' }));
 
     await waitFor(() => {
-      expect(mocks.validateChannelCredentials).toHaveBeenCalledWith('s1', 'ca-telegram');
+      expect(mocks.validateChannelCredentials).toHaveBeenCalledWith('s1', 'ca-bale');
     });
   });
 
@@ -270,8 +283,8 @@ describe('ChannelAccountsPage', () => {
     expect(screen.queryByText('Save advanced setup')).not.toBeInTheDocument();
   });
 
-  it('opens replace credentials dialog for telegram admins', async () => {
-    mocks.listChannelAccounts.mockResolvedValue([makeAccount('telegram')]);
+  it('opens replace credentials dialog for bale admins', async () => {
+    mocks.listChannelAccounts.mockResolvedValue([makeAccount('bale')]);
     const user = userEvent.setup();
     renderPage();
     await waitForShopReady();

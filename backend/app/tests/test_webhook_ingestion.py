@@ -40,6 +40,7 @@ def _create_account(db_session, demo_shop, ig_user_id: str = "17841400000000001"
         provider=ChannelProvider.INSTAGRAM,
         display_name=account.username,
         external_account_id=account.ig_user_id,
+        access_token_encrypted=account.access_token_encrypted,
         status=ChannelAccountStatus.CONNECTED,
         settings_json={"legacy_instagram_account_id": str(account.id)},
     )

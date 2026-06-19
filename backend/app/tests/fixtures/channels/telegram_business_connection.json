@@ -1,0 +1,25 @@
+{
+  "update_id": 900001,
+  "business_connection": {
+    "id": "biz-conn-1",
+    "user": {
+      "id": 123456789,
+      "username": "shop_owner",
+      "first_name": "Shop"
+    },
+    "user_chat_id": 123456789,
+    "date": 1710000000,
+    "is_enabled": true,
+    "rights": {
+      "can_reply": true,
+      "can_read_messages": true,
+      "can_delete_sent_messages": false,
+      "can_delete_all_messages": false,
+      "can_edit_name": false,
+      "can_edit_bio": false,
+      "can_edit_profile_photo": false,
+      "can_edit_username": false,
+      "can_view_gifts_and_stars": false
+    }
+  }
+}

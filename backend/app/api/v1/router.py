@@ -35,6 +35,7 @@ from app.api.v1.semantic_search import router as semantic_search_router
 from app.api.v1.suggested_replies import router as suggested_replies_router
 from app.api.v1.simulator import router as simulator_router
 from app.api.v1.triggers import router as triggers_router
+from app.api.v1.telegram_connect import router as telegram_connect_router
 from app.api.v1.trl_validation import router as trl_validation_router
 from app.api.v1.webhooks import router as webhooks_router
 
@@ -56,6 +57,7 @@ router.include_router(customers_router)
 router.include_router(webhooks_router)
 router.include_router(channels_router)
 router.include_router(instagram_connect_router)
+router.include_router(telegram_connect_router)
 router.include_router(decision_traces_router)
 router.include_router(semantic_search_router)
 router.include_router(payments_router)

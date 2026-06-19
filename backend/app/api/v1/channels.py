@@ -13,7 +13,8 @@ from app.channels.adapters import InstagramProviderAdapter
 from app.core.config import get_settings
 from app.db.session import get_db_session
 from app.domain.enums import ChannelAccountStatus, ChannelProvider, UserRole
-from app.domain.models import ChannelAccount, ShopMember, User
+from app.domain.models import ChannelAccount, InstagramAccount, ShopMember, User
+from app.services.legacy_channel_compat import ensure_channel_account_for_legacy_instagram
 from app.schemas.channels import (
     ChannelAccountCreate,
     ChannelAccountCredentials,
@@ -147,6 +148,22 @@ def _candidate_webhook_accounts(
     return list(db.scalars(stmt).all())
 
 
+def _legacy_instagram_webhook_accounts(
+    db: Session, payload: dict[str, Any]
+) -> list[ChannelAccount]:
+    recipient_ids = _instagram_recipient_ids(payload)
+    if not recipient_ids:
+        return []
+    legacy_accounts = list(
+        db.scalars(
+            select(InstagramAccount).where(InstagramAccount.ig_user_id.in_(recipient_ids))
+        ).all()
+    )
+    return [
+        ensure_channel_account_for_legacy_instagram(db, legacy) for legacy in legacy_accounts
+    ]
+
+
 async def _verified_webhook_account(
     db: Session,
     provider: ChannelProvider,
@@ -157,6 +174,13 @@ async def _verified_webhook_account(
 ) -> ChannelAccount:
     headers = dict(request.headers)
     candidates = _candidate_webhook_accounts(db, provider, payload, headers, channel_account_id)
+    if (
+        not candidates
+        and allow_legacy_meta_secret
+        and provider == ChannelProvider.INSTAGRAM
+        and channel_account_id is None
+    ):
+        candidates = _legacy_instagram_webhook_accounts(db, payload)
     if not candidates and channel_account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -324,6 +348,10 @@ def verify_channel_webhook(
             ChannelAccount.webhook_verify_token == hub_verify_token,
         )
     )
+    if account is None and provider_enum in {ChannelProvider.INSTAGRAM, ChannelProvider.WHATSAPP}:
+        settings = get_settings()
+        if hub_verify_token == settings.webhook_internal_secret:
+            return Response(content=hub_challenge or "", media_type="text/plain")
     if account is None:
         raise HTTPException(status_code=403, detail="Verification failed")
     return Response(content=hub_challenge or "", media_type="text/plain")
@@ -394,6 +422,50 @@ async def receive_channel_webhook(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="Unsupported channel provider") from exc
     return await _receive_channel_webhook(provider_enum, request, db)
+
+
+@router.post(
+    "/channels/telegram/manager/webhook",
+    response_model=WebhookAckResponse | WebhookIgnoredResponse,
+)
+async def receive_telegram_manager_webhook(
+    request: Request,
+    db: Annotated[Session, Depends(get_db_session)],
+    _: Annotated[None, Depends(rate_limit_webhook)],
+) -> WebhookAckResponse | WebhookIgnoredResponse:
+    """Receives managed_bot updates from the platform manager bot.
+
+    Register once on deploy:
+    setWebhook(url={public_api_base_url}/api/v1/channels/telegram/manager/webhook,
+               secret_token=..., allowed_updates=["managed_bot"])
+    """
+    settings = get_settings()
+    secret = settings.telegram_manager_webhook_secret
+    if secret:
+        header_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+        if header_secret != secret and not settings.webhook_signature_bypass:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Invalid webhook secret")
+    elif not settings.webhook_signature_bypass:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Manager webhook secret not configured")
+
+    body = await request.body()
+    try:
+        payload: dict[str, Any] = json.loads(body.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload"
+        ) from exc
+
+    managed_bot = payload.get("managed_bot")
+    if not managed_bot:
+        return WebhookIgnoredResponse(reason="no_managed_bot_update")
+
+    from app.services.telegram_managed_bot_service import TelegramManagedBotService
+
+    handled = await TelegramManagedBotService(db).handle_managed_bot_update(managed_bot)
+    if not handled:
+        return WebhookIgnoredResponse(reason="managed_bot_update_not_matched")
+    return WebhookAckResponse(status="ok")
 
 
 @router.post(

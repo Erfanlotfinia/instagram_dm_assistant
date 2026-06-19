@@ -25,6 +25,7 @@ def test_channel_outbound_stores_outbound_message(db_session, demo_shop) -> None
         provider=ChannelProvider.INSTAGRAM,
         display_name=account.username,
         external_account_id=account.ig_user_id,
+        access_token_encrypted=account.access_token_encrypted,
         status=ChannelAccountStatus.CONNECTED,
         settings_json={"legacy_instagram_account_id": str(account.id)},
     )

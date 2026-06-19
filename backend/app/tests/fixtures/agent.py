@@ -5,6 +5,8 @@ from uuid import UUID
 from app.core.security import encrypt_secret
 from app.domain.enums import (
     AgentWorkflowState,
+    ChannelAccountStatus,
+    ChannelProvider,
     ConfidenceSource,
     InstagramAccountStatus,
     MessageChannel,
@@ -13,6 +15,7 @@ from app.domain.enums import (
     ProductStatus,
 )
 from app.domain.models import (
+    ChannelAccount,
     Conversation,
     Customer,
     InstagramAccount,
@@ -38,6 +41,20 @@ def seed_order_flow_data(db_session, demo_shop) -> dict:
     db_session.add(account)
     db_session.flush()
 
+    channel_account = ChannelAccount(
+        shop_id=demo_shop.id,
+        provider=ChannelProvider.INSTAGRAM,
+        display_name=account.username,
+        external_account_id=account.ig_user_id,
+        bot_username=account.username,
+        access_token_encrypted=account.access_token_encrypted,
+        status=ChannelAccountStatus.CONNECTED,
+        capabilities_json={"supports_text": True, "supports_images": True},
+        settings_json={"legacy_instagram_account_id": str(account.id)},
+    )
+    db_session.add(channel_account)
+    db_session.flush()
+
     customer = Customer(shop_id=demo_shop.id, instagram_user_id="cust-1")
     db_session.add(customer)
     db_session.flush()
@@ -45,6 +62,11 @@ def seed_order_flow_data(db_session, demo_shop) -> dict:
     conversation = Conversation(
         shop_id=demo_shop.id,
         instagram_account_id=account.id,
+        channel_account_id=channel_account.id,
+        channel_provider=ChannelProvider.INSTAGRAM.value,
+        external_conversation_id=customer.instagram_user_id,
+        channel_conversation_id=customer.instagram_user_id,
+        channel_customer_id=customer.instagram_user_id,
         customer_id=customer.id,
         workflow_state=AgentWorkflowState.IDLE,
     )
@@ -87,12 +109,17 @@ def seed_order_flow_data(db_session, demo_shop) -> dict:
         confidence_source=ConfidenceSource.MANUAL,
         is_active=True,
     )
-    demo_shop.agent_settings = {**(demo_shop.agent_settings or {}), "preview_required_for_first_24h": False, "auto_send_confidence_threshold": 0.5}
+    demo_shop.agent_settings = {
+        **(demo_shop.agent_settings or {}),
+        "preview_required_for_first_24h": False,
+        "auto_send_confidence_threshold": 0.5,
+    }
     db_session.add(mapping)
     db_session.commit()
 
     return {
         "account": account,
+        "channel_account": channel_account,
         "customer": customer,
         "conversation": conversation,
         "product": product,
@@ -133,8 +160,13 @@ def create_shared_post_message(
     *,
     instagram_media_id: str = "media-abc",
 ) -> Message:
+    conversation = db_session.get(Conversation, conversation_id)
     message = Message(
+        shop_id=conversation.shop_id,
         conversation_id=conversation_id,
+        customer_id=conversation.customer_id,
+        channel_provider=ChannelProvider.INSTAGRAM,
+        channel_account_id=conversation.channel_account_id,
         direction=MessageDirection.INBOUND,
         channel=MessageChannel.INSTAGRAM,
         message_type=MessageType.SHARED_POST,
@@ -150,9 +182,16 @@ def create_shared_post_message(
     return message
 
 
-def create_text_message(db_session, conversation_id: UUID, text: str, *, instagram_message_id: str | None = None) -> Message:
+def create_text_message(
+    db_session, conversation_id: UUID, text: str, *, instagram_message_id: str | None = None
+) -> Message:
+    conversation = db_session.get(Conversation, conversation_id)
     message = Message(
+        shop_id=conversation.shop_id,
         conversation_id=conversation_id,
+        customer_id=conversation.customer_id,
+        channel_provider=ChannelProvider.INSTAGRAM,
+        channel_account_id=conversation.channel_account_id,
         direction=MessageDirection.INBOUND,
         channel=MessageChannel.INSTAGRAM,
         instagram_message_id=instagram_message_id,

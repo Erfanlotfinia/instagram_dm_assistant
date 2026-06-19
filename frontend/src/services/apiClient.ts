@@ -32,6 +32,9 @@ import type {
   InstagramConnectStartResponse,
   InstagramReadiness,
   InstagramSelectAccountRequest,
+  TelegramConnectSession,
+  TelegramConnectStartRequest,
+  TelegramConnectStartResponse,
   TelegramWebhookInfo,
   WebhookTestResponse,
 } from '../types/channel';
@@ -232,6 +235,63 @@ export const apiClient = {
     request<TelegramWebhookInfo>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/delete-webhook`, { method: 'POST', body: JSON.stringify({}) }),
   getTelegramWebhookInfo: (shopId: string, channelAccountId: string) =>
     request<TelegramWebhookInfo>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/webhook-info`),
+
+  startTelegramConnect: (shopId: string, payload: TelegramConnectStartRequest) =>
+    request<TelegramConnectStartResponse>(`/api/v1/shops/${shopId}/channels/telegram/connect/start`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getTelegramConnectSession: (shopId: string, sessionId: string) =>
+    request<TelegramConnectSession>(`/api/v1/shops/${shopId}/channels/telegram/connect/${sessionId}`),
+  submitTelegramBotToken: (
+    shopId: string,
+    sessionId: string,
+    payload: { bot_token: string; webhook_secret?: string },
+  ) =>
+    request<TelegramConnectSession>(
+      `/api/v1/shops/${shopId}/channels/telegram/connect/${sessionId}/bot-token`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
+  completeTelegramConnect: (shopId: string, sessionId: string) =>
+    request<ChannelAccount>(
+      `/api/v1/shops/${shopId}/channels/telegram/connect/${sessionId}/complete`,
+      { method: 'POST', body: JSON.stringify({}) },
+    ),
+  cancelTelegramConnect: (shopId: string, sessionId: string) =>
+    request<TelegramConnectSession>(
+      `/api/v1/shops/${shopId}/channels/telegram/connect/${sessionId}/cancel`,
+      { method: 'POST', body: JSON.stringify({}) },
+    ),
+  syncTelegramBusiness: (shopId: string, channelAccountId: string) =>
+    request<ChannelAccount>(
+      `/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/business/sync`,
+      { method: 'POST', body: JSON.stringify({}) },
+    ),
+  refreshTelegramBusiness: (shopId: string, channelAccountId: string) =>
+    request<ChannelAccount>(
+      `/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/business/refresh`,
+      { method: 'POST', body: JSON.stringify({}) },
+    ),
+  validateTelegramBusiness: (shopId: string, channelAccountId: string) =>
+    request<ChannelAccount>(
+      `/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/business/validate`,
+      { method: 'POST', body: JSON.stringify({}) },
+    ),
+  reconnectTelegramBusiness: (shopId: string, channelAccountId: string) =>
+    request<TelegramConnectStartResponse>(
+      `/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/business/reconnect`,
+      { method: 'POST', body: JSON.stringify({}) },
+    ),
+  rotateTelegramManagedBotToken: (shopId: string, channelAccountId: string) =>
+    request<ChannelAccount>(
+      `/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/managed-bot/rotate-token`,
+      { method: 'POST', body: JSON.stringify({}) },
+    ),
+  reconnectTelegramManagedBot: (shopId: string, channelAccountId: string) =>
+    request<ChannelAccount>(
+      `/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/managed-bot/reconnect`,
+      { method: 'POST', body: JSON.stringify({}) },
+    ),
 
   startInstagramConnect: (shopId: string) =>
     request<InstagramConnectStartResponse>(`/api/v1/shops/${shopId}/channels/instagram/connect/start`, {
