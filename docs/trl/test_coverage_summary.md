@@ -103,7 +103,7 @@ npm run build
 |----------|---------|
 | README — Sprint 6 manual QA | Admin workflows across auth, dashboard, conversations, products, orders, settings |
 | `docs/pilot_test_script.md` | TRL 6 pilot scenarios, rollback, daily review |
-| `docs/demo-scenario.md` | Persian fashion DM demo flow |
+| `docs/demo-scenario.md` | Persian commerce message demo flow |
 
 ### Missing E2E
 
@@ -143,7 +143,7 @@ npm run build
 
 ## Recommended test additions for TRL 5/6
 
-1. CI job: `pytest` + export TRL report on `trl-fashion-demo` seed (subset or full 100 scenarios)
+1. CI job: `pytest` + export TRL report on `trl-commerce-demo` seed (subset or full 100 scenarios)
 2. Compose integration test: webhook POST → worker consumes → conversation state updated
 3. Labeled LLM eval script (50–100 Persian/English DMs) with minimum F1 thresholds
 4. Playwright: login → TRL validation run → view failed scenarios → pilot readiness check

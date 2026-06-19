@@ -2,7 +2,7 @@
 
 Usage:
     python -m app.scripts.generate_trl_report
-    python -m app.scripts.generate_trl_report --shop-slug trl-fashion-demo
+    python -m app.scripts.generate_trl_report --shop-slug trl-commerce-demo
     python -m app.scripts.generate_trl_report --output /tmp/trl_report.md
 """
 from __future__ import annotations
@@ -61,7 +61,7 @@ def build_report(*, shop_slug: str | None = None) -> str:
                 raise SystemExit(f"Shop not found for slug: {shop_slug}")
         else:
             shop = db.scalar(
-                select(Shop).where(Shop.slug == "trl-fashion-demo").limit(1)
+                select(Shop).where(Shop.slug == "trl-commerce-demo").limit(1)
             ) or db.scalar(select(Shop).order_by(Shop.created_at.asc()).limit(1))
             if shop is None:
                 raise SystemExit("No shops found in database.")
@@ -212,7 +212,7 @@ def build_report(*, shop_slug: str | None = None) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate TRL validation and pilot readiness markdown report.")
-    parser.add_argument("--shop-slug", default=None, help="Shop slug (default: trl-fashion-demo or first shop)")
+    parser.add_argument("--shop-slug", default=None, help="Shop slug (default: trl-commerce-demo or first shop)")
     parser.add_argument("--output", "-o", default=None, help="Write report to file instead of stdout")
     args = parser.parse_args(argv)
 

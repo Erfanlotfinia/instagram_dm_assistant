@@ -43,6 +43,6 @@ def test_attribute_dictionary_route_replaces_fashion_dictionary():
     page = (REPO_ROOT / "frontend/src/pages/AttributeDictionaryPage.tsx").read_text(encoding="utf-8")
 
     assert 'path="attributes" element={<AttributeDictionaryPage />}' in routes
-    assert "/fashion-dictionary" not in routes
+    assert "/catalog/attributes" in routes
     assert 'title="Attribute dictionary"' in page
-    assert "Fashion Dictionary" not in page
+    assert "Legacy Dictionary" not in page

@@ -39,7 +39,7 @@ Demonstrate the Modira under **constrained real-world operations** for one fashi
 
 | Field | Planned value | Status |
 |-------|---------------|--------|
-| Shop slug | `trl-fashion-demo` (lab) → **real pilot shop TBD** | **MISSING** |
+| Shop slug | `trl-commerce-demo` (lab) → **real pilot shop TBD** | **MISSING** |
 | Instagram account | Single connected business account | Configure in admin |
 | Currency | Shop-local (e.g. IRR) | Per shop settings |
 | Catalog size | ≥ 10 active products, ≥ 80% mapped | Per readiness API |
@@ -50,7 +50,7 @@ Demonstrate the Modira under **constrained real-world operations** for one fashi
 
 - Admin: `trl-admin@example.com` / `Password123!`
 - Operator: `trl-operator@example.com` / `Password123!`
-- Shop slug: `trl-fashion-demo`
+- Shop slug: `trl-commerce-demo`
 
 ---
 

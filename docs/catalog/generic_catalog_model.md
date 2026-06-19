@@ -1,6 +1,6 @@
 # Generic catalog model
 
-The Catalog Commerce Assistant represents product facts as generic category attributes instead of fashion-only fields. `color` and `size` remain supported, but they are compatibility attributes inside the Fashion and clothing preset.
+Modira represents product facts as generic category attributes. `color` and `size` remain supported as ordinary attributes inside category presets, not as platform-wide assumptions.
 
 Core tables:
 - `product_categories` for system and shop categories.

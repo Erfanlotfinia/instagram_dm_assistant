@@ -32,8 +32,6 @@ class WorkerApp:
 
     def start(self) -> None:
         queue_names = [self.settings.rabbitmq_queue_message_received]
-        if self.settings.rabbitmq_legacy_queue_message_received not in queue_names:
-            queue_names.append(self.settings.rabbitmq_legacy_queue_message_received)
         parameters = pika.URLParameters(self.settings.rabbitmq_url)
         self._connection = pika.BlockingConnection(parameters)
         self._channel = self._connection.channel()

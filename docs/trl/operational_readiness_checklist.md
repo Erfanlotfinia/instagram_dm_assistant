@@ -25,7 +25,7 @@
 |---|------|--------|------------------|
 | 1 | JWT auth on admin APIs | ✅ Present | `test_auth_api.py` |
 | 2 | Shop membership / role checks | ✅ Present | `test_roles.py`, `require_shop_role` |
-| 3 | Instagram tokens encrypted at rest | ✅ Present | Fernet encryption in Sprint 7 |
+| 3 | Channel credentials encrypted at rest | ✅ Present | Fernet encryption in Sprint 7 |
 | 4 | Optional Meta webhook signature verification | ✅ Present | `META_APP_SECRET` |
 | 5 | Rate limiting on login, webhook, outbound | ✅ Present | Sprint 7 security |
 | 6 | Audit logging for sensitive actions | ✅ Present | `AdminAuditLog`, Sprint F docs |

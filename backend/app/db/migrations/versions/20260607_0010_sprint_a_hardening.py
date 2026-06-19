@@ -1,4 +1,4 @@
-"""sprint a fashion order hardening
+"""sprint a catalog order hardening
 
 Revision ID: 20260607_0010
 Revises: 20260607_0009

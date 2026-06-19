@@ -25,6 +25,7 @@ export const ChannelAnalyticsPage = lazyPage(
   'ChannelAnalyticsPage',
 );
 export const RolloutPage = lazyPage(() => import('../pages/RolloutPage'), 'RolloutPage');
+export const IncidentTimelinePage = lazyPage(() => import('../pages/IncidentTimelinePage'), 'IncidentTimelinePage');
 
 export const AIControlOverviewPage = lazyPage(
   () => import('../pages/AIControlPages'),

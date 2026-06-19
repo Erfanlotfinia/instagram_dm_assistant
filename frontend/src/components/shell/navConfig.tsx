@@ -32,31 +32,22 @@ export const HUBS: HubDef[] = [
     icon: Icons.inbox,
   },
   {
-    id: 'handoffs',
-    label: 'Handoffs',
-    path: '/handoffs',
-    icon: Icons.handoffs,
-    badge: 'handoffs',
-  },
-  {
-    id: 'orders',
-    label: 'Orders',
-    path: '/orders',
-    icon: Icons.orders,
-  },
-  {
     id: 'catalog',
     label: 'Catalog',
     path: '/catalog',
     icon: Icons.catalog,
     tabs: [
       { to: '/catalog/products', label: 'Products' },
-      { to: '/catalog/mapping', label: 'Post Mapping' },
-      { to: '/catalog/copilot', label: 'Copilot' },
-      { to: '/catalog/resolver', label: 'Option Resolver' },
       { to: '/catalog/attributes', label: 'Attributes' },
-      { to: '/catalog/search', label: 'Search Index' },
+      { to: '/catalog/resolver', label: 'Resolver' },
+      { to: '/catalog/mapping', label: 'Mapping' },
     ],
+  },
+  {
+    id: 'orders',
+    label: 'Orders',
+    path: '/orders',
+    icon: Icons.orders,
   },
   {
     id: 'automation',
@@ -88,6 +79,13 @@ export const HUBS: HubDef[] = [
       { to: '/ai/corrections', label: 'Corrections' },
       { to: '/ai/tasks', label: 'Tasks' },
     ],
+  },
+  {
+    id: 'handoffs',
+    label: 'Handoffs',
+    path: '/handoffs',
+    icon: Icons.handoffs,
+    badge: 'handoffs',
   },
   {
     id: 'analytics',
