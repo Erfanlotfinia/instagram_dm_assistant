@@ -197,6 +197,10 @@ class ChannelAccountService:
         account.refresh_token_encrypted = None
         account.bot_token_encrypted = None
         account.last_error = None
+        if account.provider == ChannelProvider.INSTAGRAM:
+            from app.services.legacy_channel_compat import sync_legacy_instagram_account_from_channel
+
+            sync_legacy_instagram_account_from_channel(self.db, account)
         AuditService(self.db).log(
             action="channel_disconnected",
             entity_type="channel_account",

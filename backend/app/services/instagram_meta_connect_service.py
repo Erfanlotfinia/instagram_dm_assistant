@@ -17,6 +17,7 @@ from app.core.security import decrypt_secret, encrypt_secret
 from app.domain.enums import ChannelAccountStatus, ChannelProvider
 from app.domain.models import ChannelAccount, ChannelConnectionSession
 from app.services.channel_account_service import adapter_for_provider
+from app.services.legacy_channel_compat import sync_legacy_instagram_account_from_channel
 
 
 @dataclass(frozen=True)
@@ -324,6 +325,9 @@ class InstagramMetaConnectService:
             account.status = ChannelAccountStatus.ERROR
             account.last_error = self.ERROR_MESSAGES["validation_failed"]
 
+        self.db.commit()
+        self.db.refresh(account)
+        sync_legacy_instagram_account_from_channel(self.db, account)
         self.db.commit()
         self.db.refresh(account)
         return account

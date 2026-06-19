@@ -9,7 +9,7 @@ from app.domain.enums import ChannelAccountStatus, ChannelProvider, InstagramAcc
 from app.domain.models import ChannelAccount, InstagramAccount, User
 from app.repositories.instagram_account_repository import InstagramAccountRepository
 from app.schemas.instagram_account import InstagramAccountCreate, InstagramAccountRead
-from app.services.shop_service import ShopService
+from app.services.legacy_channel_compat import ensure_legacy_instagram_accounts_for_shop
 
 
 class InstagramAccountService:
@@ -20,6 +20,7 @@ class InstagramAccountService:
 
     def list_accounts(self, shop_id: UUID, user: User) -> list[InstagramAccountRead]:
         self.shop_service.get_shop(shop_id, user)
+        ensure_legacy_instagram_accounts_for_shop(self.db, shop_id)
         accounts = self.accounts.list_for_shop(shop_id)
         return [InstagramAccountRead.model_validate(account) for account in accounts]
 
