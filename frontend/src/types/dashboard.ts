@@ -45,6 +45,9 @@ export interface DashboardTrendPoint {
   llm: number;
   handoff: number;
   conversions: number;
+  active_conversations: number;
+  pending_orders: number;
+  failed_jobs: number;
 }
 
 export interface DashboardTrends {

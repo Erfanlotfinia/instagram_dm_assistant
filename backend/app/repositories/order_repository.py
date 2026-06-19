@@ -43,6 +43,24 @@ class OrderRepository:
         )
         return self.db.scalar(stmt)
 
+    def get_linked_for_conversation(self, conversation_id: UUID) -> Order | None:
+        """Latest non-terminal order for conversation context display."""
+        excluded_statuses = {
+            OrderStatus.CANCELLED,
+            OrderStatus.EXPIRED,
+            OrderStatus.FAILED,
+        }
+        stmt = (
+            select(Order)
+            .options(joinedload(Order.items))
+            .where(
+                Order.conversation_id == conversation_id,
+                Order.status.not_in(excluded_statuses),
+            )
+            .order_by(Order.created_at.desc())
+        )
+        return self.db.scalar(stmt)
+
     def list_for_customer(self, customer_id: UUID, *, limit: int = 50) -> list[Order]:
         stmt = (
             select(Order)

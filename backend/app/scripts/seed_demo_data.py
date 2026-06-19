@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.enums import (
     AgentMode,
+    AgentActionStatus,
     AgentRunStatus,
     AgentWorkflowState,
     CatalogAliasSource,
@@ -55,7 +57,9 @@ from app.domain.enums import (
 )
 from app.domain.models import (
     AbandonedOrderRecoveryRule,
+    AdminAuditLog,
     AdminTask,
+    AgentAction,
     AgentDecisionTrace,
     AgentRun,
     AutomationRuleSuggestion,
@@ -78,6 +82,7 @@ from app.domain.models import (
     Order,
     OrderItem,
     Payment,
+    PolicyVersion,
     Product,
     ProductAlias,
     ProductNormalized,
@@ -100,6 +105,7 @@ from app.domain.models import (
 )
 from app.repositories.shop_repository import ShopMemberRepository, ShopRepository
 from app.services.conversation_event_service import EVENT_TITLES
+from app.services.legacy_channel_compat import get_instagram_channel_account_id
 
 logger = logging.getLogger(__name__)
 
@@ -206,11 +212,15 @@ def _get_or_create_conversation(
         )
     )
     if conversation is None:
+        channel_account_id = get_instagram_channel_account_id(db, account_id)
         conversation = Conversation(
             shop_id=shop_id,
             instagram_account_id=account_id,
-            customer_id=customer_id,
+            channel_account_id=channel_account_id,
+            channel_provider=ChannelProvider.INSTAGRAM.value,
+            external_conversation_id=channel_conversation_id,
             channel_conversation_id=channel_conversation_id,
+            customer_id=customer_id,
             **kwargs,
         )
         db.add(conversation)
@@ -231,9 +241,22 @@ def _ensure_message(
         select(Message).where(Message.instagram_message_id == instagram_message_id)
     )
     if existing is not None:
+        if created_at is not None:
+            existing.created_at = created_at
         return
+    conversation = db.get(Conversation, conversation_id)
+    if conversation is None:
+        raise ValueError(f"Conversation {conversation_id} not found")
     message = Message(
+        shop_id=conversation.shop_id,
         conversation_id=conversation_id,
+        customer_id=(
+            conversation.customer_id if direction == MessageDirection.INBOUND else None
+        ),
+        channel_provider=ChannelProvider.INSTAGRAM,
+        channel_account_id=conversation.channel_account_id,
+        external_message_id=instagram_message_id,
+        channel_message_id=instagram_message_id,
         direction=direction,
         channel=MessageChannel.INSTAGRAM,
         message_type=MessageType.TEXT,
@@ -712,6 +735,608 @@ def _seed_dashboard_metrics_demo(
     logger.info("Seeded dashboard funnel, recovery, and upsell demo metrics")
 
 
+def _ensure_auto_sent_audit_for_traces(db: Session, shop_id: UUID) -> None:
+    """Backfill message_auto_sent audit rows for auto-send decision traces."""
+    traces = db.scalars(
+        select(AgentDecisionTrace)
+        .join(Conversation, Conversation.id == AgentDecisionTrace.conversation_id)
+        .where(
+            Conversation.shop_id == shop_id,
+            Conversation.is_simulation.is_(False),
+            AgentDecisionTrace.auto_send_allowed.is_(True),
+            AgentDecisionTrace.human_handoff_required.is_(False),
+        )
+    ).all()
+    for trace in traces:
+        seed_key = f"trace-{trace.id}"
+        existing = db.scalar(
+            select(AdminAuditLog).where(
+                AdminAuditLog.shop_id == shop_id,
+                AdminAuditLog.action == "message_auto_sent",
+                AdminAuditLog.details.contains({"seed_key": seed_key}),
+            ).limit(1)
+        )
+        if existing is not None:
+            existing.created_at = trace.created_at
+            continue
+        log = AdminAuditLog(
+            shop_id=shop_id,
+            action="message_auto_sent",
+            entity_type="conversation",
+            entity_id=str(trace.conversation_id),
+            details={
+                "seed": True,
+                "seed_analytics": True,
+                "seed_key": seed_key,
+                "message_id": str(trace.message_id),
+            },
+        )
+        log.created_at = trace.created_at
+        db.add(log)
+
+
+def _seed_analytics_signals(
+    db: Session,
+    *,
+    shop: Shop,
+    now: datetime,
+    conv_order_ready: Conversation,
+    conv_handoff: Conversation,
+) -> None:
+    """Audit logs and outbound replies so analytics overview KPIs have demo values."""
+    outbound_specs = [
+        (
+            "demo-msg-sara-out-1",
+            conv_handoff.id,
+            "Let me check XL availability with our team.",
+            now - timedelta(minutes=4, seconds=30),
+        ),
+    ]
+    for message_id, conversation_id, text, created_at in outbound_specs:
+        _ensure_message(
+            db,
+            conversation_id=conversation_id,
+            instagram_message_id=message_id,
+            direction=MessageDirection.OUTBOUND,
+            text=text,
+            created_at=created_at,
+        )
+
+    if (
+        db.scalar(
+            select(AdminAuditLog.id).where(
+                AdminAuditLog.shop_id == shop.id,
+                AdminAuditLog.details.contains({"seed_analytics": True}),
+            ).limit(1)
+        )
+        is None
+    ):
+        audit_specs = [
+            ("message_auto_sent", str(conv_order_ready.id), now - timedelta(minutes=17)),
+            ("message_auto_sent", str(conv_order_ready.id), now - timedelta(minutes=16)),
+            ("message_auto_sent", str(conv_handoff.id), now - timedelta(minutes=4)),
+        ]
+        for action, entity_id, created_at in audit_specs:
+            log = AdminAuditLog(
+                shop_id=shop.id,
+                action=action,
+                entity_type="conversation",
+                entity_id=entity_id,
+                details={"seed": True, "seed_analytics": True},
+            )
+            log.created_at = created_at
+            db.add(log)
+
+    _ensure_auto_sent_audit_for_traces(db, shop.id)
+
+
+def _trends_window_start(now: datetime, days: int = 30) -> datetime:
+    return (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _trends_day_volume(day_offset: int, window_start: datetime) -> int:
+    weekday = (window_start + timedelta(days=day_offset)).weekday()
+    weekend_factor = 0.55 if weekday >= 5 else 1.0
+    campaign = 1.35 if 8 <= day_offset <= 22 else 1.0
+    growth = 0.9 + (day_offset / 29) * 0.55
+    wave = 1.0 + (((day_offset * 5) % 9) - 4) * 0.035
+    base = 34 + (day_offset % 7) * 5 + ((day_offset * 11 + 5) % 16)
+    return max(30, int(base * weekend_factor * growth * campaign * wave))
+
+
+def _trends_message_time(day_start: datetime, index: int) -> datetime:
+    return day_start + timedelta(
+        hours=8 + (index * 5) % 14,
+        minutes=(index * 13) % 60,
+        seconds=(index * 7) % 60,
+    )
+
+
+def _trends_trace_outcome(
+    trace_index: int,
+    day_offset: int,
+) -> tuple[bool, bool, AgentWorkflowState, str, dict[str, Any]]:
+    """Deterministic mix: ~48% automated, ~32% LLM, ~20% handoff with varied intents."""
+    cycle = [
+        (True, False, AgentWorkflowState.WAITING_FOR_CONFIRMATION, "buy_product", {"intent": 0.91, "product": 0.88, "variant": 0.89, "risk_level": "low"}),
+        (True, False, AgentWorkflowState.WAITING_FOR_PAYMENT, "ask_price", {"intent": 0.88, "product": 0.86, "variant": 0.86, "risk_level": "low"}),
+        (True, False, AgentWorkflowState.WAITING_FOR_CUSTOMER_INFO, "ask_size", {"intent": 0.87, "product": 0.85, "variant": 0.9, "risk_level": "low"}),
+        (False, False, AgentWorkflowState.IDLE, "ask_availability", {"intent": 0.76, "product": 0.74, "variant": 0.72, "risk_level": "medium"}),
+        (False, False, AgentWorkflowState.WAITING_FOR_CUSTOMER_INFO, "confirm_order", {"intent": 0.74, "product": 0.72, "variant": 0.7, "risk_level": "medium"}),
+        (False, False, AgentWorkflowState.IDLE, "general_question", {"intent": 0.71, "product": 0.69, "variant": 0.68, "risk_level": "medium"}),
+        (False, True, AgentWorkflowState.HUMAN_HANDOFF, "buy_product", {"intent": 0.69, "product": 0.58, "variant": 0.41, "risk_level": "high", "risk_reasons": ["low_variant_confidence"]}),
+        (False, True, AgentWorkflowState.HUMAN_HANDOFF, "payment_support", {"intent": 0.66, "product": 0.62, "variant": 0.55, "risk_level": "high", "risk_reasons": ["payment_dispute"]}),
+        (True, False, AgentWorkflowState.WAITING_FOR_CONFIRMATION, "buy_product", {"intent": 0.93, "product": 0.91, "variant": 0.92, "risk_level": "low"}),
+        (False, False, AgentWorkflowState.IDLE, "ask_shipping", {"intent": 0.78, "product": 0.76, "variant": 0.75, "risk_level": "medium"}),
+    ]
+    idx = (trace_index + day_offset * 3) % len(cycle)
+    auto_send, handoff_required, next_state, intent, risk = cycle[idx]
+    if day_offset >= 20 and not handoff_required:
+        auto_send = trace_index % 4 != 0
+    return auto_send, handoff_required, next_state, intent, risk
+
+
+def _add_trend_decision_trace(
+    db: Session,
+    *,
+    conversation: Conversation,
+    message: Message,
+    hoodie: Product,
+    hoodie_variant: ProductVariant,
+    trace_time: datetime,
+    trace_index: int,
+    day_offset: int,
+) -> None:
+    auto_send, handoff_required, next_state, intent, risk_score = _trends_trace_outcome(
+        trace_index,
+        day_offset,
+    )
+    agent_run = AgentRun(
+        conversation_id=conversation.id,
+        input_message_id=message.id,
+        model_name="demo-trend-agent",
+        prompt_version="seed-trend-v2",
+        input_json={"message_text": message.text},
+        output_json={
+            "intent": intent,
+            "confidence": {
+                "intent": float(risk_score.get("intent", 0.8)),
+                "product": float(risk_score.get("product", 0.78)),
+                "variant": float(risk_score.get("variant", 0.86)),
+            },
+        },
+        status=AgentRunStatus.SUCCESS,
+        is_simulation=False,
+    )
+    agent_run.created_at = trace_time - timedelta(seconds=20)
+    db.add(agent_run)
+    db.flush()
+
+    trace = AgentDecisionTrace(
+        conversation_id=conversation.id,
+        message_id=message.id,
+        agent_run_id=agent_run.id,
+        intent=intent,
+        extracted_slots={"color": "black", "size": "M"},
+        normalized_slots={"color": "black", "size": "M"},
+        product_candidates=[{"product_id": str(hoodie.id), "title": hoodie.title, "score": 0.85}],
+        selected_product_id=hoodie.id,
+        variant_resolution={
+            "variant_id": str(hoodie_variant.id),
+            "sku": hoodie_variant.sku,
+            "confidence": float(risk_score.get("variant", 0.86)),
+        },
+        inventory_result={"available": True},
+        risk_score=risk_score,
+        order_action={"order_id": None, "status": None},
+        next_state=next_state.value,
+        auto_send_allowed=auto_send,
+        human_handoff_required=handoff_required,
+        reasoning_summary=(
+            f"Automated reply sent for {intent.replace('_', ' ')}."
+            if auto_send
+            else f"Routed to {'operator' if handoff_required else 'LLM review'} for {intent.replace('_', ' ')}."
+        ),
+    )
+    trace.created_at = trace_time
+    db.add(trace)
+
+
+def _ensure_trend_day(
+    db: Session,
+    *,
+    offset: int,
+    window_start: datetime,
+    conversations: list[Conversation],
+    hoodie: Product,
+    hoodie_variant: ProductVariant,
+) -> None:
+    """Ensure a full day of inbound messages and decision traces for dashboard charts."""
+    day_start = window_start + timedelta(days=offset)
+    volume = _trends_day_volume(offset, window_start)
+
+    for i in range(volume):
+        message_key = f"demo-trend-msg-{offset}-{i}"
+        message = db.scalar(select(Message).where(Message.instagram_message_id == message_key))
+        msg_time = _trends_message_time(day_start, i)
+        if message is None:
+            conv = conversations[(offset + i) % len(conversations)]
+            _ensure_message(
+                db,
+                conversation_id=conv.id,
+                instagram_message_id=message_key,
+                direction=MessageDirection.INBOUND,
+                text=f"Customer message day {offset + 1} #{i + 1}",
+                created_at=msg_time,
+            )
+            message = db.scalar(select(Message).where(Message.instagram_message_id == message_key))
+        else:
+            message.created_at = msg_time
+
+        if message is None:
+            continue
+
+        trace_time = msg_time + timedelta(minutes=2 + (i % 5))
+        trace = db.scalar(
+            select(AgentDecisionTrace).where(AgentDecisionTrace.message_id == message.id).limit(1)
+        )
+        if trace is None:
+            conversation = db.get(Conversation, message.conversation_id)
+            if conversation is None:
+                continue
+            _add_trend_decision_trace(
+                db,
+                conversation=conversation,
+                message=message,
+                hoodie=hoodie,
+                hoodie_variant=hoodie_variant,
+                trace_time=trace_time,
+                trace_index=i,
+                day_offset=offset,
+            )
+        else:
+            trace.created_at = trace_time
+            if trace.agent_run_id is not None:
+                agent_run = db.get(AgentRun, trace.agent_run_id)
+                if agent_run is not None:
+                    agent_run.created_at = trace_time - timedelta(seconds=20)
+
+
+def _ensure_trend_conversations(
+    db: Session,
+    *,
+    shop: Shop,
+    account: InstagramAccount,
+    reza: Customer,
+    now: datetime,
+) -> list[Conversation]:
+    trend_customers = [
+        reza,
+        _get_or_create_customer(
+            db,
+            shop.id,
+            instagram_user_id="demo-cust-trend-a",
+            full_name="Trend Customer A",
+            phone="09124445566",
+        ),
+        _get_or_create_customer(
+            db,
+            shop.id,
+            instagram_user_id="demo-cust-trend-b",
+            full_name="Trend Customer B",
+            phone="09125556677",
+        ),
+        _get_or_create_customer(
+            db,
+            shop.id,
+            instagram_user_id="demo-cust-trend-c",
+            full_name="Trend Customer C",
+            phone="09126667788",
+        ),
+        _get_or_create_customer(
+            db,
+            shop.id,
+            instagram_user_id="demo-cust-trend-d",
+            full_name="Trend Customer D",
+            phone="09127778899",
+        ),
+        _get_or_create_customer(
+            db,
+            shop.id,
+            instagram_user_id="demo-cust-trend-e",
+            full_name="Trend Customer E",
+            phone="09128889900",
+        ),
+    ]
+    conversations: list[Conversation] = []
+    for idx, customer in enumerate(trend_customers):
+        conversations.append(
+            _get_or_create_conversation(
+                db,
+                shop_id=shop.id,
+                account_id=account.id,
+                customer_id=customer.id,
+                channel_conversation_id=f"demo-conv-trends-history-{idx}",
+                state=ConversationState.CLOSED if idx == 0 else ConversationState.OPEN,
+                workflow_state=AgentWorkflowState.IDLE,
+                handoff_required=False,
+                last_message_at=now - timedelta(days=1),
+            )
+        )
+    return conversations
+
+
+def _ensure_trend_commerce_for_day(
+    db: Session,
+    *,
+    offset: int,
+    day_start: datetime,
+    shop: Shop,
+    conversations: list[Conversation],
+    trend_customers: list[Customer],
+    hoodie: Product,
+    hoodie_variant: ProductVariant,
+) -> None:
+    customer = trend_customers[offset % len(trend_customers)]
+    conversation = conversations[offset % len(conversations)]
+
+    if offset % 3 == 0:
+        order = _ensure_order_with_item(
+            db,
+            shop_id=shop.id,
+            customer_id=customer.id,
+            conversation_id=conversation.id,
+            product=hoodie,
+            variant=hoodie_variant,
+            status=OrderStatus.PAID,
+            payment_status=OrderPaymentStatus.PAID,
+            shipping_status=OrderShippingStatus.DELIVERED,
+            customer_name=customer.full_name or "Trend Customer",
+            reference_key=f"demo-trend-order-{offset}",
+        )
+        order.created_at = day_start + timedelta(hours=16)
+
+    if offset % 4 in (1, 3):
+        pending = _ensure_order_with_item(
+            db,
+            shop_id=shop.id,
+            customer_id=customer.id,
+            conversation_id=conversation.id,
+            product=hoodie,
+            variant=hoodie_variant,
+            status=OrderStatus.PAYMENT_PENDING,
+            payment_status=OrderPaymentStatus.UNPAID,
+            shipping_status=OrderShippingStatus.NOT_STARTED,
+            customer_name=customer.full_name or "Trend Customer",
+            reference_key=f"demo-trend-pending-{offset}",
+        )
+        pending.created_at = day_start + timedelta(hours=11, minutes=30)
+
+
+def _refresh_dashboard_trends_history(
+    db: Session,
+    *,
+    now: datetime,
+    shop: Shop,
+    account: InstagramAccount,
+    reza: Customer,
+    hoodie: Product,
+    hoodie_variant: ProductVariant,
+) -> None:
+    """Re-anchor demo trend messages/traces and backfill missing decision traces."""
+    window_start = _trends_window_start(now)
+    trend_conversations = _ensure_trend_conversations(
+        db,
+        shop=shop,
+        account=account,
+        reza=reza,
+        now=now,
+    )
+    trend_customers = [
+        db.get(Customer, conversation.customer_id)
+        for conversation in trend_conversations
+        if conversation.customer_id is not None
+    ]
+    trend_customers = [customer for customer in trend_customers if customer is not None]
+
+    for offset in range(30):
+        day_start = window_start + timedelta(days=offset)
+        _ensure_trend_day(
+            db,
+            offset=offset,
+            window_start=window_start,
+            conversations=trend_conversations,
+            hoodie=hoodie,
+            hoodie_variant=hoodie_variant,
+        )
+        if trend_customers:
+            _ensure_trend_commerce_for_day(
+                db,
+                offset=offset,
+                day_start=day_start,
+                shop=shop,
+                conversations=trend_conversations,
+                trend_customers=trend_customers,
+                hoodie=hoodie,
+                hoodie_variant=hoodie_variant,
+            )
+
+    conv_ids = {conversation.id for conversation in trend_conversations}
+    for conv_id in conv_ids:
+        conversation = db.get(Conversation, conv_id)
+        if conversation is None:
+            continue
+        latest = db.scalar(
+            select(Message.created_at)
+            .where(Message.conversation_id == conv_id)
+            .order_by(Message.created_at.desc())
+            .limit(1)
+        )
+        if latest is not None:
+            conversation.last_message_at = latest
+
+    logger.info("Refreshed and backfilled 30-day AI decision trend history")
+
+
+def _seed_agent_run_failures(
+    db: Session,
+    *,
+    conv_handoff: Conversation,
+    conv_sim: Conversation,
+    now: datetime,
+) -> None:
+    """Failed LLM runs so AI Control safety KPIs show realistic non-zero values."""
+    failure_specs = [
+        (
+            "demo-fail-msg-1",
+            conv_handoff.id,
+            "Invalid JSON response: unexpected token at position 14",
+            now - timedelta(days=1, hours=3),
+        ),
+        (
+            "demo-fail-msg-2",
+            conv_handoff.id,
+            "Schema validation failed: missing required field 'intent'",
+            now - timedelta(days=4, hours=2),
+        ),
+        (
+            "demo-fail-msg-3",
+            conv_sim.id,
+            "OpenAI request timed out after 30s",
+            now - timedelta(days=9, hours=5),
+        ),
+        (
+            "demo-fail-msg-4",
+            conv_handoff.id,
+            "Invalid JSON response: unexpected end of input",
+            now - timedelta(days=15, hours=1),
+        ),
+        (
+            "demo-fail-msg-5",
+            conv_handoff.id,
+            "Model returned empty completion",
+            now - timedelta(days=22, hours=4),
+        ),
+        (
+            "demo-fail-msg-6",
+            conv_sim.id,
+            "Invalid JSON response: trailing comma in slots object",
+            now - timedelta(days=27, hours=6),
+        ),
+    ]
+    for message_id, conversation_id, error_message, created_at in failure_specs:
+        existing_run = db.scalar(
+            select(AgentRun)
+            .join(Message, Message.id == AgentRun.input_message_id)
+            .where(Message.instagram_message_id == message_id)
+            .limit(1)
+        )
+        if existing_run is not None:
+            existing_run.status = AgentRunStatus.FAILED
+            existing_run.error_message = error_message
+            existing_run.created_at = created_at
+            continue
+
+        _ensure_message(
+            db,
+            conversation_id=conversation_id,
+            instagram_message_id=message_id,
+            direction=MessageDirection.INBOUND,
+            text="Message that triggered a failed agent run",
+            created_at=created_at - timedelta(minutes=1),
+        )
+        message = db.scalar(select(Message).where(Message.instagram_message_id == message_id))
+        if message is None:
+            continue
+        run = AgentRun(
+            conversation_id=conversation_id,
+            input_message_id=message.id,
+            model_name="demo-failure-agent",
+            prompt_version="seed-fail-v1",
+            input_json={"message_text": message.text},
+            output_json={},
+            status=AgentRunStatus.FAILED,
+            error_message=error_message,
+            is_simulation=False,
+        )
+        run.created_at = created_at
+        db.add(run)
+
+    logger.info("Seeded failed agent runs for AI control metrics")
+
+
+def _seed_dashboard_trends_history(
+    db: Session,
+    *,
+    shop: Shop,
+    account: InstagramAccount,
+    now: datetime,
+    hoodie: Product,
+    hoodie_variant: ProductVariant | None,
+    reza: Customer,
+) -> None:
+    """Spread inbound messages, decision traces, and paid orders across the last 30 days."""
+    if hoodie_variant is None:
+        return
+
+    if (
+        db.scalar(
+            select(Message).where(Message.instagram_message_id == "demo-trend-msg-0-0")
+        )
+        is not None
+    ):
+        _refresh_dashboard_trends_history(
+            db,
+            now=now,
+            shop=shop,
+            account=account,
+            reza=reza,
+            hoodie=hoodie,
+            hoodie_variant=hoodie_variant,
+        )
+        return
+
+    window_start = _trends_window_start(now)
+    days = 30
+    conversations = _ensure_trend_conversations(
+        db,
+        shop=shop,
+        account=account,
+        reza=reza,
+        now=now,
+    )
+    trend_customers = [
+        db.get(Customer, conversation.customer_id)
+        for conversation in conversations
+        if conversation.customer_id is not None
+    ]
+    trend_customers = [customer for customer in trend_customers if customer is not None]
+
+    for offset in range(days):
+        day_start = window_start + timedelta(days=offset)
+        _ensure_trend_day(
+            db,
+            offset=offset,
+            window_start=window_start,
+            conversations=conversations,
+            hoodie=hoodie,
+            hoodie_variant=hoodie_variant,
+        )
+        if trend_customers:
+            _ensure_trend_commerce_for_day(
+                db,
+                offset=offset,
+                day_start=day_start,
+                shop=shop,
+                conversations=conversations,
+                trend_customers=trend_customers,
+                hoodie=hoodie,
+                hoodie_variant=hoodie_variant,
+            )
+
+    logger.info("Seeded 30-day dashboard and AI decision chart history")
+
+
 def _seed_failed_jobs(
     db: Session,
     *,
@@ -835,9 +1460,6 @@ def _seed_decision_traces(
     hoodie: Product,
     hoodie_variant: ProductVariant | None,
 ) -> None:
-    if db.scalar(select(AgentDecisionTrace).limit(1)) is not None:
-        return
-
     specs = [
         (
             conv_order_ready,
@@ -848,6 +1470,7 @@ def _seed_decision_traces(
             {"color": "black", "size": "L", "quantity": 1},
             {
                 "intent": 0.92,
+                "product": 0.88,
                 "variant": 0.91,
                 "requires_preview": False,
                 "requires_handoff": False,
@@ -865,6 +1488,7 @@ def _seed_decision_traces(
             {"color": "xl", "quantity": 1},
             {
                 "intent": 0.7,
+                "product": 0.61,
                 "variant": 0.42,
                 "requires_preview": True,
                 "requires_handoff": True,
@@ -885,6 +1509,15 @@ def _seed_decision_traces(
         handoff,
         summary,
     ) in specs:
+        if (
+            db.scalar(
+                select(AgentDecisionTrace)
+                .where(AgentDecisionTrace.conversation_id == conversation.id)
+                .limit(1)
+            )
+            is not None
+        ):
+            continue
         message = db.scalar(select(Message).where(Message.instagram_message_id == message_key))
         if message is None:
             continue
@@ -894,7 +1527,14 @@ def _seed_decision_traces(
             model_name="demo-seed-agent",
             prompt_version="seed-v1",
             input_json={"message_text": message.text},
-            output_json={"intent": intent},
+            output_json={
+                "intent": intent,
+                "confidence": {
+                    "intent": float(risk_score.get("intent", 0.8)),
+                    "product": float(risk_score.get("product", 0.75)),
+                    "variant": float(risk_score.get("variant", 0.7)),
+                },
+            },
             status=AgentRunStatus.SUCCESS,
             is_simulation=False,
         )
@@ -926,7 +1566,40 @@ def _seed_decision_traces(
                 reasoning_summary=summary,
             )
         )
+        db.add(
+            AgentAction(
+                conversation_id=conversation.id,
+                action_name=intent,
+                input_json={"message_id": str(message.id), "extracted_slots": extracted},
+                output_json={
+                    "normalized_slots": normalized,
+                    "next_state": next_state.value,
+                    "human_handoff_required": handoff,
+                },
+                confidence=float(risk_score.get("variant") or risk_score.get("intent") or 0.5),
+                status=AgentActionStatus.SUCCESS,
+            )
+        )
     logger.info("Seeded agent decision traces for risk and conversation detail views")
+
+
+def _pending_payment_for_order(
+    db: Session, order_id: UUID, provider_reference: str
+) -> Payment | None:
+    for pending in db.new:
+        if isinstance(pending, Payment) and (
+            pending.order_id == order_id
+            or pending.provider_reference == provider_reference
+        ):
+            return pending
+    return None
+
+
+def _pending_shipment_for_order(db: Session, order_id: UUID) -> Shipment | None:
+    for pending in db.new:
+        if isinstance(pending, Shipment) and pending.order_id == order_id:
+            return pending
+    return None
 
 
 def _ensure_order_fulfillment_records(
@@ -941,8 +1614,18 @@ def _ensure_order_fulfillment_records(
     """Backfill Payment and Shipment rows so order detail pages show fulfillment info."""
     now = datetime.now(UTC)
     resolved_status = order_status or order.status
+    provider_reference = f"demo-pay-{reference_key}"
 
-    if db.scalar(select(Payment).where(Payment.order_id == order.id).limit(1)) is None:
+    existing_payment = _pending_payment_for_order(db, order.id, provider_reference)
+    if existing_payment is None:
+        existing_payment = db.scalar(
+            select(Payment).where(
+                (Payment.order_id == order.id)
+                | (Payment.provider_reference == provider_reference)
+            ).limit(1)
+        )
+
+    if existing_payment is None:
         record_status: PaymentRecordStatus | None = None
         if payment_status == OrderPaymentStatus.PAID:
             record_status = PaymentRecordStatus.PAID
@@ -963,7 +1646,7 @@ def _ensure_order_fulfillment_records(
                     provider=PaymentProvider.MOCK,
                     status=record_status,
                     payment_url=f"http://localhost:8800/api/v1/payments/mock/pay/demo-{reference_key}",
-                    provider_reference=f"demo-pay-{reference_key}",
+                    provider_reference=provider_reference,
                     callback_processed_at=now - timedelta(hours=2)
                     if record_status == PaymentRecordStatus.PAID
                     else None,
@@ -976,7 +1659,12 @@ def _ensure_order_fulfillment_records(
         OrderShippingStatus.SHIPPED,
         OrderShippingStatus.DELIVERED,
     }:
-        if db.scalar(select(Shipment).where(Shipment.order_id == order.id).limit(1)) is None:
+        existing_shipment = _pending_shipment_for_order(db, order.id)
+        if existing_shipment is None:
+            existing_shipment = db.scalar(
+                select(Shipment).where(Shipment.order_id == order.id).limit(1)
+            )
+        if existing_shipment is None:
             shipment_status = ShipmentStatus.PREPARING
             if shipping_status == OrderShippingStatus.SHIPPED:
                 shipment_status = ShipmentStatus.SHIPPED
@@ -2205,7 +2893,32 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
         hoodie_variant=hoodie_variant,
     )
 
+    _seed_dashboard_trends_history(
+        db,
+        shop=shop,
+        account=account,
+        now=now,
+        hoodie=hoodie,
+        hoodie_variant=hoodie_variant,
+        reza=reza,
+    )
+
     _backfill_demo_order_fulfillment(db, shop.id)
+
+    _seed_agent_run_failures(
+        db,
+        conv_handoff=conv_handoff,
+        conv_sim=conv_sim,
+        now=now,
+    )
+
+    _seed_analytics_signals(
+        db,
+        shop=shop,
+        now=now,
+        conv_order_ready=conv_order_ready,
+        conv_handoff=conv_handoff,
+    )
 
     db.flush()
     logger.info("Rich demo data seeded for shop %s", shop.slug)

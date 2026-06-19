@@ -186,6 +186,71 @@ interface FunnelStep {
   value: number;
 }
 
+export interface HandoffReasonRow {
+  reason: string;
+  count: number;
+  rate: number;
+}
+
+function formatHandoffReason(reason: string): string {
+  const trimmed = reason.trim();
+  if (!trimmed) return 'Unknown';
+  if (trimmed.includes(' ') && !trimmed.includes('_')) return trimmed;
+  return trimmed
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+/** Ranked handoff breakdown with proportional bars (matches FunnelBars styling). */
+export function HandoffReasonBars({ rows }: { rows: HandoffReasonRow[] }) {
+  const max = Math.max(...rows.map((row) => row.count), 1);
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+
+  return (
+    <div className="flex flex-col gap-4">
+      {rows.map((row, index) => {
+        const barPct = Math.round((row.count / max) * 100);
+        const sharePct = Math.round(row.rate * 100);
+        const label = formatHandoffReason(row.reason);
+
+        return (
+          <div key={`${row.reason}-${index}`} className="group">
+            <div className="mb-1.5 flex items-start gap-2.5">
+              <span
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-danger-soft text-[10px] font-semibold tabular-nums text-danger"
+                aria-hidden="true"
+              >
+                {index + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-medium leading-snug text-fg" title={label}>
+                    {label}
+                  </p>
+                  <span className="shrink-0 tabular-nums text-sm font-semibold text-fg">
+                    {row.count.toLocaleString()}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-[11px] tabular-nums text-subtle">{sharePct}% of handoffs</p>
+              </div>
+            </div>
+            <div className="ml-[1.875rem] h-2 overflow-hidden rounded-full bg-surface-sunken">
+              <div
+                className="h-full rounded-full bg-danger/70 transition-all group-hover:bg-danger"
+                style={{ width: `${Math.max(barPct, 6)}%` }}
+                role="presentation"
+              />
+            </div>
+          </div>
+        );
+      })}
+      <p className="border-t border-border pt-3 text-center text-[11px] tabular-nums text-subtle">
+        {total.toLocaleString()} handoff{total === 1 ? '' : 's'} in selected period
+      </p>
+    </div>
+  );
+}
+
 /** Horizontal funnel rendered with proportional bars (avoids extra deps). */
 export function FunnelBars({ steps }: { steps: FunnelStep[] }) {
   const max = Math.max(...steps.map((step) => step.value), 1);

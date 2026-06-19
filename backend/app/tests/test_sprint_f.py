@@ -1,8 +1,21 @@
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
-from app.domain.enums import AgentRunStatus, FailedJobStatus, MessageDirection, MessageType, OrderPaymentStatus, OrderStatus, PaymentProvider, PaymentRecordStatus, UserRole
-from app.domain.models import AdminAuditLog, AgentRun, FailedJob, Message, Order, Product, Shop, ShopMember, UnavailableDemandLog
+from app.domain.enums import (
+    AgentRunStatus,
+    ChannelProvider,
+    FailedJobStatus,
+    MessageChannel,
+    MessageDirection,
+    MessageType,
+    OrderPaymentStatus,
+    OrderStatus,
+    PaymentProvider,
+    PaymentRecordStatus,
+    UserRole,
+)
+from app.domain.models import AdminAuditLog, AgentDecisionTrace, AgentRun, FailedJob, Message, Order, Product, Shop, ShopMember, UnavailableDemandLog
 from app.services.payment_service import PaymentService
 from app.tests.fixtures.agent import build_orchestrator, create_text_message, seed_order_flow_data
 
@@ -81,6 +94,153 @@ def test_analytics_agent_performance(client, auth_headers, demo_shop) -> None:
     body = response.json()
     assert "auto_sent_messages" in body
     assert "handoff_rate" in body
+
+
+def test_analytics_agent_performance_confidence_from_traces(
+    client, auth_headers, db_session, demo_shop
+) -> None:
+    data = seed_order_flow_data(db_session, demo_shop)
+    message = create_text_message(db_session, data["conversation"].id, "Which hoodie?")
+    agent_run = AgentRun(
+        conversation_id=data["conversation"].id,
+        input_message_id=message.id,
+        model_name="test",
+        prompt_version="v1",
+        status=AgentRunStatus.SUCCESS,
+        is_simulation=False,
+    )
+    db_session.add(agent_run)
+    db_session.flush()
+    db_session.add(
+        AgentDecisionTrace(
+            conversation_id=data["conversation"].id,
+            message_id=message.id,
+            agent_run_id=agent_run.id,
+            intent="buy_product",
+            extracted_slots={},
+            normalized_slots={},
+            product_candidates=[{"product_id": "demo", "title": "Hoodie", "score": 0.87}],
+            inventory_result={},
+            risk_score={"intent": 0.91, "product": 0.86, "variant": 0.88},
+            order_action={},
+            next_state="idle",
+            auto_send_allowed=True,
+            human_handoff_required=False,
+            reasoning_summary="High confidence product match.",
+        )
+    )
+    db_session.commit()
+
+    response = client.get(
+        f"/api/v1/shops/{demo_shop.id}/analytics/agent-performance",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["average_intent_confidence"] is not None
+    assert body["average_product_confidence"] is not None
+    assert body["average_intent_confidence"] >= 0.9
+    assert body["average_product_confidence"] >= 0.85
+
+
+def test_analytics_agent_performance_counts_failed_runs(
+    client, auth_headers, db_session, demo_shop
+) -> None:
+    data = seed_order_flow_data(db_session, demo_shop)
+    message = create_text_message(db_session, data["conversation"].id, "Broken JSON please")
+    db_session.add(
+        AgentRun(
+            conversation_id=data["conversation"].id,
+            input_message_id=message.id,
+            model_name="test",
+            prompt_version="v1",
+            status=AgentRunStatus.FAILED,
+            error_message="Invalid JSON response: unexpected token",
+            is_simulation=False,
+        )
+    )
+    db_session.commit()
+
+    response = client.get(
+        f"/api/v1/shops/{demo_shop.id}/analytics/agent-performance",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["failed_agent_runs"] >= 1
+    assert body["invalid_llm_outputs"] >= 1
+
+
+def test_analytics_agent_performance_counts_auto_send_traces(client, auth_headers, db_session, demo_shop) -> None:
+    data = seed_order_flow_data(db_session, demo_shop)
+    message = create_text_message(db_session, data["conversation"].id, "I want the hoodie")
+    agent_run = AgentRun(
+        conversation_id=data["conversation"].id,
+        input_message_id=message.id,
+        model_name="test",
+        prompt_version="v1",
+        status=AgentRunStatus.SUCCESS,
+        is_simulation=False,
+    )
+    db_session.add(agent_run)
+    db_session.flush()
+    db_session.add(
+        AgentDecisionTrace(
+            conversation_id=data["conversation"].id,
+            message_id=message.id,
+            agent_run_id=agent_run.id,
+            intent="buy_product",
+            extracted_slots={},
+            normalized_slots={},
+            product_candidates=[],
+            inventory_result={},
+            risk_score={},
+            order_action={},
+            next_state="idle",
+            auto_send_allowed=True,
+            human_handoff_required=False,
+            reasoning_summary="Auto reply sent.",
+        )
+    )
+    db_session.commit()
+
+    response = client.get(
+        f"/api/v1/shops/{demo_shop.id}/analytics/agent-performance",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["auto_sent_messages"] >= 1
+
+
+def test_analytics_response_time(client, auth_headers, db_session, demo_shop) -> None:
+    data = seed_order_flow_data(db_session, demo_shop)
+    conversation = data["conversation"]
+    now = datetime.now(UTC)
+    inbound = create_text_message(db_session, conversation.id, "Need pricing")
+    inbound.created_at = now - timedelta(minutes=10)
+    outbound = Message(
+        shop_id=demo_shop.id,
+        conversation_id=conversation.id,
+        direction=MessageDirection.OUTBOUND,
+        channel_provider=ChannelProvider.INSTAGRAM,
+        channel_account_id=conversation.channel_account_id,
+        message_type=MessageType.TEXT,
+        channel=MessageChannel.INSTAGRAM,
+        text="Here is the price",
+        raw_payload={},
+    )
+    outbound.created_at = now - timedelta(minutes=8)
+    db_session.add(outbound)
+    db_session.commit()
+
+    response = client.get(
+        f"/api/v1/shops/{demo_shop.id}/analytics/response-time",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["average_first_response_time_seconds"] is not None
+    assert body["average_first_response_time_seconds"] >= 60
 
 
 def test_analytics_shop_isolation(client, auth_headers, db_session, demo_shop, admin_user) -> None:

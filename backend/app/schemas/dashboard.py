@@ -64,6 +64,9 @@ class DashboardTrendPoint(BaseModel):
     llm: int = 0
     handoff: int = 0
     conversions: int = 0
+    active_conversations: int = 0
+    pending_orders: int = 0
+    failed_jobs: int = 0
 
 
 class DashboardTrends(BaseModel):

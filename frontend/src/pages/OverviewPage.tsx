@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useShop } from '../contexts/ShopContext';
 import { queryKeys } from '../lib/queryClient';
 import { apiClient } from '../services/apiClient';
+import type { DashboardTrendPoint } from '../types/dashboard';
 
 function pct(value: number): string {
   return `${Math.round(value * 100)}%`;
@@ -22,10 +23,28 @@ function money(value: string): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);
 }
 
+function sumPoints(points: DashboardTrendPoint[], key: keyof DashboardTrendPoint): number {
+  return points.reduce((total, point) => total + Number(point[key] ?? 0), 0);
+}
+
+function dailyDecisionRates(points: DashboardTrendPoint[]) {
+  return points.map((point) => {
+    const total = point.automated + point.llm + point.handoff;
+    if (total === 0) {
+      return { automated: 0, llm: 0, handoff: 0 };
+    }
+    return {
+      automated: point.automated / total,
+      llm: point.llm / total,
+      handoff: point.handoff / total,
+    };
+  });
+}
+
 export function OverviewPage() {
   const { user } = useAuth();
   const { selectedShopId } = useShop();
-  const [period, setPeriod] = useState<'7d' | '30d'>('7d');
+  const [period, setPeriod] = useState<'7d' | '30d'>('30d');
 
   const metricsQuery = useQuery({
     queryKey: queryKeys.dashboardMetrics(selectedShopId),
@@ -42,7 +61,48 @@ export function OverviewPage() {
 
   const metrics = metricsQuery.data;
   const points = trendsQuery.data?.points ?? [];
-  const messageTrend = points.map((point) => point.messages);
+  const periodLabel = period === '7d' ? 'last 7 days' : 'last 30 days';
+
+  const {
+    messageTrend,
+    automationTrend,
+    llmTrend,
+    handoffTrend,
+    conversionTrend,
+    messagesInPeriod,
+    automatedTotal,
+    llmTotal,
+    handoffTotal,
+    conversionsTotal,
+    activeConversationTrend,
+    pendingOrdersTrend,
+    failedJobsTrend,
+    activeConversationsInPeriod,
+    pendingOrdersInPeriod,
+    failedJobsInPeriod,
+  } = useMemo(() => {
+    const rates = dailyDecisionRates(points);
+    return {
+      messageTrend: points.map((point) => point.messages),
+      automationTrend: rates.map((rate) => rate.automated),
+      llmTrend: rates.map((rate) => rate.llm),
+      handoffTrend: rates.map((rate) => rate.handoff),
+      conversionTrend: points.map((point) =>
+        point.messages > 0 ? point.conversions / point.messages : 0,
+      ),
+      activeConversationTrend: points.map((point) => point.active_conversations ?? 0),
+      pendingOrdersTrend: points.map((point) => point.pending_orders ?? 0),
+      failedJobsTrend: points.map((point) => point.failed_jobs ?? 0),
+      messagesInPeriod: sumPoints(points, 'messages'),
+      automatedTotal: sumPoints(points, 'automated'),
+      llmTotal: sumPoints(points, 'llm'),
+      handoffTotal: sumPoints(points, 'handoff'),
+      conversionsTotal: sumPoints(points, 'conversions'),
+      activeConversationsInPeriod: sumPoints(points, 'active_conversations'),
+      pendingOrdersInPeriod: sumPoints(points, 'pending_orders'),
+      failedJobsInPeriod: sumPoints(points, 'failed_jobs'),
+    };
+  }, [points]);
 
   const funnel = metrics?.conversion_funnel;
   const conversionRate =
@@ -83,18 +143,56 @@ export function OverviewPage() {
             <KpiCard
               label="Messages today"
               value={metrics.messages_today.toLocaleString()}
-              hint={`${metrics.messages_week.toLocaleString()} in last 7 days`}
+              hint={`${messagesInPeriod.toLocaleString()} in ${periodLabel}`}
               trend={messageTrend}
             />
-            <KpiCard label="Automation success" value={pct(metrics.automation_success_rate)} tone="success" />
-            <KpiCard label="LLM fallback" value={pct(metrics.llm_fallback_rate)} tone="warning" />
-            <KpiCard label="Human handoff" value={pct(metrics.handoff_rate)} tone="danger" />
-            <KpiCard label="Conversion (chat→order)" value={pct(conversionRate)} tone="accent" />
-            <KpiCard label="Active conversations" value={metrics.active_conversations.toLocaleString()} />
-            <KpiCard label="Pending orders" value={metrics.waiting_for_payment.toLocaleString()} />
+            <KpiCard
+              label="Automation success"
+              value={pct(metrics.automation_success_rate)}
+              hint={`${automatedTotal.toLocaleString()} auto-handled · ${periodLabel}`}
+              trend={automationTrend}
+              tone="success"
+            />
+            <KpiCard
+              label="LLM fallback"
+              value={pct(metrics.llm_fallback_rate)}
+              hint={`${llmTotal.toLocaleString()} LLM decisions · ${periodLabel}`}
+              trend={llmTrend}
+              tone="warning"
+            />
+            <KpiCard
+              label="Human handoff"
+              value={pct(metrics.handoff_rate)}
+              hint={`${handoffTotal.toLocaleString()} escalations · ${periodLabel}`}
+              trend={handoffTrend}
+              tone="danger"
+            />
+            <KpiCard
+              label="Conversion (chat→order)"
+              value={pct(conversionRate)}
+              hint={`${conversionsTotal.toLocaleString()} conversions · ${periodLabel}`}
+              trend={conversionTrend}
+              tone="accent"
+            />
+            <KpiCard
+              label="Active conversations"
+              value={metrics.active_conversations.toLocaleString()}
+              hint={`${activeConversationsInPeriod.toLocaleString()} with inbound activity · ${periodLabel}`}
+              trend={activeConversationTrend}
+              tone="accent"
+            />
+            <KpiCard
+              label="Pending orders"
+              value={metrics.waiting_for_payment.toLocaleString()}
+              hint={`${pendingOrdersInPeriod.toLocaleString()} new pending · ${periodLabel}`}
+              trend={pendingOrdersTrend}
+              tone="warning"
+            />
             <KpiCard
               label="Failed jobs"
               value={metrics.failed_jobs_count.toLocaleString()}
+              hint={`${failedJobsInPeriod.toLocaleString()} failures · ${periodLabel}`}
+              trend={failedJobsTrend}
               tone={metrics.failed_jobs_count > 0 ? 'danger' : 'success'}
             />
           </div>

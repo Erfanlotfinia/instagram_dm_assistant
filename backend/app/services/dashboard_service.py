@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.enums import (
     ConversationState,
+    FailedJobStatus,
     MessageDirection,
     OrderPaymentStatus,
     OrderRecoveryStatus,
@@ -108,6 +109,9 @@ class DashboardService:
         messages_by_day = self._inbound_messages_by_day(shop_id, start)
         traces_by_day = self._trace_outcomes_by_day(shop_id, start)
         conversions_by_day = self._paid_orders_by_day(shop_id, start)
+        active_by_day = self._conversations_with_inbound_by_day(shop_id, start)
+        pending_by_day = self._payment_pending_orders_by_day(shop_id, start)
+        failed_jobs_by_day = self._failed_jobs_by_day(shop_id, start)
 
         points: list[DashboardTrendPoint] = []
         for offset in range(days):
@@ -122,6 +126,9 @@ class DashboardService:
                     llm=llm,
                     handoff=handoff,
                     conversions=conversions_by_day.get(key, 0),
+                    active_conversations=active_by_day.get(key, 0),
+                    pending_orders=pending_by_day.get(key, 0),
+                    failed_jobs=failed_jobs_by_day.get(key, 0),
                 )
             )
         return DashboardTrends(period=period, points=points)
@@ -221,6 +228,43 @@ class DashboardService:
                 Order.created_at >= start,
             )
             .group_by(func.date(Order.created_at))
+        ).all()
+        return {str(day): int(count) for day, count in rows}
+
+    def _conversations_with_inbound_by_day(self, shop_id: UUID, start: datetime) -> dict[str, int]:
+        rows = self.db.execute(
+            select(func.date(Message.created_at), func.count(func.distinct(Message.conversation_id)))
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(
+                Conversation.shop_id == shop_id,
+                Message.direction == MessageDirection.INBOUND,
+                Message.created_at >= start,
+            )
+            .group_by(func.date(Message.created_at))
+        ).all()
+        return {str(day): int(count) for day, count in rows}
+
+    def _payment_pending_orders_by_day(self, shop_id: UUID, start: datetime) -> dict[str, int]:
+        rows = self.db.execute(
+            select(func.date(Order.created_at), func.count())
+            .where(
+                Order.shop_id == shop_id,
+                Order.status == OrderStatus.PAYMENT_PENDING,
+                Order.created_at >= start,
+            )
+            .group_by(func.date(Order.created_at))
+        ).all()
+        return {str(day): int(count) for day, count in rows}
+
+    def _failed_jobs_by_day(self, shop_id: UUID, start: datetime) -> dict[str, int]:
+        rows = self.db.execute(
+            select(func.date(FailedJob.created_at), func.count())
+            .where(
+                FailedJob.shop_id == shop_id,
+                FailedJob.status == FailedJobStatus.FAILED,
+                FailedJob.created_at >= start,
+            )
+            .group_by(func.date(FailedJob.created_at))
         ).all()
         return {str(day): int(count) for day, count in rows}
 

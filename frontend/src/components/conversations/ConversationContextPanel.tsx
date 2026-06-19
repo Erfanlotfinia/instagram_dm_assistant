@@ -19,6 +19,7 @@ interface ConversationContextPanelProps {
   confidence: Record<string, unknown> | undefined;
   onSaveCustomer: (values: CustomerUpdate) => void;
   isSavingCustomer: boolean;
+  defaultTab?: ContextTab;
 }
 
 const TABS: { id: ContextTab; label: string }[] = [
@@ -60,8 +61,9 @@ export function ConversationContextPanel({
   confidence,
   onSaveCustomer,
   isSavingCustomer,
+  defaultTab = 'customer',
 }: ConversationContextPanelProps) {
-  const [activeTab, setActiveTab] = useState<ContextTab>('customer');
+  const [activeTab, setActiveTab] = useState<ContextTab>(defaultTab);
   const linkedOrderId = conversation.linked_order?.id;
   const correctnessQuery = useQuery({
     queryKey: queryKeys.orderCorrectness(linkedOrderId ?? ''),
@@ -134,7 +136,7 @@ export function ConversationContextPanel({
             </Link>
           </div>
         ) : (
-          <p className="text-sm text-muted">No active order linked to this conversation.</p>
+          <p className="text-sm text-muted">No order linked to this conversation.</p>
         )}
 
         {correctnessQuery.data ? <OrderDraftPanel order={correctnessQuery.data} /> : null}
@@ -194,7 +196,7 @@ export function ConversationContextPanel({
         ) : null}
 
         <ContextSection title="Decision trace">
-          <p className="text-sm text-fg">{conversation.decision_trace_summary ?? 'No agent actions yet.'}</p>
+          <p className="text-sm text-fg">{conversation.decision_trace_summary ?? 'No agent decisions recorded yet.'}</p>
         </ContextSection>
       </div>
 

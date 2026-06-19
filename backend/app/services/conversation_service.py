@@ -17,7 +17,7 @@ from app.domain.enums import (
     SuggestedReplyStatus,
     UserRole,
 )
-from app.domain.models import Message, SuggestedReply, User
+from app.domain.models import AgentDecisionTrace, Message, SuggestedReply, User
 from app.repositories.agent_action_repository import AgentActionRepository
 from app.repositories.agent_run_repository import AgentRunRepository
 from app.repositories.conversation_repository import ConversationRepository
@@ -87,7 +87,7 @@ class ConversationService:
             if last_message is not None:
                 read.last_message_text = last_message.text
                 read.last_message_direction = last_message.direction
-            active_order = self.orders.get_active_for_conversation(conversation.id)
+            active_order = self.orders.get_linked_for_conversation(conversation.id)
             if active_order is not None:
                 read.linked_order = LinkedOrderSummary(
                     id=active_order.id,
@@ -153,7 +153,7 @@ class ConversationService:
                         available_quantity=available,
                     )
 
-        active_order = self.orders.get_active_for_conversation(conversation.id)
+        active_order = self.orders.get_linked_for_conversation(conversation.id)
         if active_order is not None:
             detail.linked_order = LinkedOrderSummary(
                 id=active_order.id,
@@ -184,7 +184,10 @@ class ConversationService:
             ConversationEventRead.model_validate(event)
             for event in self.event_service.list_for_conversation(conversation.id)
         ]
-        detail.decision_trace_summary = self._build_decision_trace_summary(detail.agent_actions)
+        detail.decision_trace_summary = self._decision_trace_summary_for_conversation(
+            conversation.id,
+            detail.agent_actions,
+        )
         return detail
 
     async def mark_telegram_business_read(
@@ -549,6 +552,33 @@ class ConversationService:
                 if values:
                     return sum(values) / len(values)
         return None
+
+    def _decision_trace_summary_for_conversation(
+        self,
+        conversation_id: UUID,
+        agent_actions: list,
+    ) -> str | None:
+        summary = self._build_decision_trace_summary(agent_actions)
+        if summary is not None:
+            return summary
+
+        trace = self.db.scalar(
+            select(AgentDecisionTrace)
+            .where(AgentDecisionTrace.conversation_id == conversation_id)
+            .order_by(AgentDecisionTrace.created_at.desc())
+            .limit(1)
+        )
+        if trace is None:
+            return None
+        if trace.reasoning_summary:
+            return trace.reasoning_summary
+
+        parts: list[str] = []
+        if trace.intent:
+            parts.append(f"Intent: {trace.intent.replace('_', ' ')}")
+        if trace.next_state:
+            parts.append(f"State: {trace.next_state.replace('_', ' ')}")
+        return " — ".join(parts) if parts else None
 
     @staticmethod
     def _build_decision_trace_summary(agent_actions: list) -> str | None:

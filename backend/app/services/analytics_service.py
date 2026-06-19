@@ -8,8 +8,8 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.domain.enums import AgentRunStatus, ConversationState, MessageDirection, OrderPaymentStatus, OrderStatus
-from app.domain.models import AdminAuditLog, AgentDecisionAudit, AgentRun, Conversation, ConversationSlots, Message, Order, Product, ShopMember, UnavailableDemandLog, User
+from app.domain.enums import AgentRunStatus, ConversationState, MessageDirection, OrderPaymentStatus, OrderStatus, PaymentRecordStatus
+from app.domain.models import AdminAuditLog, AgentDecisionAudit, AgentDecisionTrace, AgentRun, Conversation, ConversationSlots, Message, Order, Payment, Product, ShopMember, UnavailableDemandLog, User
 from app.schemas.analytics import (
     AgentPerformanceMetrics,
     FunnelAnalytics,
@@ -57,6 +57,7 @@ class AnalyticsService:
         total_conversations = self._count_conversations(shop_id, start, end)
         handoffs = self._count_conversations(shop_id, start, end, Conversation.handoff_required.is_(True))
         reasons = Counter(self.db.scalars(self._range(select(Conversation.handoff_reason).where(Conversation.shop_id == shop_id, Conversation.handoff_reason.is_not(None)), Conversation.created_at, start, end)).all())
+        avg_first_response, _, avg_time_to_payment = self._response_time_metrics(shop_id, start, end)
         return FunnelAnalytics(
             inbound_messages=inbound,
             product_resolved_count=resolved_products,
@@ -73,6 +74,8 @@ class AnalyticsService:
             abandoned_conversations=max(total_conversations - drafts - handoffs, 0),
             top_abandoned_reason=reasons.most_common(1)[0][0] if reasons else None,
             operator_handoff_rate=self._rate(handoffs, total_conversations),
+            average_time_to_first_response_seconds=avg_first_response,
+            average_time_to_payment_seconds=avg_time_to_payment,
         )
 
     def posts(self, shop_id: UUID, user: User, start: datetime | None = None, end: datetime | None = None) -> list[PostPerformanceRow]:
@@ -209,10 +212,11 @@ class AnalyticsService:
 
     def response_time(self, shop_id: UUID, user: User, start: datetime | None = None, end: datetime | None = None) -> ResponseTimeAnalytics:
         self.shop_service.get_shop(shop_id, user)
+        avg_first_response, avg_draft, avg_payment = self._response_time_metrics(shop_id, start, end)
         return ResponseTimeAnalytics(
-            average_first_response_time_seconds=self.funnel(shop_id, user, start, end).average_time_to_first_response_seconds,
-            average_time_to_draft_order_seconds=None,
-            average_time_to_payment_seconds=self.funnel(shop_id, user, start, end).average_time_to_payment_seconds,
+            average_first_response_time_seconds=avg_first_response,
+            average_time_to_draft_order_seconds=avg_draft,
+            average_time_to_payment_seconds=avg_payment,
         )
 
     def lost_demand(
@@ -376,17 +380,7 @@ class AnalyticsService:
         self.shop_service.get_shop(shop_id, user)
         total_conversations = self._count_conversations(shop_id, start, end) or 1
         handoffs = self._count_conversations(shop_id, start, end, Conversation.handoff_required.is_(True))
-        auto_sent = self.db.scalar(
-            self._range(
-                select(func.count(AdminAuditLog.id)).where(
-                    AdminAuditLog.shop_id == shop_id,
-                    AdminAuditLog.action == "message_auto_sent",
-                ),
-                AdminAuditLog.created_at,
-                start,
-                end,
-            )
-        ) or 0
+        auto_sent = self._count_auto_sent_messages(shop_id, start, end)
         preview_required = self.db.scalar(
             self._range(
                 select(func.count(Conversation.id)).where(
@@ -441,14 +435,12 @@ class AnalyticsService:
         ).all()
         for audit in audits:
             slots = audit.extracted_slots or {}
-            confidence = slots.get("confidence") or {}
-            if isinstance(confidence, dict):
-                if confidence.get("intent") is not None:
-                    intent_confidences.append(float(confidence["intent"]))
-                if confidence.get("product") is not None:
-                    product_confidences.append(float(confidence["product"]))
-                if confidence.get("variant") is not None:
-                    variant_confidences.append(float(confidence["variant"]))
+            self._append_confidence_scores(
+                slots.get("confidence") or {},
+                intent_confidences,
+                product_confidences,
+                variant_confidences,
+            )
         runs = self.db.scalars(
             self._range(
                 select(AgentRun)
@@ -460,14 +452,27 @@ class AnalyticsService:
             )
         ).all()
         for run in runs:
-            confidence = (run.output_json or {}).get("confidence") or {}
-            if isinstance(confidence, dict):
-                if confidence.get("intent") is not None:
-                    intent_confidences.append(float(confidence["intent"]))
-                if confidence.get("product") is not None:
-                    product_confidences.append(float(confidence["product"]))
-                if confidence.get("variant") is not None:
-                    variant_confidences.append(float(confidence["variant"]))
+            self._append_confidence_scores(
+                (run.output_json or {}).get("confidence") or {},
+                intent_confidences,
+                product_confidences,
+                variant_confidences,
+            )
+        traces = self.db.scalars(
+            self._range(
+                select(AgentDecisionTrace)
+                .join(Conversation, Conversation.id == AgentDecisionTrace.conversation_id)
+                .where(
+                    Conversation.shop_id == shop_id,
+                    Conversation.is_simulation.is_(False),
+                ),
+                AgentDecisionTrace.created_at,
+                start,
+                end,
+            )
+        ).all()
+        for trace in traces:
+            self._append_trace_confidence_scores(trace, intent_confidences, product_confidences, variant_confidences)
 
         def _avg(values: list[float]) -> float | None:
             return round(sum(values) / len(values), 4) if values else None
@@ -482,6 +487,175 @@ class AnalyticsService:
             average_product_confidence=_avg(product_confidences),
             average_variant_confidence=_avg(variant_confidences),
         )
+
+    def _append_confidence_scores(
+        self,
+        confidence: dict,
+        intent_confidences: list[float],
+        product_confidences: list[float],
+        variant_confidences: list[float],
+    ) -> None:
+        if not isinstance(confidence, dict):
+            return
+        if confidence.get("intent") is not None:
+            intent_confidences.append(float(confidence["intent"]))
+        if confidence.get("product") is not None:
+            product_confidences.append(float(confidence["product"]))
+        if confidence.get("variant") is not None:
+            variant_confidences.append(float(confidence["variant"]))
+
+    def _append_trace_confidence_scores(
+        self,
+        trace: AgentDecisionTrace,
+        intent_confidences: list[float],
+        product_confidences: list[float],
+        variant_confidences: list[float],
+    ) -> None:
+        risk = trace.risk_score or {}
+        if isinstance(risk, dict):
+            if risk.get("intent") is not None:
+                intent_confidences.append(float(risk["intent"]))
+            if risk.get("product") is not None:
+                product_confidences.append(float(risk["product"]))
+            if risk.get("variant") is not None:
+                variant_confidences.append(float(risk["variant"]))
+
+        if not isinstance(risk, dict) or risk.get("product") is None:
+            candidate_scores = [
+                float(candidate["score"])
+                for candidate in (trace.product_candidates or [])
+                if isinstance(candidate, dict) and candidate.get("score") is not None
+            ]
+            if candidate_scores:
+                product_confidences.append(max(candidate_scores))
+
+        variant_resolution = trace.variant_resolution or {}
+        if isinstance(variant_resolution, dict) and variant_resolution.get("confidence") is not None:
+            if not isinstance(risk, dict) or risk.get("variant") is None:
+                variant_confidences.append(float(variant_resolution["confidence"]))
+
+    def _count_auto_sent_messages(
+        self, shop_id: UUID, start: datetime | None, end: datetime | None
+    ) -> int:
+        audit_count = self.db.scalar(
+            self._range(
+                select(func.count(AdminAuditLog.id)).where(
+                    AdminAuditLog.shop_id == shop_id,
+                    AdminAuditLog.action == "message_auto_sent",
+                ),
+                AdminAuditLog.created_at,
+                start,
+                end,
+            )
+        ) or 0
+        trace_count = self.db.scalar(
+            self._range(
+                select(func.count(AgentDecisionTrace.id))
+                .join(Conversation, Conversation.id == AgentDecisionTrace.conversation_id)
+                .where(
+                    Conversation.shop_id == shop_id,
+                    Conversation.is_simulation.is_(False),
+                    AgentDecisionTrace.auto_send_allowed.is_(True),
+                    AgentDecisionTrace.human_handoff_required.is_(False),
+                ),
+                AgentDecisionTrace.created_at,
+                start,
+                end,
+            )
+        ) or 0
+        return max(audit_count, trace_count)
+
+    def _response_time_metrics(
+        self, shop_id: UUID, start: datetime | None, end: datetime | None
+    ) -> tuple[float | None, float | None, float | None]:
+        conv_ids = list(
+            self.db.scalars(
+                self._range(
+                    select(Conversation.id).where(
+                        Conversation.shop_id == shop_id,
+                        Conversation.is_simulation.is_(False),
+                    ),
+                    Conversation.created_at,
+                    start,
+                    end,
+                )
+            ).all()
+        )
+        if not conv_ids:
+            return None, None, None
+
+        messages = self.db.scalars(
+            select(Message)
+            .where(Message.conversation_id.in_(conv_ids))
+            .order_by(Message.conversation_id, Message.created_at)
+        ).all()
+        by_conv: dict[UUID, list[Message]] = defaultdict(list)
+        for message in messages:
+            by_conv[message.conversation_id].append(message)
+
+        first_response_deltas: list[float] = []
+        for conv_messages in by_conv.values():
+            first_inbound: datetime | None = None
+            for message in conv_messages:
+                if message.direction == MessageDirection.INBOUND:
+                    if first_inbound is None:
+                        first_inbound = message.created_at
+                elif first_inbound is not None:
+                    delta = (message.created_at - first_inbound).total_seconds()
+                    if delta >= 0:
+                        first_response_deltas.append(delta)
+                    break
+
+        orders = self.db.scalars(
+            self._range(
+                select(Order).where(Order.shop_id == shop_id, Order.conversation_id.in_(conv_ids)),
+                Order.created_at,
+                start,
+                end,
+            )
+        ).all()
+        paid_order_ids = [order.id for order in orders if order.payment_status == OrderPaymentStatus.PAID]
+        paid_at_by_order: dict[UUID, datetime] = {}
+        if paid_order_ids:
+            payments = self.db.scalars(
+                select(Payment).where(
+                    Payment.order_id.in_(paid_order_ids),
+                    Payment.status == PaymentRecordStatus.PAID,
+                )
+            ).all()
+            for payment in payments:
+                paid_at = payment.callback_processed_at or payment.updated_at
+                existing = paid_at_by_order.get(payment.order_id)
+                if existing is None or paid_at < existing:
+                    paid_at_by_order[payment.order_id] = paid_at
+
+        draft_deltas: list[float] = []
+        payment_deltas: list[float] = []
+        for order in orders:
+            conv_messages = by_conv.get(order.conversation_id, [])
+            first_inbound = next(
+                (message.created_at for message in conv_messages if message.direction == MessageDirection.INBOUND),
+                None,
+            )
+            if first_inbound is None:
+                continue
+            draft_delta = (order.created_at - first_inbound).total_seconds()
+            if draft_delta >= 0:
+                draft_deltas.append(draft_delta)
+            if order.payment_status == OrderPaymentStatus.PAID:
+                paid_at = paid_at_by_order.get(order.id, order.updated_at)
+                pay_delta = (paid_at - first_inbound).total_seconds()
+                if pay_delta >= 0:
+                    payment_deltas.append(pay_delta)
+
+        return (
+            self._avg_seconds(first_response_deltas),
+            self._avg_seconds(draft_deltas),
+            self._avg_seconds(payment_deltas),
+        )
+
+    def _avg_seconds(self, values: list[float]) -> float | None:
+        return round(sum(values) / len(values), 2) if values else None
 
     def _range(self, stmt, column, start, end):
         if start:

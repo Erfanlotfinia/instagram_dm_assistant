@@ -216,11 +216,13 @@ export function ConversationDetailPanel({ conversationId }: ConversationDetailPa
               <DecisionTraceViewer shopId={shopId} conversationId={conversationId} />
             ) : (
               <ConversationContextPanel
+                key={rightPanelTab}
                 conversation={conversation}
                 shopId={shopId}
                 confidence={conversation.slots?.confidence}
                 onSaveCustomer={(values) => saveCustomer.mutate(values)}
                 isSavingCustomer={saveCustomer.isPending}
+                defaultTab={rightPanelTab === 'order' ? 'order' : 'customer'}
               />
             )}
           </div>

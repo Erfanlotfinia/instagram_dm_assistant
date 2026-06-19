@@ -7,6 +7,7 @@ import { Card, CardBody, CardHeader, Badge } from '../components/ui';
 import { KpiCard, DataTable, FilterBar, LoadingState, ErrorState, EmptyState } from '../components/data';
 import type { Column } from '../components/data';
 import { useShop } from '../contexts/ShopContext';
+import { queryKeys } from '../lib/queryClient';
 import { apiClient } from '../services/apiClient';
 import type { AgentDecisionTrace } from '../types/conversation';
 
@@ -75,6 +76,11 @@ function traceColumns(): Column<AgentDecisionTrace>[] {
 export function AIControlOverviewPage() {
   const { selectedShopId } = useShop();
   const tracesQuery = useDecisionTraces();
+  const trendsQuery = useQuery({
+    queryKey: queryKeys.dashboardTrends(selectedShopId, '30d'),
+    queryFn: () => apiClient.getDashboardTrends(selectedShopId, '30d'),
+    enabled: Boolean(selectedShopId),
+  });
   const perfQuery = useQuery({
     queryKey: ['ai-agent-performance', selectedShopId],
     queryFn: () => apiClient.getAnalyticsAgentPerformance(selectedShopId),
@@ -83,17 +89,22 @@ export function AIControlOverviewPage() {
 
   const traces = tracesQuery.data ?? [];
   const counts = useMemo(() => {
-    const total = traces.length || 1;
+    const total = traces.length;
     const automated = traces.filter((trace) => classify(trace) === 'automated').length;
     const llm = traces.filter((trace) => classify(trace) === 'llm').length;
     const handoff = traces.filter((trace) => classify(trace) === 'handoff').length;
     return {
-      total: traces.length,
-      automated: Math.round((automated / total) * 100),
-      llm: Math.round((llm / total) * 100),
-      handoff: Math.round((handoff / total) * 100),
+      total,
+      automated: total > 0 ? Math.round((automated / total) * 100) : 0,
+      llm: total > 0 ? Math.round((llm / total) * 100) : 0,
+      handoff: total > 0 ? Math.round((handoff / total) * 100) : 0,
     };
   }, [traces]);
+
+  const trendPoints = trendsQuery.data?.points ?? [];
+  const hasTrendData = trendPoints.some(
+    (point) => point.automated + point.llm + point.handoff > 0,
+  );
 
   const perf = perfQuery.data;
 
@@ -104,35 +115,51 @@ export function AIControlOverviewPage() {
         <KpiCard label="Automated" value={`${counts.automated}%`} tone="success" />
         <KpiCard label="LLM handled" value={`${counts.llm}%`} tone="warning" />
         <KpiCard label="Human handoff" value={`${counts.handoff}%`} tone="danger" />
-        <KpiCard label="Invalid LLM outputs" value={perf?.invalid_llm_outputs ?? 0} tone="danger" />
-        <KpiCard label="Failed agent runs" value={perf?.failed_agent_runs ?? 0} tone="danger" />
+        <KpiCard label="Invalid LLM outputs" value={perfQuery.isLoading ? '…' : (perf?.invalid_llm_outputs ?? 0)} tone="danger" />
+        <KpiCard label="Failed agent runs" value={perfQuery.isLoading ? '…' : (perf?.failed_agent_runs ?? 0)} tone="danger" />
         <KpiCard
           label="Avg intent confidence"
-          value={perf?.average_intent_confidence != null ? `${Math.round(perf.average_intent_confidence * 100)}%` : '—'}
+          value={
+            perfQuery.isLoading
+              ? '…'
+              : perf?.average_intent_confidence != null
+                ? `${Math.round(perf.average_intent_confidence * 100)}%`
+                : '—'
+          }
         />
         <KpiCard
           label="Avg product confidence"
-          value={perf?.average_product_confidence != null ? `${Math.round(perf.average_product_confidence * 100)}%` : '—'}
+          value={
+            perfQuery.isLoading
+              ? '…'
+              : perf?.average_product_confidence != null
+                ? `${Math.round(perf.average_product_confidence * 100)}%`
+                : '—'
+          }
         />
       </div>
 
       <Card>
-        <CardHeader title="Decision distribution" description="How automated responses are being handled." />
+        <CardHeader
+          title="Decision distribution"
+          description="Automated vs LLM-handled vs human handoff, by day (last 30 days)."
+        />
         <CardBody>
-          {tracesQuery.isLoading ? (
+          {trendsQuery.isLoading ? (
             <LoadingState />
-          ) : traces.length === 0 ? (
+          ) : !hasTrendData ? (
             <EmptyState title="No decisions yet" />
           ) : (
             <AreaTrend
-              data={[{ name: 'mix', Automated: counts.automated, LLM: counts.llm, Handoff: counts.handoff }]}
-              xKey="name"
+              data={trendPoints as unknown as Array<Record<string, number | string>>}
+              xKey="date"
+              stacked
               series={[
-                { key: 'Automated', label: 'Automated', color: 'var(--c-success)' },
-                { key: 'LLM', label: 'LLM', color: 'var(--c-warning)' },
-                { key: 'Handoff', label: 'Handoff', color: 'var(--c-danger)' },
+                { key: 'automated', label: 'Automated', color: 'var(--c-success)' },
+                { key: 'llm', label: 'LLM handled', color: 'var(--c-warning)' },
+                { key: 'handoff', label: 'Human handoff', color: 'var(--c-danger)' },
               ]}
-              height={200}
+              height={240}
             />
           )}
         </CardBody>
