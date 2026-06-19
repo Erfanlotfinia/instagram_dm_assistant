@@ -39,9 +39,9 @@ export const CatalogCopilotPage = lazyPage(() => import('../pages/CatalogCopilot
 export const ChannelAccountsPage = lazyPage(() => import('../pages/ChannelAccountsPage'), 'ChannelAccountsPage');
 export const OrderDetailPage = lazyPage(() => import('../pages/OrderDetailPage'), 'OrderDetailPage');
 export const DMSimulatorPage = lazyPage(() => import('../pages/DMSimulatorPage'), 'DMSimulatorPage');
-export const FashionDictionaryPage = lazyPage(
-  () => import('../pages/FashionDictionaryPage'),
-  'FashionDictionaryPage',
+export const AttributeDictionaryPage = lazyPage(
+  () => import('../pages/AttributeDictionaryPage'),
+  'AttributeDictionaryPage',
 );
 export const FailedJobsPage = lazyPage(() => import('../pages/FailedJobsPage'), 'FailedJobsPage');
 export const InstagramProductMappingPage = lazyPage(
