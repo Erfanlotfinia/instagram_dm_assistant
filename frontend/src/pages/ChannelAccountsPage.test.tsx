@@ -17,6 +17,10 @@ const mocks = vi.hoisted(() => ({
   validateChannelCredentials: vi.fn(),
   testChannelWebhook: vi.fn(),
   setTelegramWebhook: vi.fn(),
+  startInstagramConnect: vi.fn(),
+  reconnectInstagram: vi.fn(),
+  disconnectChannel: vi.fn(),
+  getInstagramReadiness: vi.fn(),
   getMe: vi.fn(),
   copyTextToClipboard: vi.fn(),
 }));
@@ -50,6 +54,10 @@ vi.mock('../services/apiClient', () => ({
     validateChannelCredentials: mocks.validateChannelCredentials,
     testChannelWebhook: mocks.testChannelWebhook,
     setTelegramWebhook: mocks.setTelegramWebhook,
+    startInstagramConnect: mocks.startInstagramConnect,
+    reconnectInstagram: mocks.reconnectInstagram,
+    disconnectChannel: mocks.disconnectChannel,
+    getInstagramReadiness: mocks.getInstagramReadiness,
   },
 }));
 
@@ -102,6 +110,18 @@ describe('ChannelAccountsPage', () => {
       role: 'owner',
     });
     mocks.listChannelAccounts.mockResolvedValue([]);
+    mocks.getInstagramReadiness.mockResolvedValue({
+      meta_app_id_configured: true,
+      meta_app_secret_configured: true,
+      oauth_redirect_uri: 'http://localhost:8000/api/v1/channels/instagram/oauth/callback',
+      data_deletion_callback_configured: false,
+      privacy_policy_url: null,
+      required_scopes: ['instagram_basic'],
+      app_mode: 'development',
+      webhook_callback_reachable: true,
+      webhook_callback_url: 'http://localhost:8000/api/v1/channels/instagram/webhook',
+      app_review_status: 'manual_check_required',
+    });
     mocks.copyTextToClipboard.mockResolvedValue(undefined);
     localStorage.setItem('dm_assistant_selected_shop_id', 's1');
   });
@@ -112,14 +132,14 @@ describe('ChannelAccountsPage', () => {
   });
 
   async function waitForShopReady() {
-    expect(await screen.findByText('Add channel account')).toBeInTheDocument();
+    expect(await screen.findByText('Add other channel accounts')).toBeInTheDocument();
     await waitFor(() => {
       expect(mocks.listChannelAccounts).toHaveBeenCalledWith('s1');
     });
   }
 
-  it('renders all supported providers in connected channels', async () => {
-    const providers: ChannelProvider[] = ['instagram', 'whatsapp', 'telegram', 'bale', 'rubika'];
+  it('renders other supported providers in connected channels', async () => {
+    const providers: ChannelProvider[] = ['whatsapp', 'telegram', 'bale', 'rubika'];
     mocks.listChannelAccounts.mockResolvedValue(providers.map((provider) => makeAccount(provider)));
 
     renderPage();
@@ -129,30 +149,24 @@ describe('ChannelAccountsPage', () => {
     for (const provider of providers) {
       expect(await screen.findByText(`${provider} main`)).toBeInTheDocument();
     }
-    expect(screen.getAllByText('Instagram').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Connect Instagram' })).toBeInTheDocument();
     expect(screen.getAllByText('WhatsApp').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Telegram').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Bale').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Rubika').length).toBeGreaterThan(0);
   });
 
-  it('does not display saved token values and shows configured status instead', async () => {
-    const secretToken = 'super-secret-access-token-value';
+  it('does not display saved token values for connected instagram card', async () => {
     mocks.listChannelAccounts.mockResolvedValue([
       makeAccount('instagram', {
         token_configured: true,
+        settings_json: { instagram_username: 'demo_shop' },
       }),
     ]);
 
     renderPage();
     await waitForShopReady();
-    await screen.findByText('instagram main');
 
-    expect(screen.getAllByText('Configured').length).toBeGreaterThan(0);
-    document.querySelectorAll('input[type="password"]').forEach((input) => {
-      expect(input).not.toHaveValue(secretToken);
-    });
-    expect(screen.queryByDisplayValue(secretToken)).not.toBeInTheDocument();
+    expect(screen.getByText('Encrypted')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('super-secret-access-token-value')).not.toBeInTheDocument();
   });
 
   it('renders configured and not configured credential badges', async () => {
@@ -204,19 +218,15 @@ describe('ChannelAccountsPage', () => {
     expect(screen.queryByRole('button', { name: 'Validate credentials' })).not.toBeInTheDocument();
   });
 
-  it('shows instagram required setup fields in create form', async () => {
-    const user = userEvent.setup();
+  it('does not show instagram manual fields in normal create form', async () => {
     renderPage();
     await waitForShopReady();
 
     const providerSelect = screen.getByRole('combobox');
-    await user.selectOptions(providerSelect, 'instagram');
-
-    expect(screen.getByText('Instagram Business Account ID')).toBeInTheDocument();
-    expect(screen.getByText('Facebook Page ID')).toBeInTheDocument();
-    expect(screen.getByText('Webhook verify token')).toBeInTheDocument();
-    expect(screen.getByText('Webhook secret')).toBeInTheDocument();
-    expect(screen.getByText('Page access token')).toBeInTheDocument();
+    expect(providerSelect).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Instagram' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Page access token')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Connect Instagram' })).toBeInTheDocument();
   });
 
   it('shows telegram bot token field in create form', async () => {
@@ -253,8 +263,15 @@ describe('ChannelAccountsPage', () => {
     expect(screen.getByText(/never shown again after save/)).toBeInTheDocument();
   });
 
-  it('opens replace credentials dialog for admins', async () => {
-    mocks.listChannelAccounts.mockResolvedValue([makeAccount('instagram')]);
+  it('keeps advanced instagram setup collapsed by default', async () => {
+    renderPage();
+    await waitForShopReady();
+    expect(screen.getByText('Advanced / developer setup only')).toBeInTheDocument();
+    expect(screen.queryByText('Save advanced setup')).not.toBeInTheDocument();
+  });
+
+  it('opens replace credentials dialog for telegram admins', async () => {
+    mocks.listChannelAccounts.mockResolvedValue([makeAccount('telegram')]);
     const user = userEvent.setup();
     renderPage();
     await waitForShopReady();

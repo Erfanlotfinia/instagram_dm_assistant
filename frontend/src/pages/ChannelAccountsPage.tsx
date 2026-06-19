@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 
 import { HubPage } from '../components/shell/HubPage';
-import { Callout, Card, CardBody, CardHeader } from '../components/ui';
-import { EmptyState, LoadingState } from '../components/data';
 import { ChannelAccountCard } from '../components/channels/ChannelAccountCard';
 import { ChannelAccountCreateForm } from '../components/channels/ChannelAccountCreateForm';
 import { ChannelCredentialsDialog } from '../components/channels/ChannelCredentialsDialog';
+import { InstagramAdvancedSetup } from '../components/channels/InstagramAdvancedSetup';
+import { InstagramConnectCard } from '../components/channels/InstagramConnectCard';
+import { InstagramReadinessPanel } from '../components/channels/InstagramReadinessPanel';
+import { Callout, Card, CardBody, CardHeader } from '../components/ui';
+import { EmptyState, LoadingState } from '../components/data';
 import { useAuth } from '../contexts/AuthContext';
 import { useShop } from '../contexts/ShopContext';
 import { apiClient } from '../services/apiClient';
@@ -20,6 +23,16 @@ export function ChannelAccountsPage() {
   const [credentialsAccount, setCredentialsAccount] = useState<ChannelAccount | null>(null);
 
   const canManageCredentials = user?.role === 'owner' || user?.role === 'admin';
+  const instagramAccount =
+    accounts.find(
+      (account) =>
+        account.provider === 'instagram' &&
+        account.status !== 'disabled' &&
+        account.token_configured,
+    ) ??
+    accounts.find((account) => account.provider === 'instagram' && account.status !== 'disabled') ??
+    null;
+  const otherAccounts = accounts.filter((account) => account.provider !== 'instagram');
 
   async function loadAccounts() {
     if (!selectedShopId) {
@@ -62,9 +75,6 @@ export function ChannelAccountsPage() {
     setError(null);
     try {
       const settings: Record<string, unknown> = {};
-      if (payload.provider === 'instagram' && payload.pageId) {
-        settings.page_id = payload.pageId;
-      }
       if (payload.provider === 'telegram') {
         settings.allowed_updates_json = ['message', 'callback_query'];
         settings.use_local_bot_api = false;
@@ -131,12 +141,33 @@ export function ChannelAccountsPage() {
         </Card>
       ) : (
         <>
+          {isLoading ? (
+            <Card>
+              <CardBody>
+                <LoadingState label="Loading channel accounts…" />
+              </CardBody>
+            </Card>
+          ) : (
+            <InstagramConnectCard
+              shopId={selectedShopId}
+              account={instagramAccount}
+              canManage={canManageCredentials}
+              onRefresh={() => void loadAccounts()}
+            />
+          )}
+
+          {canManageCredentials ? (
+            <InstagramAdvancedSetup shopId={selectedShopId} onSaved={() => void loadAccounts()} />
+          ) : null}
+
+          {canManageCredentials ? <InstagramReadinessPanel shopId={selectedShopId} /> : null}
+
           <Card>
             <CardHeader
-              title="Add channel account"
+              title="Add other channel accounts"
               description={
                 canManageCredentials
-                  ? 'Create a new channel connection and save encrypted credentials.'
+                  ? 'Connect WhatsApp, Telegram, Bale, or Rubika with encrypted credentials.'
                   : 'View-only access. Contact an owner or admin to add channels.'
               }
             />
@@ -154,24 +185,18 @@ export function ChannelAccountsPage() {
 
           <div className="flex flex-col gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-fg">Connected channels</h2>
+              <h2 className="text-lg font-semibold text-fg">Other connected channels</h2>
               <p className="text-sm text-muted">Status, webhook readiness, and setup progress per account.</p>
             </div>
 
-            {isLoading ? (
+            {!isLoading && otherAccounts.length === 0 ? (
               <Card>
                 <CardBody>
-                  <LoadingState label="Loading channel accounts…" />
-                </CardBody>
-              </Card>
-            ) : accounts.length === 0 ? (
-              <Card>
-                <CardBody>
-                  <EmptyState title="No channel accounts connected yet" />
+                  <EmptyState title="No other channel accounts connected yet" />
                 </CardBody>
               </Card>
             ) : (
-              accounts.map((account) => (
+              otherAccounts.map((account) => (
                 <ChannelAccountCard
                   key={account.id}
                   account={account}

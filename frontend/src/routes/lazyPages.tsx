@@ -38,6 +38,14 @@ export const AISafetyPage = lazyPage(() => import('../pages/AIControlPages'), 'A
 // Existing pages
 export const CatalogCopilotPage = lazyPage(() => import('../pages/CatalogCopilotPage'), 'CatalogCopilotPage');
 export const ChannelAccountsPage = lazyPage(() => import('../pages/ChannelAccountsPage'), 'ChannelAccountsPage');
+export const InstagramConnectCallbackPage = lazyPage(
+  () => import('../pages/InstagramConnectCallbackPage'),
+  'InstagramConnectCallbackPage',
+);
+export const InstagramAccountSelectPage = lazyPage(
+  () => import('../pages/InstagramAccountSelectPage'),
+  'InstagramAccountSelectPage',
+);
 export const OrderDetailPage = lazyPage(() => import('../pages/OrderDetailPage'), 'OrderDetailPage');
 export const DMSimulatorPage = lazyPage(() => import('../pages/DMSimulatorPage'), 'DMSimulatorPage');
 export const AttributeDictionaryPage = lazyPage(

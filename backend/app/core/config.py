@@ -70,6 +70,18 @@ class Settings(BaseSettings):
     )
     meta_graph_api_version: str = "v20.0"
     meta_graph_api_base_url: str = "https://graph.facebook.com"
+    meta_oauth_scopes: list[str] = Field(
+        default_factory=lambda: [
+            "instagram_basic",
+            "instagram_manage_messages",
+            "pages_show_list",
+            "pages_read_engagement",
+            "pages_manage_metadata",
+            "business_management",
+        ]
+    )
+    meta_oauth_redirect_path: str = "/api/v1/channels/instagram/oauth/callback"
+    meta_privacy_policy_url: str = ""
     enabled_channel_providers: str = "instagram,whatsapp,telegram,bale,rubika"
     enable_real_provider_send: bool = False
     conversation_lock_ttl_seconds: int = Field(default=120, ge=1)
@@ -145,6 +157,10 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"META_APP_SECRET is required in {self.app_env} when Meta providers are enabled"
                 )
+            if "instagram" in enabled_providers and not self.meta_app_id:
+                raise ValueError(
+                    f"META_APP_ID is required in {self.app_env} when Instagram is enabled"
+                )
             if not self.cors_origins or "*" in self.cors_origins:
                 raise ValueError(f"CORS_ORIGINS must be explicit in {self.app_env}")
             if self.cors_allow_credentials and "*" in self.cors_origins:
@@ -189,6 +205,11 @@ class Settings(BaseSettings):
         if self.llm_provider == "gemini":
             return bool(self.gemini_api_key)
         return bool(self.openai_api_key)
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def meta_oauth_redirect_uri(self) -> str:
+        return f"{self.public_api_base_url.rstrip('/')}{self.meta_oauth_redirect_path}"
 
     @computed_field  # type: ignore[misc]
     @property

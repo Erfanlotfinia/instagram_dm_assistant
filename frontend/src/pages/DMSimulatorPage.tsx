@@ -496,7 +496,7 @@ export function DMSimulatorPage() {
             title="No Instagram accounts connected"
             description="Add an account under Instagram Accounts, then return here to test DM flows."
             action={
-              <Link to="/instagram-accounts">
+              <Link to="/system/channels">
                 <Button type="button" variant="secondary">
                   Go to Instagram Accounts
                 </Button>

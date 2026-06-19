@@ -14,6 +14,8 @@ import {
   AttributeDictionaryPage,
   ChannelAccountsPage,
   ChannelAnalyticsPage,
+  InstagramAccountSelectPage,
+  InstagramConnectCallbackPage,
   ConversationIntelligencePage,
   DMSimulatorPage,
   FailedJobsPage,
@@ -143,6 +145,8 @@ export function AppRoutes() {
           <Route path="health" element={<SystemHealthPage />} />
           <Route path="jobs" element={<FailedJobsPage />} />
           <Route path="channels" element={<ChannelAccountsPage />} />
+          <Route path="channels/instagram/connect" element={<InstagramConnectCallbackPage />} />
+          <Route path="channels/instagram/select" element={<InstagramAccountSelectPage />} />
           <Route path="shops" element={<ShopsPage />} />
           <Route path="rollout" element={<RolloutPage />} />
           <Route path="settings" element={<SettingsPage />} />

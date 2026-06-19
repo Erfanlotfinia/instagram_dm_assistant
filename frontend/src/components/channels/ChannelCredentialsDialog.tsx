@@ -53,11 +53,11 @@ export function ChannelCredentialsDialog({
     setError(null);
   }, [open, account]);
 
-  if (!account) {
+  if (!account || account.provider === 'instagram') {
     return null;
   }
 
-  const isMetaProvider = account.provider === 'instagram' || account.provider === 'whatsapp';
+  const isMetaProvider = account.provider === 'whatsapp';
   const isBotProvider = account.provider === 'telegram' || account.provider === 'bale' || account.provider === 'rubika';
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -164,21 +164,6 @@ export function ChannelCredentialsDialog({
           </div>
         </div>
 
-        {account.provider === 'instagram' && (
-          <>
-            <Field label="Instagram Business Account ID">
-              <Input
-                value={externalAccountId}
-                onChange={(event) => setExternalAccountId(event.target.value)}
-                disabled={!canManage}
-              />
-            </Field>
-            <Field label="Facebook Page ID">
-              <Input value={pageId} onChange={(event) => setPageId(event.target.value)} disabled={!canManage} />
-            </Field>
-          </>
-        )}
-
         {account.provider === 'whatsapp' && (
           <>
             <Field label="WABA ID">
@@ -245,7 +230,7 @@ export function ChannelCredentialsDialog({
 
         {isMetaProvider && (
           <Field
-            label={account.provider === 'instagram' ? 'Page access token' : 'Access token'}
+            label="Access token"
             hint={`Current: ${configuredLabel(account.token_configured)}`}
           >
             <Input

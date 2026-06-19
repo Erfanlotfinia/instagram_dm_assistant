@@ -31,6 +31,9 @@ describe('channelAccounts helpers', () => {
   it('builds canonical callback URL per provider', () => {
     expect(buildCallbackUrl('whatsapp')).toMatch(/\/api\/v1\/channels\/whatsapp\/webhook$/);
     expect(buildCallbackUrl('telegram')).toMatch(/\/api\/v1\/channels\/telegram\/webhook$/);
+    expect(buildCallbackUrl('instagram', 'account-123')).toMatch(
+      /\/api\/v1\/channels\/instagram\/account-123\/webhook$/,
+    );
   });
 
   it('derives primary token configured by provider', () => {

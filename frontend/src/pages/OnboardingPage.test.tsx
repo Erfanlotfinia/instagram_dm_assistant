@@ -20,7 +20,7 @@ vi.mock('../services/apiClient', () => ({
       total_steps: 9,
       steps: [
         { key: 'shop_profile', label: 'Create shop profile', completed: true, href: '/shops' },
-        { key: 'connect_instagram', label: 'Connect Instagram account', completed: false, href: '/instagram-accounts' },
+        { key: 'connect_instagram', label: 'Connect Instagram account', completed: false, href: '/system/channels' },
         { key: 'first_product', label: 'Add first product', completed: false, href: '/products' },
       ],
     }),
@@ -45,7 +45,7 @@ describe('OnboardingPage', () => {
     expect(screen.getByRole('progressbar', { name: 'Onboarding progress' })).toHaveAttribute('aria-valuenow', '11');
     expect(screen.getByText('Next recommended action')).toBeInTheDocument();
     expect(screen.getByText('Connect an Instagram business account to receive DMs.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Connect Instagram account' })).toHaveAttribute('href', '/instagram-accounts');
+    expect(screen.getByRole('link', { name: 'Connect Instagram account' })).toHaveAttribute('href', '/system/channels');
     expect(screen.getByText('Create shop profile')).toBeInTheDocument();
   });
 });

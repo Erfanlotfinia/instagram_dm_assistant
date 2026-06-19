@@ -5,11 +5,11 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.domain.enums import AgentMode
+from app.domain.enums import AgentMode, ChannelAccountStatus, ChannelProvider
 from app.domain.models import (
+    ChannelAccount,
     ColorAlias,
     Conversation,
-    InstagramAccount,
     InstagramProductMap,
     Product,
     ProductVariant,
@@ -23,7 +23,7 @@ from app.services.shop_service import ShopService
 
 STEP_DEFINITIONS: tuple[tuple[str, str, str], ...] = (
     ("shop_profile", "Create shop profile", "/shops"),
-    ("connect_instagram", "Connect Instagram account", "/instagram-accounts"),
+    ("connect_instagram", "Connect Instagram account", "/system/channels"),
     ("first_product", "Add first product", "/products"),
     ("first_variant", "Add product variants", "/products"),
     ("map_post", "Map Instagram post URL", "/instagram-mapping"),
@@ -56,7 +56,11 @@ class OnboardingStatusService:
         flags = shop.onboarding_flags or {}
 
         account_count = self.db.scalar(
-            select(func.count(InstagramAccount.id)).where(InstagramAccount.shop_id == shop_id)
+            select(func.count(ChannelAccount.id)).where(
+                ChannelAccount.shop_id == shop_id,
+                ChannelAccount.provider == ChannelProvider.INSTAGRAM,
+                ChannelAccount.status != ChannelAccountStatus.DISABLED,
+            )
         ) or 0
         product_count = self.db.scalar(
             select(func.count(Product.id)).where(Product.shop_id == shop_id)

@@ -155,6 +155,22 @@ class InstagramProviderAdapter(StaticTokenAdapter):
             webhook_security_type=WebhookSecurityType.SIGNATURE,
         )
 
+    async def validate_credentials(self) -> bool:
+        if not self.token:
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.get(
+                    f"{self.api_base_url}/{self.api_version}/me",
+                    params={"access_token": self.token, "fields": "id"},
+                )
+            if not response.is_success:
+                return False
+            data = response.json()
+            return isinstance(data, dict) and bool(data.get("id"))
+        except httpx.RequestError:
+            return False
+
 
 class WhatsAppProviderAdapter(StaticTokenAdapter):
     provider = ChannelProvider.WHATSAPP

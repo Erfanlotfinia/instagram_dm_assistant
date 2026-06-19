@@ -185,6 +185,30 @@ class ChannelAccountService:
         self.db.refresh(account)
         return account
 
+    async def disconnect(self, account: ChannelAccount, actor_user_id: UUID) -> ChannelAccount:
+        from app.services.instagram_meta_connect_service import InstagramMetaConnectService
+
+        token = self.decrypt_access_token(account)
+        if account.provider == ChannelProvider.INSTAGRAM and token:
+            await InstagramMetaConnectService(self.db).revoke_token_if_supported(token)
+
+        account.status = ChannelAccountStatus.DISABLED
+        account.access_token_encrypted = None
+        account.refresh_token_encrypted = None
+        account.bot_token_encrypted = None
+        account.last_error = None
+        AuditService(self.db).log(
+            action="channel_disconnected",
+            entity_type="channel_account",
+            shop_id=account.shop_id,
+            actor_user_id=actor_user_id,
+            entity_id=str(account.id),
+            metadata={"provider": account.provider.value},
+        )
+        self.db.commit()
+        self.db.refresh(account)
+        return account
+
     @staticmethod
     def _missing_required_credentials(account: ChannelAccount) -> list[str]:
         required = {

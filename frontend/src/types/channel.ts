@@ -82,6 +82,60 @@ export interface WebhookTestResponse {
   channel_account_id: string;
 }
 
+export type ChannelConnectionSessionStatus =
+  | 'pending'
+  | 'redirected'
+  | 'authorized'
+  | 'account_selection_required'
+  | 'connected'
+  | 'failed'
+  | 'expired'
+  | 'cancelled';
+
+export interface InstagramConnectStartResponse {
+  authorization_url: string;
+  session_id: string;
+  expires_at: string;
+}
+
+export interface InstagramCandidateAccount {
+  page_id: string;
+  page_name: string;
+  instagram_business_account_id: string;
+  instagram_username?: string | null;
+  instagram_profile_picture_url?: string | null;
+}
+
+export interface InstagramConnectSession {
+  id: string;
+  shop_id: string;
+  status: ChannelConnectionSessionStatus;
+  expires_at: string;
+  completed_at?: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+  candidate_accounts: InstagramCandidateAccount[];
+  channel_account_id?: string | null;
+}
+
+export interface InstagramSelectAccountRequest {
+  page_id: string;
+  instagram_business_account_id: string;
+}
+
+export interface InstagramReadiness {
+  meta_app_id_configured: boolean;
+  meta_app_secret_configured: boolean;
+  oauth_redirect_uri: string;
+  data_deletion_callback_configured: boolean;
+  privacy_policy_url?: string | null;
+  required_scopes: string[];
+  app_mode: string;
+  webhook_callback_reachable: boolean;
+  webhook_callback_url: string;
+  app_review_status: string;
+}
+
 export interface TelegramWebhookInfo {
   ok?: boolean;
   result?: Record<string, unknown>;

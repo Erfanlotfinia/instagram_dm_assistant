@@ -103,6 +103,25 @@ class ChannelAccountStatus(str, enum.Enum):
     ERROR = "error"
 
 
+class ChannelConnectionProvider(str, enum.Enum):
+    INSTAGRAM = "instagram"
+
+
+class ChannelConnectionMethod(str, enum.Enum):
+    META_OAUTH_BUSINESS_LOGIN = "meta_oauth_business_login"
+
+
+class ChannelConnectionSessionStatus(str, enum.Enum):
+    PENDING = "pending"
+    REDIRECTED = "redirected"
+    AUTHORIZED = "authorized"
+    ACCOUNT_SELECTION_REQUIRED = "account_selection_required"
+    CONNECTED = "connected"
+    FAILED = "failed"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+
+
 class ChannelConversationStatus(str, enum.Enum):
     OPEN = "open"
     CLOSED = "closed"

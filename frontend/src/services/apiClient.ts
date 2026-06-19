@@ -28,6 +28,10 @@ import type {
   ChannelAccountCreate,
   ChannelAccountCredentials,
   ChannelAccountUpdate,
+  InstagramConnectSession,
+  InstagramConnectStartResponse,
+  InstagramReadiness,
+  InstagramSelectAccountRequest,
   TelegramWebhookInfo,
   WebhookTestResponse,
 } from '../types/channel';
@@ -228,6 +232,33 @@ export const apiClient = {
     request<TelegramWebhookInfo>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/delete-webhook`, { method: 'POST', body: JSON.stringify({}) }),
   getTelegramWebhookInfo: (shopId: string, channelAccountId: string) =>
     request<TelegramWebhookInfo>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/telegram/webhook-info`),
+
+  startInstagramConnect: (shopId: string) =>
+    request<InstagramConnectStartResponse>(`/api/v1/shops/${shopId}/channels/instagram/connect/start`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  getInstagramConnectSession: (shopId: string, sessionId: string) =>
+    request<InstagramConnectSession>(
+      `/api/v1/shops/${shopId}/channels/instagram/connect/sessions/${sessionId}`,
+    ),
+  selectInstagramAccount: (shopId: string, sessionId: string, payload: InstagramSelectAccountRequest) =>
+    request<ChannelAccount>(
+      `/api/v1/shops/${shopId}/channels/instagram/connect/sessions/${sessionId}/select-account`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
+  reconnectInstagram: (shopId: string, channelAccountId: string) =>
+    request<InstagramConnectStartResponse>(
+      `/api/v1/shops/${shopId}/channels/${channelAccountId}/instagram/reconnect`,
+      { method: 'POST', body: JSON.stringify({}) },
+    ),
+  disconnectChannel: (shopId: string, channelAccountId: string) =>
+    request<ChannelAccount>(`/api/v1/shops/${shopId}/channels/${channelAccountId}/disconnect`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  getInstagramReadiness: (shopId: string) =>
+    request<InstagramReadiness>(`/api/v1/shops/${shopId}/channels/instagram/readiness`),
 
   getPilotSettings: (shopId: string) => request<PilotSettings>(`/api/v1/shops/${shopId}/pilot-settings`),
   updatePilotSettings: (shopId: string, payload: Partial<PilotSettings>) =>

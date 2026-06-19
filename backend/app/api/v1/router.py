@@ -13,6 +13,7 @@ from app.api.v1.failed_jobs import router as failed_jobs_router
 from app.api.v1.failed_jobs_platform import router as failed_jobs_platform_router
 from app.api.v1.catalog_attributes import router as catalog_attributes_router
 from app.api.v1.health import router as health_router
+from app.api.v1.instagram_connect import router as instagram_connect_router
 from app.api.v1.jobs import router as jobs_router
 from app.api.v1.order_correctness import router as order_correctness_router
 from app.api.v1.orders import router as orders_router
@@ -54,6 +55,7 @@ router.include_router(conversations_router)
 router.include_router(customers_router)
 router.include_router(webhooks_router)
 router.include_router(channels_router)
+router.include_router(instagram_connect_router)
 router.include_router(decision_traces_router)
 router.include_router(semantic_search_router)
 router.include_router(payments_router)

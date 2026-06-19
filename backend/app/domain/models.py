@@ -29,6 +29,9 @@ from app.domain.enums import (
     CatalogAliasSource,
     CatalogImportJobStatus,
     ChannelAccountStatus,
+    ChannelConnectionMethod,
+    ChannelConnectionProvider,
+    ChannelConnectionSessionStatus,
     ChannelConversationStatus,
     ChannelMessageType,
     ChannelProvider,
@@ -243,6 +246,48 @@ class ChannelAccount(Base, TimestampMixin):
     settings_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     last_validation_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ChannelConnectionSession(Base, TimestampMixin):
+    __tablename__ = "channel_connection_sessions"
+    __table_args__ = (UniqueConstraint("state", name="uq_channel_connection_sessions_state"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    shop_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("shops.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider: Mapped[ChannelConnectionProvider] = mapped_column(
+        pg_enum(ChannelConnectionProvider, name="channel_connection_provider"),
+        nullable=False,
+        index=True,
+    )
+    method: Mapped[ChannelConnectionMethod] = mapped_column(
+        pg_enum(ChannelConnectionMethod, name="channel_connection_method"),
+        nullable=False,
+    )
+    status: Mapped[ChannelConnectionSessionStatus] = mapped_column(
+        pg_enum(ChannelConnectionSessionStatus, name="channel_connection_session_status"),
+        nullable=False,
+        default=ChannelConnectionSessionStatus.PENDING,
+        index=True,
+    )
+    state: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    nonce: Mapped[str] = mapped_column(String(128), nullable=False)
+    code_verifier: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    redirect_uri: Mapped[str] = mapped_column(Text, nullable=False)
+    requested_scopes_json: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    provider_payload_redacted: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    oauth_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    selected_external_account_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    selected_page_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    selected_instagram_business_account_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_by: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class ChannelContactIdentity(Base, TimestampMixin):

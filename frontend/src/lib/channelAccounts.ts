@@ -8,7 +8,6 @@ export interface ProviderMeta {
 
 export const PROVIDER_META: ProviderMeta[] = [
   { value: 'bale', label: 'Bale', hint: 'Telegram-like bot endpoint with Bale token and webhook limits.' },
-  { value: 'instagram', label: 'Instagram', hint: 'Meta webhook signature and Instagram Graph send APIs.' },
   { value: 'rubika', label: 'Rubika', hint: 'HTTPS endpoint mode, receiveUpdate and receiveInlineMessage support.' },
   { value: 'telegram', label: 'Telegram', hint: 'Bot API token with optional X-Telegram-Bot-Api-Secret-Token webhook header.' },
   { value: 'whatsapp', label: 'WhatsApp', hint: 'Cloud API phone number ID, verify token, templates and 24h service window.' },
@@ -29,9 +28,23 @@ export function getPublicApiBaseUrl(): string {
   return configured.replace(/\/$/, '');
 }
 
-export function buildCallbackUrl(provider: ChannelProvider): string {
+export function buildCallbackUrl(provider: ChannelProvider, accountId?: string): string {
+  if (provider === 'instagram' && accountId) {
+    return `${getPublicApiBaseUrl()}/api/v1/channels/instagram/${accountId}/webhook`;
+  }
   return `${getPublicApiBaseUrl()}/api/v1/channels/${provider}/webhook`;
 }
+
+export const INSTAGRAM_CONNECT_ERROR_MESSAGES: Record<string, string> = {
+  no_business_account: 'No Instagram Business account found.',
+  no_page_connected: 'Please connect your Instagram account to a Facebook Page.',
+  missing_permissions: 'Missing required permissions. Reconnect and grant all requested permissions.',
+  app_not_approved: 'Meta app review may be required before Instagram messaging works in live mode.',
+  token_exchange_failed: 'Could not complete Meta authorization. Try connecting again.',
+  webhook_setup_failed: 'Instagram connected but webhook setup could not be confirmed.',
+  validation_failed: 'Connected account could not be validated with Meta.',
+  connection_expired: 'Connection expired. Try again.',
+};
 
 export async function copyTextToClipboard(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);

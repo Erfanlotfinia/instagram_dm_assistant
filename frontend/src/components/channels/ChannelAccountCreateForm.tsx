@@ -49,7 +49,7 @@ export function ChannelAccountCreateForm({ disabled = false, onSubmit }: Channel
 
   const selectedProvider = PROVIDER_META.find((item) => item.value === provider);
   const isBotProvider = provider === 'telegram' || provider === 'bale' || provider === 'rubika';
-  const isMetaProvider = provider === 'instagram' || provider === 'whatsapp';
+  const isMetaProvider = provider === 'whatsapp';
 
   async function copyCallbackUrl() {
     if (!provider) {
@@ -132,22 +132,6 @@ export function ChannelAccountCreateForm({ disabled = false, onSubmit }: Channel
         />
       </Field>
 
-      {provider === 'instagram' && (
-        <>
-          <Field label="Instagram Business Account ID">
-            <Input
-              value={externalAccountId}
-              onChange={(event) => setExternalAccountId(event.target.value)}
-              required
-              disabled={disabled}
-            />
-          </Field>
-          <Field label="Facebook Page ID" hint="Optional; stored in account settings.">
-            <Input value={pageId} onChange={(event) => setPageId(event.target.value)} disabled={disabled} />
-          </Field>
-        </>
-      )}
-
       {provider === 'whatsapp' && (
         <>
           <Field label="WABA ID">
@@ -217,7 +201,7 @@ export function ChannelAccountCreateForm({ disabled = false, onSubmit }: Channel
       )}
 
       {isMetaProvider && provider && (
-        <Field label={provider === 'instagram' ? 'Page access token' : 'Access token'}>
+        <Field label="Access token">
           <Input
             type="password"
             autoComplete="new-password"

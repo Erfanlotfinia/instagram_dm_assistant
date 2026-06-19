@@ -12,7 +12,7 @@ from app.api.deps import get_current_user, rate_limit_webhook, require_shop_role
 from app.channels.adapters import InstagramProviderAdapter
 from app.core.config import get_settings
 from app.db.session import get_db_session
-from app.domain.enums import ChannelProvider, UserRole
+from app.domain.enums import ChannelAccountStatus, ChannelProvider, UserRole
 from app.domain.models import ChannelAccount, ShopMember, User
 from app.schemas.channels import (
     ChannelAccountCreate,
@@ -32,6 +32,13 @@ from app.services.channel_webhook_ingestion_service import (
 from app.services.shop_service import ShopService
 
 router = APIRouter(tags=["channels"])
+
+
+def _default_instagram_webhook_url(channel_account_id: UUID) -> str:
+    return (
+        f"{get_settings().public_api_base_url}"
+        f"/api/v1/channels/instagram/{channel_account_id}/webhook"
+    )
 
 
 def _default_telegram_webhook_url(channel_account_id: UUID) -> str:
@@ -320,6 +327,56 @@ def verify_channel_webhook(
     if account is None:
         raise HTTPException(status_code=403, detail="Verification failed")
     return Response(content=hub_challenge or "", media_type="text/plain")
+
+
+def _get_instagram_webhook_account(
+    db: Session, channel_account_id: UUID, hub_verify_token: str | None = None
+) -> ChannelAccount:
+    account = db.scalar(
+        select(ChannelAccount).where(
+            ChannelAccount.id == channel_account_id,
+            ChannelAccount.provider == ChannelProvider.INSTAGRAM,
+        )
+    )
+    if account is None:
+        raise HTTPException(status_code=404, detail="Instagram channel account not found")
+    if account.status == ChannelAccountStatus.DISABLED:
+        raise HTTPException(status_code=403, detail="Instagram channel account is disabled")
+    if hub_verify_token and account.webhook_verify_token != hub_verify_token:
+        raise HTTPException(status_code=403, detail="Verification failed")
+    return account
+
+
+@router.get("/channels/instagram/{channel_account_id}/webhook")
+def verify_instagram_channel_webhook(
+    channel_account_id: UUID,
+    db: Annotated[Session, Depends(get_db_session)],
+    hub_mode: Annotated[str | None, Query(alias="hub.mode")] = None,
+    hub_verify_token: Annotated[str | None, Query(alias="hub.verify_token")] = None,
+    hub_challenge: Annotated[str | None, Query(alias="hub.challenge")] = None,
+) -> Response:
+    if hub_mode != "subscribe" or not hub_verify_token:
+        raise HTTPException(status_code=403, detail="Verification failed")
+    _get_instagram_webhook_account(db, channel_account_id, hub_verify_token)
+    return Response(content=hub_challenge or "", media_type="text/plain")
+
+
+@router.post(
+    "/channels/instagram/{channel_account_id}/webhook",
+    response_model=WebhookAckResponse | WebhookIgnoredResponse,
+)
+async def receive_instagram_channel_webhook(
+    channel_account_id: UUID,
+    request: Request,
+    db: Annotated[Session, Depends(get_db_session)],
+    _: Annotated[None, Depends(rate_limit_webhook)],
+) -> WebhookAckResponse | WebhookIgnoredResponse:
+    return await _receive_channel_webhook(
+        ChannelProvider.INSTAGRAM,
+        request,
+        db,
+        channel_account_id=channel_account_id,
+    )
 
 
 @router.post(
