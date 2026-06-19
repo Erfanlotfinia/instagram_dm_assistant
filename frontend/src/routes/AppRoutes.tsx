@@ -1,4 +1,4 @@
-import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom';
 
 import { AppShell } from '../components/shell/AppShell';
 import { HubLayout } from '../components/shell/HubLayout';
@@ -19,10 +19,12 @@ import {
   FailedJobsPage,
   HandoffQueuePage,
   InboxPage,
+  IncidentTimelinePage,
   InstagramProductMappingPage,
   LLMLogsPage,
   LoginPage,
   OperatorCorrectionsPage,
+  OrderDetailPage,
   OrdersHubPage,
   OverviewPage,
   PostRevenueAnalyticsPage,
@@ -42,6 +44,14 @@ import {
   VariantResolverPage,
 } from './lazyPages';
 import { RouteSuspense } from './RouteSuspense';
+
+function LegacyConversationRedirect() {
+  const { conversationId } = useParams<{ conversationId?: string }>();
+  const location = useLocation();
+  const inboxPath = conversationId ? `/inbox/${conversationId}` : '/inbox';
+
+  return <Navigate to={`${inboxPath}${location.search}${location.hash}`} replace />;
+}
 
 function tabsFor(hubId: string) {
   return HUBS.find((hub) => hub.id === hubId)?.tabs ?? [];
@@ -82,6 +92,7 @@ export function AppRoutes() {
 
         {/* Orders */}
         <Route path="/orders" element={<OrdersHubPage />} />
+        <Route path="/orders/:orderId" element={<OrderDetailPage />} />
 
         {/* Catalog */}
         <Route path="/catalog" element={<HubLayout tabs={tabsFor('catalog')} />}>
@@ -136,6 +147,14 @@ export function AppRoutes() {
           <Route path="rollout" element={<RolloutPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
+
+        {/* Legacy in-app links kept while callers migrate to the final hub routes. */}
+        <Route path="/conversations" element={<LegacyConversationRedirect />} />
+        <Route path="/conversations/:conversationId" element={<LegacyConversationRedirect />} />
+        <Route path="/incidents" element={<IncidentTimelinePage />} />
+        <Route path="/incidents/:incidentId" element={<IncidentTimelinePage />} />
+        <Route path="/system-health" element={<Navigate to="/system/health" replace />} />
+        <Route path="/operator-corrections" element={<Navigate to="/ai/corrections" replace />} />
 
         {/* Unknown paths return to the Overview hub. */}
 
