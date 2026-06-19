@@ -2,6 +2,7 @@
 
 Called from app.scripts.seed after core admin/shop/catalog bootstrap.
 """
+
 from __future__ import annotations
 
 import logging
@@ -16,11 +17,18 @@ from app.domain.enums import (
     AgentMode,
     AgentRunStatus,
     AgentWorkflowState,
+    CatalogAliasSource,
+    CatalogImportJobStatus,
+    ChannelAccountStatus,
+    ChannelProvider,
     ConfidenceSource,
     ConversationEventType,
     ConversationPriorityLevel,
     ConversationState,
     FailedJobStatus,
+    IncidentSeverity,
+    IncidentStatus,
+    IncidentTrigger,
     InstagramAccountStatus,
     MessageChannel,
     MessageDirection,
@@ -32,45 +40,63 @@ from app.domain.enums import (
     PaymentProvider,
     PaymentRecordStatus,
     ProductStatus,
+    ScenarioPackType,
+    SellingStyle,
     ShipmentProvider,
     ShipmentStatus,
-    SellingStyle,
+    SimulatorRunSourceType,
+    SimulatorRunStatus,
     SuggestedReplyGeneratedBy,
     SuggestedReplyStatus,
     TriggerSourceType,
     UpsellSuggestionStatus,
     UserRole,
+    VariantAliasType,
 )
 from app.domain.models import (
     AbandonedOrderRecoveryRule,
+    AdminTask,
     AgentDecisionTrace,
     AgentRun,
+    AutomationRuleSuggestion,
+    CatalogImportJob,
+    ChannelAccount,
     ColorAlias,
     CommentToDmTrigger,
     Conversation,
     ConversationEvent,
     ConversationSlots,
     Customer,
+    CustomerPreferences,
     FailedJob,
+    Incident,
+    IncidentEvent,
     InstagramAccount,
     InstagramProductMap,
     Message,
+    OperatorCorrection,
     Order,
     OrderItem,
     Payment,
     Product,
-    Shipment,
+    ProductAlias,
+    ProductNormalized,
     ProductUpsell,
     ProductVariant,
+    ScenarioPack,
+    Shipment,
     Shop,
     ShopAgentSettings,
     ShopMember,
+    SimulatorRun,
+    SimulatorRunItem,
     SizeAlias,
     SuggestedReply,
     TriggerEvent,
     UnavailableDemandLog,
     UpsellSuggestion,
     User,
+    VariantAlias,
 )
 from app.repositories.shop_repository import ShopMemberRepository, ShopRepository
 from app.services.conversation_event_service import EVENT_TITLES
@@ -201,7 +227,9 @@ def _ensure_message(
     text: str,
     created_at: datetime | None = None,
 ) -> None:
-    existing = db.scalar(select(Message).where(Message.instagram_message_id == instagram_message_id))
+    existing = db.scalar(
+        select(Message).where(Message.instagram_message_id == instagram_message_id)
+    )
     if existing is not None:
         return
     message = Message(
@@ -244,7 +272,9 @@ def _add_conversation_event(
 def _conversation_has_events(db: Session, conversation_id: UUID) -> bool:
     return (
         db.scalar(
-            select(ConversationEvent).where(ConversationEvent.conversation_id == conversation_id).limit(1)
+            select(ConversationEvent)
+            .where(ConversationEvent.conversation_id == conversation_id)
+            .limit(1)
         )
         is not None
     )
@@ -296,7 +326,10 @@ def _seed_conversation_events(
                 event_type=ConversationEventType.INVENTORY_CHECKED,
                 description="Variant in stock",
                 created_at=now - timedelta(minutes=18),
-                metadata={"available_quantity": hoodie_variant.stock_quantity - hoodie_variant.reserved_quantity},
+                metadata={
+                    "available_quantity": hoodie_variant.stock_quantity
+                    - hoodie_variant.reserved_quantity
+                },
             )
         _add_conversation_event(
             db,
@@ -400,7 +433,9 @@ def _seed_dress_inquiry_events(
     dress_variant: ProductVariant | None,
 ) -> None:
     conv_dress = db.scalar(
-        select(Conversation).where(Conversation.channel_conversation_id == "demo-conv-dress-inquiry")
+        select(Conversation).where(
+            Conversation.channel_conversation_id == "demo-conv-dress-inquiry"
+        )
     )
     if conv_dress is None or _conversation_has_events(db, conv_dress.id):
         return
@@ -436,7 +471,9 @@ def _seed_dress_inquiry_events(
             event_type=ConversationEventType.INVENTORY_CHECKED,
             description="Variant in stock",
             created_at=now - timedelta(hours=5, minutes=48),
-            metadata={"available_quantity": dress_variant.stock_quantity - dress_variant.reserved_quantity},
+            metadata={
+                "available_quantity": dress_variant.stock_quantity - dress_variant.reserved_quantity
+            },
         )
     _add_conversation_event(
         db,
@@ -476,12 +513,15 @@ def _seed_dashboard_metrics_demo(
     conv_sim: Conversation,
 ) -> None:
     """Extra conversations, orders, and upsells so dashboard funnel/recovery widgets look alive."""
-    if db.scalar(
-        select(Order).where(
-            Order.shop_id == shop.id,
-            Order.notes == "demo-order-recovered-hoodie",
+    if (
+        db.scalar(
+            select(Order).where(
+                Order.shop_id == shop.id,
+                Order.notes == "demo-order-recovered-hoodie",
+            )
         )
-    ) is not None:
+        is not None
+    ):
         return
 
     nadia = _get_or_create_customer(
@@ -506,12 +546,32 @@ def _seed_dashboard_metrics_demo(
     )
 
     for message_id, conversation_id, text, created_at in [
-        ("demo-msg-ali-in-2", conv_order_ready.id, "آدرس همینه که قبلاً فرستادم", now - timedelta(minutes=15)),
-        ("demo-msg-sara-in-2", conv_handoff.id, "What colors do you have?", now - timedelta(minutes=5)),
+        (
+            "demo-msg-ali-in-2",
+            conv_order_ready.id,
+            "آدرس همینه که قبلاً فرستادم",
+            now - timedelta(minutes=15),
+        ),
+        (
+            "demo-msg-sara-in-2",
+            conv_handoff.id,
+            "What colors do you have?",
+            now - timedelta(minutes=5),
+        ),
         ("demo-msg-sara-in-3", conv_handoff.id, "Maybe navy instead?", now - timedelta(minutes=3)),
         ("demo-msg-reza-in-2", conv_sim.id, "قیمت چنده؟", now - timedelta(hours=1, minutes=50)),
-        ("demo-msg-nadia-in-1", conv_dress.id, "Is the red dress available in S?", now - timedelta(hours=6)),
-        ("demo-msg-nadia-in-2", conv_dress.id, "Perfect, I'll take it", now - timedelta(hours=5, minutes=45)),
+        (
+            "demo-msg-nadia-in-1",
+            conv_dress.id,
+            "Is the red dress available in S?",
+            now - timedelta(hours=6),
+        ),
+        (
+            "demo-msg-nadia-in-2",
+            conv_dress.id,
+            "Perfect, I'll take it",
+            now - timedelta(hours=5, minutes=45),
+        ),
     ]:
         _ensure_message(
             db,
@@ -522,7 +582,12 @@ def _seed_dashboard_metrics_demo(
             created_at=created_at,
         )
 
-    if db.scalar(select(ConversationSlots).where(ConversationSlots.conversation_id == conv_dress.id)) is None:
+    if (
+        db.scalar(
+            select(ConversationSlots).where(ConversationSlots.conversation_id == conv_dress.id)
+        )
+        is None
+    ):
         db.add(
             ConversationSlots(
                 conversation_id=conv_dress.id,
@@ -539,9 +604,13 @@ def _seed_dashboard_metrics_demo(
             )
         )
 
-    if black_shirt is not None and db.scalar(
-        select(ConversationSlots).where(ConversationSlots.conversation_id == conv_sim.id)
-    ) is None:
+    if (
+        black_shirt is not None
+        and db.scalar(
+            select(ConversationSlots).where(ConversationSlots.conversation_id == conv_sim.id)
+        )
+        is None
+    ):
         db.add(
             ConversationSlots(
                 conversation_id=conv_sim.id,
@@ -609,17 +678,25 @@ def _seed_dashboard_metrics_demo(
 
     upsell_specs = [
         (conv_order_ready.id, ali.id, UpsellSuggestionStatus.ACCEPTED, "demo-upsell-accepted"),
-        (conv_handoff.id, sara.id, UpsellSuggestionStatus.SUGGESTED, "demo-upsell-suggested-handoff"),
+        (
+            conv_handoff.id,
+            sara.id,
+            UpsellSuggestionStatus.SUGGESTED,
+            "demo-upsell-suggested-handoff",
+        ),
         (conv_sim.id, reza.id, UpsellSuggestionStatus.SUGGESTED, "demo-upsell-suggested-sim"),
         (conv_dress.id, nadia.id, UpsellSuggestionStatus.SUGGESTED, "demo-upsell-suggested-dress"),
     ]
-    for conversation_id, customer_id, status, marker in upsell_specs:
-        if db.scalar(
-            select(UpsellSuggestion).where(
-                UpsellSuggestion.shop_id == shop.id,
-                UpsellSuggestion.suggested_text.like(f"%{marker}%"),
+    for conversation_id, _customer_id, status, marker in upsell_specs:
+        if (
+            db.scalar(
+                select(UpsellSuggestion).where(
+                    UpsellSuggestion.shop_id == shop.id,
+                    UpsellSuggestion.suggested_text.like(f"%{marker}%"),
+                )
             )
-        ) is not None:
+            is not None
+        ):
             continue
         db.add(
             UpsellSuggestion(
@@ -645,7 +722,10 @@ def _seed_failed_jobs(
     ali: Customer,
     sara: Customer,
 ) -> None:
-    if db.scalar(select(FailedJob).where(FailedJob.error_message.like("demo:%")).limit(1)) is not None:
+    if (
+        db.scalar(select(FailedJob).where(FailedJob.error_message.like("demo:%")).limit(1))
+        is not None
+    ):
         return
 
     inbound_order = db.scalar(
@@ -711,7 +791,7 @@ def _seed_failed_jobs(
             job_type="message_received",
             payload={"raw": "malformed-worker-payload", "retry_count": 3},
             error_message="demo: Worker payload failed JSON schema validation",
-            traceback='ValidationError: 3 validation errors for MessageReceivedJob\nmessage_id\n  field required',
+            traceback="ValidationError: 3 validation errors for MessageReceivedJob\nmessage_id\n  field required",
             retry_count=3,
             max_retries=3,
             status=FailedJobStatus.FAILED,
@@ -723,9 +803,14 @@ def _seed_failed_jobs(
 
 
 def _seed_recovery_rule(db: Session, shop_id: UUID) -> None:
-    if db.scalar(
-        select(AbandonedOrderRecoveryRule).where(AbandonedOrderRecoveryRule.shop_id == shop_id).limit(1)
-    ) is not None:
+    if (
+        db.scalar(
+            select(AbandonedOrderRecoveryRule)
+            .where(AbandonedOrderRecoveryRule.shop_id == shop_id)
+            .limit(1)
+        )
+        is not None
+    ):
         return
     db.add(
         AbandonedOrderRecoveryRule(
@@ -761,7 +846,13 @@ def _seed_decision_traces(
             "buy_product",
             {"color": "مشکی", "size": "L", "quantity": 1},
             {"color": "black", "size": "L", "quantity": 1},
-            {"intent": 0.92, "variant": 0.91, "requires_preview": False, "requires_handoff": False, "risk_reasons": []},
+            {
+                "intent": 0.92,
+                "variant": 0.91,
+                "requires_preview": False,
+                "requires_handoff": False,
+                "risk_reasons": [],
+            },
             False,
             "Resolved hoodie variant HD-BLK-L; awaiting customer confirmation.",
         ),
@@ -772,12 +863,28 @@ def _seed_decision_traces(
             "buy_product",
             {"color": "XL", "quantity": 1},
             {"color": "xl", "quantity": 1},
-            {"intent": 0.7, "variant": 0.42, "requires_preview": True, "requires_handoff": True, "risk_reasons": ["low_variant_confidence"]},
+            {
+                "intent": 0.7,
+                "variant": 0.42,
+                "requires_preview": True,
+                "requires_handoff": True,
+                "risk_reasons": ["low_variant_confidence"],
+            },
             True,
             "Variant XL not confidently resolved; routed to operator handoff.",
         ),
     ]
-    for conversation, message_key, next_state, intent, extracted, normalized, risk_score, handoff, summary in specs:
+    for (
+        conversation,
+        message_key,
+        next_state,
+        intent,
+        extracted,
+        normalized,
+        risk_score,
+        handoff,
+        summary,
+    ) in specs:
         message = db.scalar(select(Message).where(Message.instagram_message_id == message_key))
         if message is None:
             continue
@@ -801,7 +908,9 @@ def _seed_decision_traces(
                 intent=intent,
                 extracted_slots=extracted,
                 normalized_slots=normalized,
-                product_candidates=[{"product_id": str(hoodie.id), "title": hoodie.title, "score": 0.88}],
+                product_candidates=[
+                    {"product_id": str(hoodie.id), "title": hoodie.title, "score": 0.88}
+                ],
                 selected_product_id=hoodie.id,
                 variant_resolution={
                     "variant_id": str(hoodie_variant.id) if hoodie_variant is not None else None,
@@ -855,7 +964,9 @@ def _ensure_order_fulfillment_records(
                     status=record_status,
                     payment_url=f"http://localhost:8800/api/v1/payments/mock/pay/demo-{reference_key}",
                     provider_reference=f"demo-pay-{reference_key}",
-                    callback_processed_at=now - timedelta(hours=2) if record_status == PaymentRecordStatus.PAID else None,
+                    callback_processed_at=now - timedelta(hours=2)
+                    if record_status == PaymentRecordStatus.PAID
+                    else None,
                     raw_payload={"seed": True, "reference_key": reference_key},
                 )
             )
@@ -887,8 +998,12 @@ def _ensure_order_fulfillment_records(
                         if shipment_status in {ShipmentStatus.SHIPPED, ShipmentStatus.DELIVERED}
                         else None
                     ),
-                    shipped_at=now - timedelta(hours=1) if shipment_status != ShipmentStatus.PREPARING else None,
-                    delivered_at=now - timedelta(minutes=30) if shipment_status == ShipmentStatus.DELIVERED else None,
+                    shipped_at=now - timedelta(hours=1)
+                    if shipment_status != ShipmentStatus.PREPARING
+                    else None,
+                    delivered_at=now - timedelta(minutes=30)
+                    if shipment_status == ShipmentStatus.DELIVERED
+                    else None,
                 )
             )
 
@@ -1007,6 +1122,472 @@ def _backfill_demo_order_fulfillment(db: Session, shop_id: UUID) -> None:
                 shipment.shipped_at = now - timedelta(hours=1)
 
     logger.info("Backfilled payment and shipment records for %s demo orders", len(orders))
+
+
+def _seed_channel_accounts(
+    db: Session, *, shop: Shop, account: InstagramAccount, now: datetime
+) -> None:
+    """Create realistic connected social channels so channel setup and simulator UIs are populated."""
+    specs = [
+        {
+            "provider": ChannelProvider.INSTAGRAM,
+            "display_name": "بوت اینستاگرام مزون تهران",
+            "external_account_id": account.ig_user_id,
+            "webhook_url": "https://api.example.ir/webhooks/instagram/demo-shop",
+            "status": ChannelAccountStatus.WEBHOOK_CONFIGURED,
+            "capabilities_json": {
+                "dm": True,
+                "comments": True,
+                "story_replies": True,
+                "media_context": True,
+            },
+            "settings_json": {
+                "legacy_instagram_account_id": str(account.id),
+                "locale": "fa-IR",
+                "timezone": "Asia/Tehran",
+            },
+        },
+        {
+            "provider": ChannelProvider.TELEGRAM,
+            "display_name": "پشتیبانی تلگرام مزون تهران",
+            "external_account_id": "telegram-demo-shop",
+            "bot_username": "demo_shop_support_bot",
+            "bot_id": "729000111",
+            "webhook_url": "https://api.example.ir/webhooks/telegram/demo-shop",
+            "status": ChannelAccountStatus.CONNECTED,
+            "capabilities_json": {"dm": True, "attachments": True, "quick_replies": True},
+            "settings_json": {"locale": "fa-IR", "handoff_queue": "tehran-support"},
+        },
+        {
+            "provider": ChannelProvider.WHATSAPP,
+            "display_name": "واتساپ فروش تهران",
+            "external_account_id": "982100011122",
+            "phone_number_id": "wa-demo-982100011122",
+            "webhook_url": "https://api.example.ir/webhooks/whatsapp/demo-shop",
+            "status": ChannelAccountStatus.CONNECTED,
+            "capabilities_json": {"dm": True, "templates": True, "payments": False},
+            "settings_json": {"locale": "fa-IR", "business_hours": "10:00-22:00"},
+        },
+    ]
+    for spec in specs:
+        channel = db.scalar(
+            select(ChannelAccount).where(
+                ChannelAccount.shop_id == shop.id,
+                ChannelAccount.provider == spec["provider"],
+                ChannelAccount.external_account_id == spec["external_account_id"],
+            )
+        )
+        if channel is None:
+            channel = ChannelAccount(
+                shop_id=shop.id, last_validation_at=now - timedelta(minutes=30), **spec
+            )
+            db.add(channel)
+        else:
+            for key, value in spec.items():
+                setattr(channel, key, value)
+            channel.last_validation_at = now - timedelta(minutes=30)
+
+
+def _seed_customer_preferences(db: Session, customers: list[Customer]) -> None:
+    specs = {
+        "demo-cust-ali": {
+            "preferred_size": "L",
+            "preferred_colors": ["black", "navy"],
+            "preferred_categories": ["hoodie", "streetwear"],
+        },
+        "demo-cust-sara": {
+            "preferred_size": "M",
+            "preferred_colors": ["cream", "red"],
+            "preferred_categories": ["dress", "outerwear"],
+        },
+        "demo-cust-reza": {
+            "preferred_size": "L",
+            "preferred_colors": ["black"],
+            "preferred_categories": ["shirts"],
+        },
+        "demo-cust-nadia": {
+            "preferred_size": "S",
+            "preferred_colors": ["red", "white"],
+            "preferred_categories": ["linen", "dress"],
+        },
+    }
+    for customer in customers:
+        data = specs.get(customer.instagram_user_id)
+        if data is None:
+            continue
+        prefs = db.scalar(
+            select(CustomerPreferences).where(CustomerPreferences.customer_id == customer.id)
+        )
+        if prefs is None:
+            prefs = CustomerPreferences(customer_id=customer.id)
+            db.add(prefs)
+        prefs.preferred_size = data["preferred_size"]
+        prefs.preferred_colors = data["preferred_colors"]
+        prefs.preferred_categories = data["preferred_categories"]
+        prefs.last_successful_size = data["preferred_size"]
+        prefs.last_successful_city = customer.city or "Tehran"
+        prefs.metadata_json = {"seed": True, "persona": customer.full_name, "market": "Iran"}
+
+
+def _seed_catalog_copilot_data(
+    db: Session, *, shop: Shop, products: list[Product], now: datetime
+) -> None:
+    for product in products:
+        normalized = db.scalar(
+            select(ProductNormalized).where(ProductNormalized.product_id == product.id)
+        )
+        if normalized is None:
+            normalized = ProductNormalized(
+                shop_id=shop.id,
+                product_id=product.id,
+                normalized_title=product.title.lower(),
+                brand="Tehran Atelier",
+                color=None,
+                size=None,
+                material="cotton"
+                if "Hoodie" in product.title or "Shirt" in product.title
+                else "linen",
+                gender="unisex"
+                if "Hoodie" in product.title or "Shirt" in product.title
+                else "women",
+                collection="Nowruz drop 1405",
+                synonym_candidates=[
+                    product.title,
+                    f"خرید {product.title}",
+                    f"{product.title} تهران",
+                ],
+                embedding_model="seed-demo-vector-v1",
+                dense_vector_dim=1536,
+                last_normalized_at=now - timedelta(hours=4),
+                last_indexed_at=now - timedelta(hours=3),
+            )
+            db.add(normalized)
+            db.flush()
+        aliases = [product.title, f"{product.title} اصل", f"{product.title} مزون تهران"]
+        if "Hoodie" in product.title:
+            aliases.extend(["هودی مشکی", "هودی لش"])
+        if "Dress" in product.title:
+            aliases.extend(["پیراهن لینن", "لباس تابستانی قرمز"])
+        for alias in aliases:
+            if (
+                db.scalar(
+                    select(ProductAlias).where(
+                        ProductAlias.shop_id == shop.id, ProductAlias.alias_text == alias
+                    )
+                )
+                is None
+            ):
+                db.add(
+                    ProductAlias(
+                        shop_id=shop.id,
+                        product_id=product.id,
+                        normalized_product_id=normalized.id,
+                        alias_text=alias,
+                        language="fa" if any("\u0600" <= ch <= "\u06ff" for ch in alias) else "en",
+                        source=CatalogAliasSource.GENERATED,
+                        confidence=Decimal("0.9400"),
+                    )
+                )
+        for variant in product.variants:
+            label = " / ".join(part for part in [variant.color, variant.size] if part)
+            for alias, alias_type in [
+                (variant.sku, VariantAliasType.SKU),
+                (label, VariantAliasType.COMBINED),
+                (variant.color or "", VariantAliasType.COLOR),
+                (variant.size or "", VariantAliasType.SIZE),
+            ]:
+                if (
+                    alias
+                    and db.scalar(
+                        select(VariantAlias).where(
+                            VariantAlias.shop_id == shop.id,
+                            VariantAlias.variant_id == variant.id,
+                            VariantAlias.alias_text == alias,
+                        )
+                    )
+                    is None
+                ):
+                    db.add(
+                        VariantAlias(
+                            shop_id=shop.id,
+                            variant_id=variant.id,
+                            alias_text=alias,
+                            alias_type=alias_type,
+                            language="und",
+                            source=CatalogAliasSource.GENERATED,
+                        )
+                    )
+    if (
+        db.scalar(select(CatalogImportJob).where(CatalogImportJob.shop_id == shop.id).limit(1))
+        is None
+    ):
+        db.add(
+            CatalogImportJob(
+                shop_id=shop.id,
+                status=CatalogImportJobStatus.COMPLETED,
+                source_format="instagram+csv",
+                total_rows=48,
+                processed_rows=46,
+                failed_rows=2,
+                checkpoint={"last_file": "tehran_catalog_1405.csv"},
+                started_at=now - timedelta(hours=5),
+                completed_at=now - timedelta(hours=4),
+                created_by_user_id=None,
+            )
+        )
+
+
+def _seed_trust_and_scenario_data(
+    db: Session,
+    *,
+    shop: Shop,
+    admin: User,
+    now: datetime,
+    conv_handoff: Conversation,
+    conv_order_ready: Conversation,
+) -> None:
+    policy = db.scalar(
+        select(PolicyVersion).where(
+            PolicyVersion.shop_id == shop.id, PolicyVersion.version == "seed-fa-ir-v1"
+        )
+    )
+    if policy is None:
+        policy = PolicyVersion(
+            shop_id=shop.id,
+            version="seed-fa-ir-v1",
+            name="Iran pilot safety policy",
+            is_active=True,
+            created_by_user_id=admin.id,
+            config_json={
+                "max_auto_order_value": 7000000,
+                "currency": "IRR",
+                "require_handoff_for": [
+                    "address_change_after_payment",
+                    "low_confidence_variant",
+                    "payment_dispute",
+                ],
+                "quiet_hours": {"timezone": "Asia/Tehran", "from": "23:00", "to": "09:00"},
+            },
+        )
+        db.add(policy)
+        db.flush()
+    scenarios = [
+        {
+            "item_key": "fa_buy_exact_variant",
+            "message_text": "سلام همین هودی مشکی سایز L رو می‌خوام، تهران هستم",
+            "shared_post_url": POST_URL_HOODIE,
+            "instagram_user_id": "demo-cust-ali",
+            "expected_json": {
+                "intent": "buy_product",
+                "product": HOODIE_TITLE,
+                "variant": "HD-BLK-L",
+                "handoff": False,
+            },
+        },
+        {
+            "item_key": "fa_out_of_stock",
+            "message_text": "پیراهن قرمز سایز M موجوده؟",
+            "shared_post_url": POST_URL_DRESS,
+            "instagram_user_id": "demo-cust-sara",
+            "expected_json": {
+                "intent": "availability_check",
+                "reason": "out_of_stock",
+                "handoff": False,
+            },
+        },
+        {
+            "item_key": "fa_payment_dispute",
+            "message_text": "پرداخت کردم ولی لینک هنوز میگه پرداخت نشده",
+            "instagram_user_id": "demo-cust-nadia",
+            "expected_json": {"intent": "payment_support", "handoff": True},
+        },
+    ]
+    pack = db.scalar(
+        select(ScenarioPack).where(
+            ScenarioPack.shop_id == shop.id,
+            ScenarioPack.name == "Golden Persian Instagram sales scenarios",
+        )
+    )
+    if pack is None:
+        db.add(
+            ScenarioPack(
+                shop_id=shop.id,
+                name="Golden Persian Instagram sales scenarios",
+                pack_type=ScenarioPackType.HANDCRAFTED,
+                description="واقع‌گرایانه‌ترین سناریوهای فروش اینستاگرامی برای بازار ایران.",
+                scenarios_json=scenarios,
+                is_golden=True,
+                created_by_user_id=admin.id,
+            )
+        )
+    if (
+        db.scalar(
+            select(SimulatorRun).where(
+                SimulatorRun.shop_id == shop.id,
+                SimulatorRun.label == "Seeded golden replay - Iran storefront",
+            )
+        )
+        is None
+    ):
+        run = SimulatorRun(
+            shop_id=shop.id,
+            created_by_user_id=admin.id,
+            label="Seeded golden replay - Iran storefront",
+            source_type=SimulatorRunSourceType.SCENARIO_PACK,
+            model_version="seed-agent-v1",
+            prompt_version="fa-ir-sales-v1",
+            policy_version_id=policy.id,
+            catalog_snapshot_hash="seed-catalog-fa-ir-001",
+            catalog_snapshot_json={
+                "products": [HOODIE_TITLE, DRESS_TITLE, "Demo Black Shirt"],
+                "currency": "IRR",
+            },
+            status=SimulatorRunStatus.COMPLETED,
+            total_items=3,
+            passed_items=2,
+            failed_items=1,
+            diff_summary_json={
+                "passed_rate": 0.667,
+                "known_gap": "payment dispute requires operator verification",
+            },
+            started_at=now - timedelta(hours=2),
+            completed_at=now - timedelta(hours=1, minutes=58),
+        )
+        db.add(run)
+        db.flush()
+        for item in scenarios:
+            passed = item["item_key"] != "fa_payment_dispute"
+            db.add(
+                SimulatorRunItem(
+                    run_id=run.id,
+                    item_key=item["item_key"],
+                    input_json=item,
+                    expected_json=item["expected_json"],
+                    actual_json={
+                        **item["expected_json"],
+                        "handoff": item["expected_json"].get("handoff", False),
+                    },
+                    diff_json={
+                        "passed": passed,
+                        "mismatches": [] if passed else ["operator_payment_verification_required"],
+                    },
+                    passed=passed,
+                    conversation_id=conv_handoff.id if not passed else conv_order_ready.id,
+                    processing_time_ms=420 if passed else 880,
+                )
+            )
+    if (
+        db.scalar(
+            select(Incident).where(
+                Incident.shop_id == shop.id,
+                Incident.title == "Payment callback mismatch during Instagram sale",
+            )
+        )
+        is None
+    ):
+        incident = Incident(
+            shop_id=shop.id,
+            title="Payment callback mismatch during Instagram sale",
+            severity=IncidentSeverity.MEDIUM,
+            status=IncidentStatus.MITIGATED,
+            trigger=IncidentTrigger.POLICY_BREACH,
+            opened_by_user_id=admin.id,
+            opened_at=now - timedelta(hours=3),
+            resolved_at=now - timedelta(hours=2, minutes=20),
+            summary_json={
+                "affected_orders": 1,
+                "market": "Iran",
+                "mitigation": "payments require human verification until gateway callback recovers",
+            },
+        )
+        db.add(incident)
+        db.flush()
+        db.add(
+            IncidentEvent(
+                incident_id=incident.id,
+                event_type="opened",
+                actor_user_id=admin.id,
+                description="زرین‌پال callback با وضعیت سفارش همخوان نبود؛ auto-send متوقف شد.",
+                metadata_json={"gateway": "zarinpal-demo"},
+                affected_conversation_ids=[str(conv_handoff.id)],
+                created_at=now - timedelta(hours=3),
+            )
+        )
+        db.add(
+            IncidentEvent(
+                incident_id=incident.id,
+                event_type="mitigated",
+                actor_user_id=admin.id,
+                description="Rule switched payment disputes to human handoff.",
+                metadata_json={"policy_version": policy.version},
+                affected_conversation_ids=[str(conv_handoff.id)],
+                created_at=now - timedelta(hours=2, minutes=20),
+            )
+        )
+
+
+def _seed_social_admin_data(
+    db: Session, *, shop: Shop, admin: User, conv_handoff: Conversation
+) -> None:
+    if (
+        db.scalar(
+            select(AdminTask)
+            .where(AdminTask.shop_id == shop.id, AdminTask.task_type == "campaign_brief")
+            .limit(1)
+        )
+        is None
+    ):
+        db.add(
+            AdminTask(
+                shop_id=shop.id,
+                requested_by_user_id=admin.id,
+                task_type="campaign_brief",
+                input_json={"campaign": "Nowruz drop", "channel": "instagram"},
+                output_json={
+                    "draft_caption": "کالکشن نوروزی آماده سفارش در دایرکت است ✨",
+                    "dm_prompt": "برای قیمت کلمه قیمت رو کامنت کن",
+                },
+                status="pending",
+                requires_approval=True,
+            )
+        )
+    message = db.scalar(select(Message).where(Message.instagram_message_id == "demo-msg-sara-in-1"))
+    if (
+        message is not None
+        and db.scalar(
+            select(OperatorCorrection)
+            .where(
+                OperatorCorrection.shop_id == shop.id,
+                OperatorCorrection.conversation_id == conv_handoff.id,
+            )
+            .limit(1)
+        )
+        is None
+    ):
+        correction = OperatorCorrection(
+            shop_id=shop.id,
+            conversation_id=conv_handoff.id,
+            message_id=message.id,
+            correction_type="variant_alias",
+            before_json={"raw": "XL", "normalized": None},
+            after_json={"raw": "XL", "normalized": "extra_large", "handoff": True},
+            operator_id=admin.id,
+        )
+        db.add(correction)
+        db.flush()
+        db.add(
+            AutomationRuleSuggestion(
+                shop_id=shop.id,
+                source_correction_id=correction.id,
+                suggested_rule_json={
+                    "rule": "map_size_alias",
+                    "raw_values": ["XL", "ایکس لارج"],
+                    "normalized": "XL",
+                    "requires_inventory_check": True,
+                },
+                status="pending",
+            )
+        )
 
 
 def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: InstagramAccount) -> None:
@@ -1134,13 +1715,16 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
         ("قرمز", "red"),
         ("navy", "navy"),
     ]:
-        if db.scalar(
-            select(ColorAlias).where(
-                ColorAlias.shop_id == shop.id,
-                ColorAlias.raw_value == alias[0],
-                ColorAlias.language == "und",
+        if (
+            db.scalar(
+                select(ColorAlias).where(
+                    ColorAlias.shop_id == shop.id,
+                    ColorAlias.raw_value == alias[0],
+                    ColorAlias.language == "und",
+                )
             )
-        ) is None:
+            is None
+        ):
             db.add(
                 ColorAlias(
                     shop_id=shop.id,
@@ -1177,12 +1761,15 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
         (POST_URL_HOODIE, hoodie, "media-hoodie"),
         (POST_URL_DRESS, dress, "media-dress"),
     ]:
-        if db.scalar(
-            select(InstagramProductMap).where(
-                InstagramProductMap.shop_id == shop.id,
-                InstagramProductMap.instagram_post_url == post_url,
+        if (
+            db.scalar(
+                select(InstagramProductMap).where(
+                    InstagramProductMap.shop_id == shop.id,
+                    InstagramProductMap.instagram_post_url == post_url,
+                )
             )
-        ) is None:
+            is None
+        ):
             db.add(
                 InstagramProductMap(
                     shop_id=shop.id,
@@ -1196,8 +1783,16 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
             )
 
     trigger_specs = [
-        ("price", TriggerSourceType.COMMENT, "Thanks! I sent you pricing in DM. Which color and size?"),
-        ("order", TriggerSourceType.DIRECT_DM, "Happy to help with your order — tell me color and size."),
+        (
+            "price",
+            TriggerSourceType.COMMENT,
+            "Thanks! I sent you pricing in DM. Which color and size?",
+        ),
+        (
+            "order",
+            TriggerSourceType.DIRECT_DM,
+            "Happy to help with your order — tell me color and size.",
+        ),
         ("سایز", TriggerSourceType.STORY_REPLY, "Which size are you looking for?"),
     ]
     triggers: list[CommentToDmTrigger] = []
@@ -1225,10 +1820,14 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
         triggers.append(trigger)
 
     hoodie_variant = db.scalar(
-        select(ProductVariant).where(ProductVariant.product_id == hoodie.id, ProductVariant.sku == "HD-BLK-L")
+        select(ProductVariant).where(
+            ProductVariant.product_id == hoodie.id, ProductVariant.sku == "HD-BLK-L"
+        )
     )
     dress_variant = db.scalar(
-        select(ProductVariant).where(ProductVariant.product_id == dress.id, ProductVariant.sku == "DR-RED-S")
+        select(ProductVariant).where(
+            ProductVariant.product_id == dress.id, ProductVariant.sku == "DR-RED-S"
+        )
     )
     shirt_variant = None
     if black_shirt is not None:
@@ -1243,10 +1842,25 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
         db, shop.id, instagram_user_id="demo-cust-ali", full_name="Ali Rezaei", phone="09121234567"
     )
     sara = _get_or_create_customer(
-        db, shop.id, instagram_user_id="demo-cust-sara", full_name="Sara Karimi", phone="09129876543"
+        db,
+        shop.id,
+        instagram_user_id="demo-cust-sara",
+        full_name="Sara Karimi",
+        phone="09129876543",
     )
     reza = _get_or_create_customer(
-        db, shop.id, instagram_user_id="demo-cust-reza", full_name="Reza Ahmadi", phone="09121112222"
+        db,
+        shop.id,
+        instagram_user_id="demo-cust-reza",
+        full_name="Reza Ahmadi",
+        phone="09121112222",
+    )
+    nadia = _get_or_create_customer(
+        db,
+        shop.id,
+        instagram_user_id="demo-cust-nadia",
+        full_name="Nadia Hosseini",
+        phone="09123334444",
     )
 
     conv_order_ready = _get_or_create_conversation(
@@ -1330,7 +1944,15 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
         created_at=now - timedelta(hours=2),
     )
 
-    if db.scalar(select(ConversationSlots).where(ConversationSlots.conversation_id == conv_order_ready.id)) is None and hoodie_variant is not None:
+    if (
+        db.scalar(
+            select(ConversationSlots).where(
+                ConversationSlots.conversation_id == conv_order_ready.id
+            )
+        )
+        is None
+        and hoodie_variant is not None
+    ):
         db.add(
             ConversationSlots(
                 conversation_id=conv_order_ready.id,
@@ -1352,7 +1974,12 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
             )
         )
 
-    if db.scalar(select(ConversationSlots).where(ConversationSlots.conversation_id == conv_handoff.id)) is None:
+    if (
+        db.scalar(
+            select(ConversationSlots).where(ConversationSlots.conversation_id == conv_handoff.id)
+        )
+        is None
+    ):
         db.add(
             ConversationSlots(
                 conversation_id=conv_handoff.id,
@@ -1407,12 +2034,15 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
                 reference_key="demo-order-draft-shirt",
             )
 
-        if db.scalar(
-            select(SuggestedReply).where(
-                SuggestedReply.conversation_id == conv_handoff.id,
-                SuggestedReply.suggested_text.like("I can check%"),
+        if (
+            db.scalar(
+                select(SuggestedReply).where(
+                    SuggestedReply.conversation_id == conv_handoff.id,
+                    SuggestedReply.suggested_text.like("I can check%"),
+                )
             )
-        ) is None:
+            is None
+        ):
             db.add(
                 SuggestedReply(
                     shop_id=shop.id,
@@ -1425,7 +2055,12 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
             )
 
         price_trigger = triggers[0]
-        if db.scalar(select(TriggerEvent).where(TriggerEvent.trigger_id == price_trigger.id).limit(1)) is None:
+        if (
+            db.scalar(
+                select(TriggerEvent).where(TriggerEvent.trigger_id == price_trigger.id).limit(1)
+            )
+            is None
+        ):
             db.add(
                 TriggerEvent(
                     trigger_id=price_trigger.id,
@@ -1452,12 +2087,17 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
                 )
             )
 
-    if db.scalar(
-        select(UnavailableDemandLog).where(
-            UnavailableDemandLog.shop_id == shop.id,
-            UnavailableDemandLog.reason == "out_of_stock",
-        ).limit(1)
-    ) is None:
+    if (
+        db.scalar(
+            select(UnavailableDemandLog)
+            .where(
+                UnavailableDemandLog.shop_id == shop.id,
+                UnavailableDemandLog.reason == "out_of_stock",
+            )
+            .limit(1)
+        )
+        is None
+    ):
         db.add(
             UnavailableDemandLog(
                 shop_id=shop.id,
@@ -1537,6 +2177,24 @@ def seed_rich_demo_data(db: Session, admin: User, shop: Shop, account: Instagram
         ali=ali,
         sara=sara,
     )
+
+    _seed_channel_accounts(db, shop=shop, account=account, now=now)
+    _seed_customer_preferences(db, [ali, sara, reza, nadia])
+    _seed_catalog_copilot_data(
+        db,
+        shop=shop,
+        products=[product for product in [black_shirt, hoodie, dress] if product is not None],
+        now=now,
+    )
+    _seed_trust_and_scenario_data(
+        db,
+        shop=shop,
+        admin=admin,
+        now=now,
+        conv_handoff=conv_handoff,
+        conv_order_ready=conv_order_ready,
+    )
+    _seed_social_admin_data(db, shop=shop, admin=admin, conv_handoff=conv_handoff)
 
     _seed_recovery_rule(db, shop.id)
     _seed_decision_traces(
