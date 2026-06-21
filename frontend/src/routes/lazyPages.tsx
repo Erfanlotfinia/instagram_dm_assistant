@@ -58,6 +58,7 @@ export const InstagramProductMappingPage = lazyPage(
   'InstagramProductMappingPage',
 );
 export const LoginPage = lazyPage(() => import('../pages/LoginPage'), 'LoginPage');
+export const ProfilePage = lazyPage(() => import('../pages/ProfilePage'), 'ProfilePage');
 export const ProductDetailPage = lazyPage(() => import('../pages/ProductDetailPage'), 'ProductDetailPage');
 export const ProductsPage = lazyPage(() => import('../pages/ProductsPage'), 'ProductsPage');
 export const PostRevenueAnalyticsPage = lazyPage(

@@ -8,7 +8,7 @@ from app.core.security import create_access_token, hash_secret, verify_secret
 from app.domain.enums import UserRole
 from app.domain.models import User
 from app.repositories.user_repository import UserRepository
-from app.schemas.auth import LoginRequest, TokenResponse, UserRead
+from app.schemas.auth import ChangePasswordRequest, LoginRequest, TokenResponse, UserProfileUpdate, UserRead
 
 
 class AuthService:
@@ -58,6 +58,25 @@ class AuthService:
 
     def get_current_user_read(self, user: User) -> UserRead:
         return UserRead.model_validate(user)
+
+    def update_profile(self, user: User, payload: UserProfileUpdate) -> UserRead:
+        user.full_name = payload.full_name.strip()
+        updated = self.users.save(user)
+        return UserRead.model_validate(updated)
+
+    def change_password(self, user: User, payload: ChangePasswordRequest) -> None:
+        if not verify_secret(payload.current_password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is incorrect",
+            )
+        if payload.current_password == payload.new_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="New password must be different from the current password",
+            )
+        user.password_hash = hash_secret(payload.new_password)
+        self.users.save(user)
 
     @staticmethod
     def create_user(

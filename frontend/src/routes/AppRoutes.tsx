@@ -25,6 +25,7 @@ import {
   InstagramProductMappingPage,
   LLMLogsPage,
   LoginPage,
+  ProfilePage,
   OperatorCorrectionsPage,
   OrderDetailPage,
   OrdersHubPage,
@@ -83,6 +84,7 @@ export function AppRoutes() {
         }
       >
         <Route path="/" element={<OverviewPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
 
         {/* Inbox */}
         <Route path="/inbox" element={<InboxPage />} />

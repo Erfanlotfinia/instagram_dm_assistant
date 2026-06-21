@@ -64,7 +64,7 @@ import type {
   SimulatorRunSummary as TrustSimulatorRunSummary,
 } from '../types/trust';
 import type { FailedJobListResponse, HealthResponse, ReadinessResponse } from '../types/health';
-import type { LoginRequest, TokenResponse, User } from '../types/auth';
+import type { ChangePasswordRequest, LoginRequest, TokenResponse, User, UserProfileUpdate } from '../types/auth';
 import type { AttributeAlias, ColorAlias, SizeAlias, UnavailableDemandLog, VariantResolverResult } from '../types/fashion';
 import type { InstagramAccount, InstagramAccountCreate } from '../types/instagramAccount';
 import type {
@@ -183,6 +183,16 @@ export const apiClient = {
       body: JSON.stringify(payload),
     }),
   getMe: () => request<User>('/api/v1/auth/me'),
+  updateMe: (payload: UserProfileUpdate) =>
+    request<User>('/api/v1/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  changePassword: (payload: ChangePasswordRequest) =>
+    request<void>('/api/v1/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   listShops: () => request<Shop[]>('/api/v1/shops'),
   createShop: (payload: ShopCreate) =>
     request<Shop>('/api/v1/shops', {

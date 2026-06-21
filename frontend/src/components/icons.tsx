@@ -166,6 +166,26 @@ export const Icons = {
       <circle cx="12" cy="7" r="4" />
     </Icon>
   ),
+  eye: (p: IconProps) => (
+    <Icon {...p}>
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </Icon>
+  ),
+  eyeOff: (p: IconProps) => (
+    <Icon {...p}>
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19" />
+      <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+      <path d="M2 2l20 20" />
+    </Icon>
+  ),
+  logOut: (p: IconProps) => (
+    <Icon {...p}>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="M16 17l5-5-5-5" />
+      <path d="M21 12H9" />
+    </Icon>
+  ),
 };
 
 export type IconName = keyof typeof Icons;

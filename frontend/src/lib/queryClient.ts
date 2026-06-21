@@ -13,6 +13,7 @@ export const queryClient = new QueryClient({
 });
 
 export const queryKeys = {
+  currentUser: ['auth', 'me'] as const,
   shops: ['shops'] as const,
   shop: (shopId: string) => ['shops', shopId] as const,
   shopSettings: (shopId: string) => ['shops', shopId, 'settings'] as const,
