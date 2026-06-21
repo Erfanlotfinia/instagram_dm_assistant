@@ -17,6 +17,9 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+const DEV_ADMIN_EMAIL = import.meta.env.VITE_DEFAULT_ADMIN_EMAIL || 'admin@example.com';
+const DEV_ADMIN_PASSWORD = import.meta.env.VITE_DEFAULT_ADMIN_PASSWORD || 'changeme123';
+
 function LoginSpinner() {
   return (
     <span
@@ -39,8 +42,8 @@ export function LoginPage() {
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: import.meta.env.DEV ? 'admin@example.com' : '',
-      password: import.meta.env.DEV ? 'changeme123' : '',
+      email: import.meta.env.DEV ? DEV_ADMIN_EMAIL : '',
+      password: import.meta.env.DEV ? DEV_ADMIN_PASSWORD : '',
     },
   });
 
@@ -170,8 +173,8 @@ export function LoginPage() {
 
             {import.meta.env.DEV ? (
               <p className="mt-5 rounded-lg border border-dashed border-border bg-surface-sunken px-3 py-2 text-center text-xs text-subtle">
-                Demo credentials: <span className="font-mono text-muted">admin@example.com</span> /{' '}
-                <span className="font-mono text-muted">changeme123</span>
+                Demo credentials: <span className="font-mono text-muted">{DEV_ADMIN_EMAIL}</span> /{' '}
+                <span className="font-mono text-muted">{DEV_ADMIN_PASSWORD}</span>
               </p>
             ) : null}
           </CardBody>

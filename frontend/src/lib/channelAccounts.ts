@@ -17,15 +17,15 @@ export function providerLabel(provider: ChannelProvider): string {
   return PROVIDER_META.find((item) => item.value === provider)?.label ?? provider;
 }
 
-const DEFAULT_API_BASE_URL =
-  typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000` : 'http://localhost:8000';
-
 export function getPublicApiBaseUrl(): string {
-  const configured =
-    import.meta.env.VITE_PUBLIC_API_BASE_URL ||
-    import.meta.env.VITE_API_BASE_URL ||
-    (typeof window !== 'undefined' ? window.location.origin : DEFAULT_API_BASE_URL);
-  return configured.replace(/\/$/, '');
+  const configured = import.meta.env.VITE_PUBLIC_API_BASE_URL || import.meta.env.VITE_API_BASE_URL;
+  if (configured) {
+    return configured.replace(/\/$/, '');
+  }
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return '';
 }
 
 export function buildCallbackUrl(provider: ChannelProvider, accountId?: string): string {

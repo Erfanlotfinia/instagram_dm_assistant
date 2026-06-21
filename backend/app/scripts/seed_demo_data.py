@@ -14,6 +14,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.domain.enums import (
     AgentMode,
     AgentActionStatus,
@@ -1645,7 +1646,7 @@ def _ensure_order_fulfillment_records(
                     order_id=order.id,
                     provider=PaymentProvider.MOCK,
                     status=record_status,
-                    payment_url=f"http://localhost:8800/api/v1/payments/mock/pay/demo-{reference_key}",
+                    payment_url=f"{get_settings().public_api_base_url.rstrip('/')}/api/v1/payments/mock/pay/demo-{reference_key}",
                     provider_reference=provider_reference,
                     callback_processed_at=now - timedelta(hours=2)
                     if record_status == PaymentRecordStatus.PAID

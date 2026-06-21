@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, repoRoot, '');
   // Reuse the public API base URL so the dev proxy and the app agree on one target.
   const proxyTarget = env.VITE_API_BASE_URL || 'http://backend:8000';
+  const devServerPort = Number(env.FRONTEND_HOST_PORT || 5173);
 
   return {
     plugins: [react(), tailwindcss()],
@@ -28,7 +29,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      port: 5173,
+      port: devServerPort,
       proxy: {
         '/api': {
           target: proxyTarget,

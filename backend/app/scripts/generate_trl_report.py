@@ -15,6 +15,7 @@ from typing import Any
 
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.domain.models import Shop, TRLValidationRun
 from app.services.pilot_service import PilotService
@@ -96,7 +97,7 @@ def build_report(*, shop_slug: str | None = None) -> str:
                 "```bash",
                 f"curl -X POST -H \"Authorization: Bearer <token>\" \\",
                 f"  -d '{{\"reset_demo_data\": true}}' \\",
-                f"  http://localhost:8000/api/v1/shops/{shop.id}/trl-validation/run",
+                f"  {get_settings().public_api_base_url.rstrip('/')}/api/v1/shops/{shop.id}/trl-validation/run",
                 "```",
                 "",
             ])
