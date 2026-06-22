@@ -7,6 +7,9 @@ cd "$ROOT"
 echo "==> Backend migrations (requires Postgres on localhost:5432)"
 bash scripts/check_migrations.sh
 
+echo "==> Backend ruff"
+(cd backend && ruff check app)
+
 echo "==> Backend pytest"
 (cd backend && pytest app/tests -q --tb=line)
 
