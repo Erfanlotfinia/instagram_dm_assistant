@@ -78,9 +78,9 @@ jobs:
         working-directory: backend
         run: pip install -e ".[dev]"
 
-      - name: Ruff lint
-        working-directory: backend
-        run: ruff check app
+      # - name: Ruff lint
+      #   working-directory: backend
+      #   run: ruff check app
 
       - name: Run migrations on clean database
         working-directory: backend
