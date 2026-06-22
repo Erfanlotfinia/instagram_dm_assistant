@@ -165,6 +165,7 @@ services:
   frontend:
     build:
       context: ./frontend
+      target: development
     restart: unless-stopped
     environment:
       VITE_API_BASE_URL: "${VITE_API_BASE_URL:?missing}"
@@ -185,6 +186,7 @@ services:
   landing:
     build:
       context: ./landing
+      target: development
     restart: unless-stopped
     environment:
       LANDING_PORT: "${LANDING_PORT:-5174}"
