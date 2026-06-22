@@ -40,7 +40,14 @@ function roleLabel(role: UserRole): string {
 }
 
 function roleTone(role: UserRole): BadgeTone {
-  return { owner: 'accent', admin: 'info', operator: 'neutral' }[role];
+  switch (role) {
+    case 'owner':
+      return 'accent';
+    case 'admin':
+      return 'info';
+    case 'operator':
+      return 'neutral';
+  }
 }
 
 export function ProfilePage() {

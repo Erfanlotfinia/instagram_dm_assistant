@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_shop_membership
 from app.db.session import get_db_session
 from app.domain.models import ShopAgentSettings, ShopMember, User
-from app.services.agent_risk_settings_service import AgentRiskSettingsService
 from app.schemas.risk import AgentRiskSettingsRead, AgentRiskSettingsUpdate
+from app.services.agent_risk_settings_service import AgentRiskSettingsService
 
 router = APIRouter(prefix="/shops/{shop_id}/agent-risk-settings", tags=["agent-risk-settings"])
 
@@ -41,11 +41,22 @@ def _read(settings: ShopAgentSettings) -> AgentRiskSettingsRead:
 
 
 @router.get("", response_model=AgentRiskSettingsRead)
-def get_agent_risk_settings(shop_id: UUID, _user: Annotated[User, Depends(get_current_user)], _membership: Annotated[ShopMember, Depends(get_shop_membership)], db: Annotated[Session, Depends(get_db_session)]) -> AgentRiskSettingsRead:
+def get_agent_risk_settings(
+    shop_id: UUID,
+    _user: Annotated[User, Depends(get_current_user)],
+    _membership: Annotated[ShopMember, Depends(get_shop_membership)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> AgentRiskSettingsRead:
     return _read(_get_or_create(db, shop_id))
 
 
 @router.put("", response_model=AgentRiskSettingsRead)
-def update_agent_risk_settings(shop_id: UUID, payload: AgentRiskSettingsUpdate, _user: Annotated[User, Depends(get_current_user)], _membership: Annotated[ShopMember, Depends(get_shop_membership)], db: Annotated[Session, Depends(get_db_session)]) -> AgentRiskSettingsRead:
+def update_agent_risk_settings(
+    shop_id: UUID,
+    payload: AgentRiskSettingsUpdate,
+    _user: Annotated[User, Depends(get_current_user)],
+    _membership: Annotated[ShopMember, Depends(get_shop_membership)],
+    db: Annotated[Session, Depends(get_db_session)],
+) -> AgentRiskSettingsRead:
     settings = AgentRiskSettingsService(db).update(shop_id, payload)
     return _read(settings)

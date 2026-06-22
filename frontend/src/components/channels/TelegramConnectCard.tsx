@@ -236,7 +236,7 @@ export function TelegramConnectCard({
       <CardHeader
         title="Telegram"
         description="Create a managed bot without BotFather, or connect Business / Hybrid manually."
-        action={
+        actions={
           isConnected ? (
             <Badge tone="success">Connected</Badge>
           ) : account?.status === 'disabled' ? (
