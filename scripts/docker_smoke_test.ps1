@@ -21,9 +21,13 @@ $backendPort = if ($env:BACKEND_HOST_PORT) { $env:BACKEND_HOST_PORT } else { "88
 $frontendPort = if ($env:FRONTEND_HOST_PORT) { $env:FRONTEND_HOST_PORT } else { "5173" }
 $backendBase = "http://localhost:$backendPort"
 
+if (-not (Test-Path "docker/postgres/init-app-user.sh")) {
+    throw "Missing docker/postgres/init-app-user.sh"
+}
+
 docker compose config | Out-Null
 docker compose build
-docker compose up -d
+docker compose up -d --wait --wait-timeout 180
 
 $waitScript = Join-Path $PSScriptRoot "wait_for_http.ps1"
 & $waitScript -Url "$backendBase/health" -TimeoutSeconds 180
