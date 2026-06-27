@@ -43,7 +43,10 @@ class Settings(BaseSettings):
     agent_max_failures: int = 2
     jwt_secret_key: str = Field(default="change-me-in-production", min_length=16)
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 60
+    jwt_access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 30
+    auth_cookie_secure: bool | None = None
+    csrf_cookie_name: str = "modira_csrf"
     token_encryption_key: str = Field(
         default="local-dev-token-encryption-key-32b!",
         min_length=32,

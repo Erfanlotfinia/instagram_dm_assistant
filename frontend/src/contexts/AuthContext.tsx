@@ -10,7 +10,6 @@ import {
 
 import { queryClient, queryKeys } from '../lib/queryClient';
 import { apiClient } from '../services/apiClient';
-import { tokenStorage } from '../services/tokenStorage';
 import type { User } from '../types/auth';
 
 interface AuthContextValue {
@@ -18,7 +17,7 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -29,20 +28,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshUser = useCallback(async () => {
-    const token = tokenStorage.get();
-    if (!token) {
-      setUser(null);
-      return;
+    try {
+      const currentUser = await apiClient.getMe();
+      setUser(currentUser);
+    } catch {
+      const refreshed = await apiClient.refresh();
+      setUser(refreshed.user);
     }
-
-    const currentUser = await apiClient.getMe();
-    setUser(currentUser);
   }, []);
 
   useEffect(() => {
     refreshUser()
       .catch(() => {
-        tokenStorage.clear();
         setUser(null);
       })
       .finally(() => setIsLoading(false));
@@ -50,14 +47,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const login = useCallback(async (email: string, password: string) => {
     const response = await apiClient.login({ email, password });
-    tokenStorage.set(response.access_token);
-    const currentUser = await apiClient.getMe();
-    setUser(currentUser);
+    setUser(response.user);
     await queryClient.invalidateQueries({ queryKey: queryKeys.shops });
   }, []);
 
-  const logout = useCallback(() => {
-    tokenStorage.clear();
+  const logout = useCallback(async () => {
+    await apiClient.logout().catch(() => undefined);
     setUser(null);
     queryClient.removeQueries({ queryKey: queryKeys.shops });
   }, []);

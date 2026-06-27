@@ -64,7 +64,7 @@ import type {
   SimulatorRunSummary as TrustSimulatorRunSummary,
 } from '../types/trust';
 import type { FailedJobListResponse, HealthResponse, ReadinessResponse } from '../types/health';
-import type { ChangePasswordRequest, LoginRequest, TokenResponse, User, UserProfileUpdate } from '../types/auth';
+import type { ChangePasswordRequest, LoginRequest, LoginResponse, User, UserProfileUpdate } from '../types/auth';
 import type { AttributeAlias, ColorAlias, SizeAlias, UnavailableDemandLog, VariantResolverResult } from '../types/fashion';
 import type { InstagramAccount, InstagramAccountCreate } from '../types/instagramAccount';
 import type {
@@ -96,7 +96,6 @@ import type {
   ShopSettings,
   ShopUpdate,
 } from '../types/shop';
-import { tokenStorage } from './tokenStorage';
 
 function resolveApiBaseUrl(): string {
   const configured = import.meta.env.VITE_API_BASE_URL;
@@ -127,19 +126,27 @@ export class ApiError extends Error {
   }
 }
 
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = tokenStorage.get();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(init?.headers as Record<string, string> | undefined),
   };
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const csrf = readCookie('modira_csrf');
+  if (csrf && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    headers['X-CSRF-Token'] = csrf;
   }
 
   const response = await fetch(apiUrl(path), {
     ...init,
+    credentials: 'include',
     headers,
   }).catch((error: unknown) => {
     if (error instanceof TypeError) {
@@ -190,11 +197,13 @@ export const apiClient = {
   getHealth: () => request<HealthResponse>('/api/v1/health'),
   getReady: () => request<ReadinessResponse>('/api/v1/ready'),
   login: (payload: LoginRequest) =>
-    request<TokenResponse>('/api/v1/auth/login', {
+    request<LoginResponse>('/api/v1/auth/login', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
   getMe: () => request<User>('/api/v1/auth/me'),
+  refresh: () => request<LoginResponse>('/api/v1/auth/refresh', { method: 'POST', body: JSON.stringify({}) }),
+  logout: () => request<void>('/api/v1/auth/logout', { method: 'POST', body: JSON.stringify({}) }),
   updateMe: (payload: UserProfileUpdate) =>
     request<User>('/api/v1/auth/me', {
       method: 'PATCH',

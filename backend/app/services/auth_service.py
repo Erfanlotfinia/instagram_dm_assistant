@@ -15,7 +15,7 @@ class AuthService:
     def __init__(self, db: Session) -> None:
         self.users = UserRepository(db)
 
-    def authenticate(self, payload: LoginRequest) -> TokenResponse:
+    def verify_credentials(self, payload: LoginRequest) -> User:
         user = self.users.get_by_email(payload.email.lower())
         if user is None or not verify_secret(payload.password, user.password_hash):
             raise HTTPException(
@@ -27,6 +27,10 @@ class AuthService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User account is inactive",
             )
+        return user
+
+    def authenticate(self, payload: LoginRequest) -> TokenResponse:
+        user = self.verify_credentials(payload)
         token = create_access_token(str(user.id))
         return TokenResponse(access_token=token)
 

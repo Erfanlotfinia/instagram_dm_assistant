@@ -48,15 +48,16 @@ def rate_limit_outbound_message(
 
 
 def get_current_user(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     db: Annotated[Session, Depends(get_db_session)],
 ) -> User:
-    if credentials is None or credentials.scheme.lower() != "bearer":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
-    return AuthService(db).get_user_from_token(credentials.credentials)
+    token = request.cookies.get("__Host-modira_access")
+    if not token and credentials is not None and credentials.scheme.lower() == "bearer":
+        token = credentials.credentials
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    return AuthService(db).get_user_from_token(token)
 
 
 def get_shop_membership(

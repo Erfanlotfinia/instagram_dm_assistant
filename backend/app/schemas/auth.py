@@ -25,6 +25,11 @@ class UserRead(BaseModel):
     is_active: bool
 
 
+class LoginResponse(BaseModel):
+    user: UserRead
+    session_id: str
+
+
 class UserProfileUpdate(BaseModel):
     full_name: str = Field(min_length=1, max_length=255)
 
