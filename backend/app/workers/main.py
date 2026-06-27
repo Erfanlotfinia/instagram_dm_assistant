@@ -91,12 +91,24 @@ class WorkerApp:
             PROCESSED_MESSAGES.inc()
             self._update_queue_lag()
         except ConversationLockedError as exc:
-            logger.info(
-                "Conversation locked; scheduling delayed retry retry_count=%s correlation_id=%s",
-                retry_count + 1,
-                metadata["correlation_id"],
-            )
-            self._publish_retry_then_ack(channel, method, body, retry_count, str(exc), metadata)
+            next_retry = retry_count + 1
+            if next_retry > self.settings.rabbitmq_max_retries:
+                logger.error(
+                    "Conversation lock retry limit exceeded retry_count=%s correlation_id=%s",
+                    next_retry,
+                    metadata["correlation_id"],
+                )
+                payload = self._payload_from_body(body)
+                reason = f"Conversation lock retry limit exceeded: {exc}"
+                self._publish_dlq_then_ack(channel, method, payload, next_retry, reason, metadata)
+                self._persist_failed_job(payload, next_retry, exc)
+            else:
+                logger.info(
+                    "Conversation locked; delayed retry retry_count=%s correlation_id=%s",
+                    next_retry,
+                    metadata["correlation_id"],
+                )
+                self._publish_retry_then_ack(channel, method, body, retry_count, str(exc), metadata)
         except InvalidJobPayloadError as exc:
             logger.error(
                 "Worker received non-retryable payload retry_count=%s correlation_id=%s: %s",

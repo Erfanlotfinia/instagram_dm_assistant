@@ -188,6 +188,31 @@ def test_conversation_lock_sends_to_retry_queue_not_immediate_requeue(monkeypatc
     channel.basic_nack.assert_not_called()
 
 
+
+def test_conversation_lock_goes_to_dlq_after_max_retries(monkeypatch) -> None:
+    from app.workers import main as worker_main
+    from app.workers.message_consumer import ConversationLockedError
+
+    publisher = MagicMock()
+    worker = _worker(monkeypatch, publisher)
+    channel = MagicMock()
+    monkeypatch.setattr(
+        worker_main,
+        "handle_delivery",
+        MagicMock(side_effect=ConversationLockedError("locked")),
+    )
+
+    worker._on_message(channel, _Method(), _properties(retry_count=2), b'{"message_id": "m"}')
+
+    publisher.publish_to_dlq.assert_called_once()
+    assert publisher.publish_to_dlq.call_args.kwargs["retry_count"] == 3
+    assert "Conversation lock retry limit exceeded" in publisher.publish_to_dlq.call_args.kwargs[
+        "error_reason"
+    ]
+    publisher.publish_to_retry.assert_not_called()
+    channel.basic_ack.assert_called_once_with(delivery_tag=123)
+    worker._persist_failed_job.assert_called_once()
+
 def test_generic_retryable_error_goes_to_retry_until_max_retries(monkeypatch) -> None:
     from app.workers import main as worker_main
 
