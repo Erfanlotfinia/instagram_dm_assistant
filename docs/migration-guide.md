@@ -2,11 +2,21 @@
 
 ## Local Docker
 
+Migrations run automatically via the one-shot `backend-migrate` service before the backend starts:
+
 ```bash
+docker compose up -d
+```
+
+To run migrations manually:
+
+```bash
+docker compose run --rm backend-migrate
+# or
 docker compose exec backend alembic upgrade head
 ```
 
-The backend container also runs `alembic upgrade head` before Uvicorn starts.
+Production uses the same `backend-migrate` pattern; see [production-deployment.md](production-deployment.md).
 
 ## Local shell
 

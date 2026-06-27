@@ -1,75 +1,93 @@
+x-backend-app-environment: &backend-app-environment
+  DATABASE_URL: "postgresql+psycopg://${POSTGRES_APP_USER:?missing}:${POSTGRES_APP_PASSWORD:?missing}@postgres:5432/${POSTGRES_DB:?missing}"
+  REDIS_URL: "redis://redis:6379/0"
+  RABBITMQ_URL: "amqp://${RABBITMQ_DEFAULT_USER:?missing}:${RABBITMQ_DEFAULT_PASS:?missing}@rabbitmq:5672/"
+  QDRANT_URL: "http://qdrant:6333"
+  APP_ENV: "${APP_ENV:?missing}"
+  LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+  JWT_SECRET_KEY: "${JWT_SECRET_KEY:?missing}"
+  TOKEN_ENCRYPTION_KEY: "${TOKEN_ENCRYPTION_KEY:?missing}"
+  CORS_ORIGINS: "${CORS_ORIGINS:?missing}"
+  LLM_MODE: "${LLM_MODE:-mock}"
+  LLM_PROVIDER: "${LLM_PROVIDER:-gemini}"
+  OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+  OPENAI_API_BASE_URL: "${OPENAI_API_BASE_URL:-}"
+  OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4o-mini}"
+  OPENAI_EMBEDDING_MODEL: "${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}"
+  GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+  GEMINI_MODEL: "${GEMINI_MODEL:-gemini-2.5-flash}"
+  GEMINI_EMBEDDING_MODEL: "${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}"
+  DEFAULT_MODEL_VERSION: "${DEFAULT_MODEL_VERSION:-gpt-4o-mini}"
+  DEFAULT_PROMPT_VERSION: "${DEFAULT_PROMPT_VERSION:-trust-layer-v1}"
+  DEFAULT_POLICY_VERSION: "${DEFAULT_POLICY_VERSION:-trust-layer-v1}"
+  WEBHOOK_SIGNATURE_BYPASS: "${WEBHOOK_SIGNATURE_BYPASS:-false}"
+  PUBLIC_API_BASE_URL: "${PUBLIC_API_BASE_URL:?missing}"
+  FRONTEND_BASE_URL: "${FRONTEND_BASE_URL:?missing}"
+  WEBHOOK_INTERNAL_SECRET: "${WEBHOOK_INTERNAL_SECRET:?missing}"
+  OAUTH_STATE_SECRET: "${OAUTH_STATE_SECRET:?missing}"
+  META_APP_ID: "${META_APP_ID:-}"
+  META_APP_SECRET: "${META_APP_SECRET:-}"
+  META_GRAPH_API_VERSION: "${META_GRAPH_API_VERSION:-v20.0}"
+  META_GRAPH_API_BASE_URL: "${META_GRAPH_API_BASE_URL:-https://graph.facebook.com}"
+  ENABLED_CHANNEL_PROVIDERS: "${ENABLED_CHANNEL_PROVIDERS:-instagram,whatsapp,telegram,bale,rubika}"
+  ENABLE_REAL_PROVIDER_SEND: "${ENABLE_REAL_PROVIDER_SEND:-false}"
+  RABBITMQ_QUEUE_MESSAGE_RECEIVED: "${RABBITMQ_QUEUE_MESSAGE_RECEIVED:-channel.message.received}"
+  RABBITMQ_QUEUE_RETRY: "${RABBITMQ_QUEUE_RETRY:-channel.message.received.retry}"
+  RABBITMQ_QUEUE_DLQ: "${RABBITMQ_QUEUE_DLQ:-channel.message.received.dlq}"
+  CONVERSATION_LOCK_TTL_SECONDS: "${CONVERSATION_LOCK_TTL_SECONDS:-120}"
+  RATE_LIMIT_ENABLED: "${RATE_LIMIT_ENABLED:-true}"
+  TRUSTED_PROXY_CIDRS: "${TRUSTED_PROXY_CIDRS:-[]}"
+  RATE_LIMIT_LOGIN_PER_MINUTE: "${RATE_LIMIT_LOGIN_PER_MINUTE:-5}"
+  RATE_LIMIT_WEBHOOK_PER_MINUTE: "${RATE_LIMIT_WEBHOOK_PER_MINUTE:-120}"
+  RATE_LIMIT_OUTBOUND_MESSAGE_PER_MINUTE: "${RATE_LIMIT_OUTBOUND_MESSAGE_PER_MINUTE:-30}"
+  RABBITMQ_MAX_RETRIES: "${RABBITMQ_MAX_RETRIES:-3}"
+  RABBITMQ_RETRY_DELAY_MS: "${RABBITMQ_RETRY_DELAY_MS:-30000}"
+  BACKGROUND_JOB_INTERVAL_SECONDS: "${BACKGROUND_JOB_INTERVAL_SECONDS:-60}"
+  EMBEDDING_REFRESH_BATCH_SIZE: "${EMBEDDING_REFRESH_BATCH_SIZE:-50}"
+  DEFAULT_ADMIN_EMAIL: "${DEFAULT_ADMIN_EMAIL:?missing}"
+  DEFAULT_ADMIN_PASSWORD: "${DEFAULT_ADMIN_PASSWORD:?missing}"
+  DEFAULT_ADMIN_NAME: "${DEFAULT_ADMIN_NAME:-Platform Admin}"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+
 services:
+  backend-migrate:
+    build:
+      context: ./backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      <<: *backend-app-environment
+    networks:
+      - private
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app:ro
+      - ./backend/alembic.ini:/app/alembic.ini:ro
+
   backend:
     build:
       context: ./backend
-    command: ["sh", "-c", "alembic upgrade head && python -m app.scripts.ensure_admin && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    command:
+      [
+        "sh",
+        "-c",
+        'if [ "$${ENABLE_ENSURE_ADMIN:-true}" = "true" ]; then python -m app.scripts.ensure_admin; fi && exec uvicorn app.main:app --host 0.0.0.0 --port 8000',
+      ]
     restart: unless-stopped
     environment:
-      DATABASE_URL: "postgresql+psycopg://${POSTGRES_APP_USER:?missing}:${POSTGRES_APP_PASSWORD:?missing}@postgres:5432/${POSTGRES_DB:?missing}"
-      REDIS_URL: "redis://redis:6379/0"
-      RABBITMQ_URL: "amqp://${RABBITMQ_DEFAULT_USER:?missing}:${RABBITMQ_DEFAULT_PASS:?missing}@rabbitmq:5672/"
-      QDRANT_URL: "http://qdrant:6333"
-
-      APP_ENV: "${APP_ENV:?missing}"
-      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
-
-      JWT_SECRET_KEY: "${JWT_SECRET_KEY:?missing}"
-      TOKEN_ENCRYPTION_KEY: "${TOKEN_ENCRYPTION_KEY:?missing}"
-      CORS_ORIGINS: "${CORS_ORIGINS:?missing}"
-
-      LLM_MODE: "${LLM_MODE:-mock}"
-      LLM_PROVIDER: "${LLM_PROVIDER:-gemini}"
-      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
-      OPENAI_API_BASE_URL: "${OPENAI_API_BASE_URL:-}"
-      OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4o-mini}"
-      OPENAI_EMBEDDING_MODEL: "${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}"
-      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
-      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-2.5-flash}"
-      GEMINI_EMBEDDING_MODEL: "${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}"
-
-      DEFAULT_MODEL_VERSION: "${DEFAULT_MODEL_VERSION:-gpt-4o-mini}"
-      DEFAULT_PROMPT_VERSION: "${DEFAULT_PROMPT_VERSION:-trust-layer-v1}"
-      DEFAULT_POLICY_VERSION: "${DEFAULT_POLICY_VERSION:-trust-layer-v1}"
-
-      WEBHOOK_SIGNATURE_BYPASS: "${WEBHOOK_SIGNATURE_BYPASS:-false}"
-      PUBLIC_API_BASE_URL: "${PUBLIC_API_BASE_URL:?missing}"
-      FRONTEND_BASE_URL: "${FRONTEND_BASE_URL:?missing}"
-      WEBHOOK_INTERNAL_SECRET: "${WEBHOOK_INTERNAL_SECRET:?missing}"
-      OAUTH_STATE_SECRET: "${OAUTH_STATE_SECRET:?missing}"
-      META_APP_ID: "${META_APP_ID:-}"
-      META_APP_SECRET: "${META_APP_SECRET:-}"
-      META_GRAPH_API_VERSION: "${META_GRAPH_API_VERSION:-v20.0}"
-      META_GRAPH_API_BASE_URL: "${META_GRAPH_API_BASE_URL:-https://graph.facebook.com}"
-      ENABLED_CHANNEL_PROVIDERS: "${ENABLED_CHANNEL_PROVIDERS:-instagram,whatsapp,telegram,bale,rubika}"
-      ENABLE_REAL_PROVIDER_SEND: "${ENABLE_REAL_PROVIDER_SEND:-false}"
-      RABBITMQ_QUEUE_MESSAGE_RECEIVED: "${RABBITMQ_QUEUE_MESSAGE_RECEIVED:-channel.message.received}"
-      RABBITMQ_QUEUE_RETRY: "${RABBITMQ_QUEUE_RETRY:-channel.message.received.retry}"
-      RABBITMQ_QUEUE_DLQ: "${RABBITMQ_QUEUE_DLQ:-channel.message.received.dlq}"
-
-      CONVERSATION_LOCK_TTL_SECONDS: "${CONVERSATION_LOCK_TTL_SECONDS:-120}"
-      RATE_LIMIT_ENABLED: "${RATE_LIMIT_ENABLED:-true}"
-      TRUSTED_PROXY_CIDRS: "${TRUSTED_PROXY_CIDRS:-[]}"
-      RATE_LIMIT_LOGIN_PER_MINUTE: "${RATE_LIMIT_LOGIN_PER_MINUTE:-5}"
-      RATE_LIMIT_WEBHOOK_PER_MINUTE: "${RATE_LIMIT_WEBHOOK_PER_MINUTE:-120}"
-      RATE_LIMIT_OUTBOUND_MESSAGE_PER_MINUTE: "${RATE_LIMIT_OUTBOUND_MESSAGE_PER_MINUTE:-30}"
-
-      RABBITMQ_MAX_RETRIES: "${RABBITMQ_MAX_RETRIES:-3}"
-      RABBITMQ_RETRY_DELAY_MS: "${RABBITMQ_RETRY_DELAY_MS:-30000}"
-      BACKGROUND_JOB_INTERVAL_SECONDS: "${BACKGROUND_JOB_INTERVAL_SECONDS:-60}"
-      EMBEDDING_REFRESH_BATCH_SIZE: "${EMBEDDING_REFRESH_BATCH_SIZE:-50}"
-
-      DEFAULT_ADMIN_EMAIL: "${DEFAULT_ADMIN_EMAIL:?missing}"
-      DEFAULT_ADMIN_PASSWORD: "${DEFAULT_ADMIN_PASSWORD:?missing}"
-      DEFAULT_ADMIN_NAME: "${DEFAULT_ADMIN_NAME:-Platform Admin}"
-
-      PYTHONDONTWRITEBYTECODE: "1"
-      PYTHONUNBUFFERED: "1"
+      <<: *backend-app-environment
+      ENABLE_ENSURE_ADMIN: "${ENABLE_ENSURE_ADMIN:-true}"
     ports:
       - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_HOST_PORT:-8000}:8000"
     networks:
       - public
       - private
     depends_on:
+      backend-migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -121,6 +139,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      backend-migrate:
+        condition: service_completed_successfully
       backend:
         condition: service_healthy
     security_opt:
@@ -154,6 +174,8 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+      backend-migrate:
+        condition: service_completed_successfully
       backend:
         condition: service_healthy
     security_opt:
