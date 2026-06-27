@@ -18,7 +18,10 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://qdrant:6333"
     llm_provider: Literal["openai", "gemini"] = Field(
         default="openai",
-        description="LLM provider for chat extraction (openai = OpenAI-compatible API, gemini = Google Gemini)",
+        description=(
+            "LLM provider for chat extraction "
+            "(openai = OpenAI-compatible API, gemini = Google Gemini)"
+        ),
     )
     openai_api_key: str = ""
     openai_api_base_url: str = Field(
@@ -55,6 +58,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173", "http://frontend:5173"]
     cors_allow_credentials: bool = True
     rate_limit_enabled: bool = True
+    trusted_proxy_cidrs: list[str] = []
     rate_limit_login_per_minute: int = Field(default=10, ge=1)
     rate_limit_webhook_per_minute: int = Field(default=120, ge=1)
     rate_limit_outbound_message_per_minute: int = Field(default=30, ge=1)
@@ -163,7 +167,10 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"JWT_SECRET_KEY must be a strong non-default secret in {self.app_env}"
                 )
-            if self.token_encryption_key in default_token_values or len(self.token_encryption_key) < 32:
+            if (
+                self.token_encryption_key in default_token_values
+                or len(self.token_encryption_key) < 32
+            ):
                 raise ValueError(
                     f"TOKEN_ENCRYPTION_KEY must be a strong non-default secret in {self.app_env}"
                 )
@@ -172,7 +179,10 @@ class Settings(BaseSettings):
                 for provider in self.enabled_channel_providers.split(",")
                 if provider.strip()
             }
-            if enabled_providers.intersection({"instagram", "whatsapp"}) and not self.meta_app_secret:
+            if (
+                enabled_providers.intersection({"instagram", "whatsapp"})
+                and not self.meta_app_secret
+            ):
                 raise ValueError(
                     f"META_APP_SECRET is required in {self.app_env} when Meta providers are enabled"
                 )
@@ -192,9 +202,15 @@ class Settings(BaseSettings):
                 raise ValueError("CORS_ORIGINS must use HTTPS in production")
             if self.llm_mode == "live":
                 if self.llm_provider == "gemini" and not self.gemini_api_key:
-                    raise ValueError("GEMINI_API_KEY is required when LLM_PROVIDER=gemini and LLM_MODE=live")
+                    raise ValueError(
+                        "GEMINI_API_KEY is required when "
+                        "LLM_PROVIDER=gemini and LLM_MODE=live"
+                    )
                 if self.llm_provider == "openai" and not self.openai_api_key:
-                    raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai and LLM_MODE=live")
+                    raise ValueError(
+                        "OPENAI_API_KEY is required when "
+                        "LLM_PROVIDER=openai and LLM_MODE=live"
+                    )
             if self.webhook_signature_bypass:
                 raise ValueError("WEBHOOK_SIGNATURE_BYPASS is not allowed in staging/production")
         return self

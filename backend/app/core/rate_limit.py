@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import ipaddress
 import logging
 import time
 from dataclasses import dataclass
+from uuid import uuid4
 
 import redis
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, Request, Response, status
 
 from app.core.config import Settings, get_settings
 
@@ -19,7 +21,66 @@ class RateLimitRule:
     window_seconds: int
 
 
+@dataclass(frozen=True)
+class RateLimitResult:
+    limit: int
+    remaining: int
+    reset_seconds: int
+    retry_after_seconds: int
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {
+            "X-RateLimit-Limit": str(self.limit),
+            "X-RateLimit-Remaining": str(self.remaining),
+            "X-RateLimit-Reset": str(self.reset_seconds),
+        }
+
+
 class RateLimiter:
+    _SCRIPT = """
+local key = KEYS[1]
+local limit = tonumber(ARGV[1])
+local window_ms = tonumber(ARGV[2])
+local now_ms = tonumber(ARGV[3])
+local member = ARGV[4]
+local window_start = now_ms - window_ms
+
+redis.call('ZREMRANGEBYSCORE', key, 0, window_start)
+local count = redis.call('ZCARD', key)
+local allowed = 0
+if count < limit then
+    redis.call('ZADD', key, now_ms, member)
+    count = count + 1
+    allowed = 1
+end
+redis.call('PEXPIRE', key, window_ms)
+
+local reset_ms = window_ms
+local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+if oldest[2] ~= nil then
+    reset_ms = (tonumber(oldest[2]) + window_ms) - now_ms
+    if reset_ms < 0 then
+        reset_ms = 0
+    end
+end
+
+local reset_seconds = math.ceil(reset_ms / 1000)
+local retry_after_seconds = 0
+if allowed == 0 then
+    retry_after_seconds = reset_seconds
+    if retry_after_seconds < 1 then
+        retry_after_seconds = 1
+    end
+end
+local remaining = limit - count
+if remaining < 0 then
+    remaining = 0
+end
+
+return {allowed, limit, remaining, reset_seconds, retry_after_seconds}
+"""
+
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
         self._client: redis.Redis | None = None
@@ -29,44 +90,93 @@ class RateLimiter:
             self._client = redis.Redis.from_url(self.settings.redis_url, decode_responses=True)
         return self._client
 
-    def check(self, rule: RateLimitRule, identifier: str) -> None:
+    def check(self, rule: RateLimitRule, identifier: str) -> RateLimitResult:
         if not self.settings.rate_limit_enabled:
-            return
+            return RateLimitResult(
+                limit=rule.limit,
+                remaining=rule.limit,
+                reset_seconds=rule.window_seconds,
+                retry_after_seconds=0,
+            )
 
         key = f"ratelimit:{rule.key_prefix}:{identifier}"
-        now = int(time.time())
-        window_start = now - rule.window_seconds
+        now_ms = int(time.time() * 1000)
+        member = f"{now_ms}:{uuid4()}"
+        allowed, limit, remaining, reset_seconds, retry_after_seconds = self._redis().eval(
+            self._SCRIPT,
+            1,
+            key,
+            rule.limit,
+            rule.window_seconds * 1000,
+            now_ms,
+            member,
+        )
+        result = RateLimitResult(
+            limit=int(limit),
+            remaining=int(remaining),
+            reset_seconds=int(reset_seconds),
+            retry_after_seconds=int(retry_after_seconds),
+        )
 
-        pipe = self._redis().pipeline()
-        pipe.zremrangebyscore(key, 0, window_start)
-        pipe.zadd(key, {str(now): now})
-        pipe.zcard(key)
-        pipe.expire(key, rule.window_seconds)
-        _, _, count, _ = pipe.execute()
-
-        if count > rule.limit:
+        if int(allowed) != 1:
             logger.warning(
-                "Rate limit exceeded prefix=%s identifier=%s count=%s limit=%s",
+                "Rate limit exceeded prefix=%s identifier=%s limit=%s",
                 rule.key_prefix,
                 identifier,
-                count,
                 rule.limit,
             )
+            headers = result.headers | {"Retry-After": str(result.retry_after_seconds)}
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Too many requests. Please try again later.",
-                headers={"Retry-After": str(rule.window_seconds)},
+                headers=headers,
             )
+        return result
 
 
-def client_identifier(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client and request.client.host:
-        return request.client.host
-    return "unknown"
+def _trusted_proxy_networks(settings: Settings) -> list[ipaddress._BaseNetwork]:
+    networks: list[ipaddress._BaseNetwork] = []
+    for cidr in settings.trusted_proxy_cidrs:
+        value = cidr.strip()
+        if not value:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(value, strict=False))
+        except ValueError:
+            logger.warning("Ignoring invalid trusted proxy CIDR: %s", value)
+    return networks
 
 
-def enforce_rate_limit(request: Request, rule: RateLimitRule, identifier: str | None = None) -> None:
-    RateLimiter().check(rule, identifier or client_identifier(request))
+def _is_trusted_proxy(host: str, settings: Settings) -> bool:
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return any(address in network for network in _trusted_proxy_networks(settings))
+
+
+def client_identifier(request: Request, settings: Settings | None = None) -> str:
+    settings = settings or get_settings()
+    client_host = request.client.host if request.client and request.client.host else "unknown"
+    if _is_trusted_proxy(client_host, settings):
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        real_ip = request.headers.get("X-Real-IP")
+        if real_ip:
+            return real_ip.strip()
+    return client_host
+
+
+def enforce_rate_limit(
+    request: Request,
+    rule: RateLimitRule,
+    response: Response | None = None,
+    identifier: str | None = None,
+    settings: Settings | None = None,
+) -> RateLimitResult:
+    settings = settings or get_settings()
+    result = RateLimiter(settings).check(rule, identifier or client_identifier(request, settings))
+    if response is not None:
+        response.headers.update(result.headers)
+    return result
