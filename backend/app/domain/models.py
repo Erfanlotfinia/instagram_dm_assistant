@@ -9,15 +9,18 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -32,18 +35,18 @@ from app.domain.enums import (
     ChannelConnectionMethod,
     ChannelConnectionProvider,
     ChannelConnectionSessionStatus,
-    ConversationResponseMode,
-    TelegramConnectionMode,
-    TelegramConnectionSessionStatus,
     ChannelConversationStatus,
     ChannelMessageType,
     ChannelProvider,
     ConfidenceSource,
     ConversationEventType,
     ConversationPriorityLevel,
+    ConversationResponseMode,
     ConversationState,
     FailedJobStatus,
-    OutboxEventStatus,
+    IncidentSeverity,
+    IncidentStatus,
+    IncidentTrigger,
     InstagramAccountStatus,
     InventoryMovementType,
     InventoryReservationStatus,
@@ -53,42 +56,42 @@ from app.domain.enums import (
     OperatorReviewDecision,
     OrderCorrectnessAction,
     OrderPaymentStatus,
-    OrderTransitionTrigger,
     OrderRecoveryAttemptStatus,
     OrderRecoveryStatus,
     OrderShippingStatus,
     OrderStatus,
-    UpsellSuggestionStatus,
+    OrderTransitionTrigger,
+    OutboxEventStatus,
     PaymentProvider,
     PaymentRecordStatus,
+    PilotEventSeverity,
+    PilotModeScope,
+    PilotOperatingMode,
     ProductStatus,
     ResolverConfidenceBand,
     ResolverFeedbackAction,
     ResolverTraceType,
+    ScenarioPackType,
+    SellingStyle,
     ShipmentProvider,
     ShipmentStatus,
     ShopStatus,
-    SellingStyle,
-    SuggestedReplyGeneratedBy,
-    SuggestedReplyStatus,
-    TriggerSourceType,
-    UserRole,
-    VariantAliasType,
-    PilotEventSeverity,
-    PilotModeScope,
-    PilotOperatingMode,
-    IncidentSeverity,
-    IncidentStatus,
-    IncidentTrigger,
-    ScenarioPackType,
     SimulatorRunSourceType,
     SimulatorRunStatus,
+    SuggestedReplyGeneratedBy,
+    SuggestedReplyStatus,
+    TelegramConnectionMode,
+    TelegramConnectionSessionStatus,
     TraceEventType,
-    WhatsAppTemplateCategory,
-    WhatsAppTemplateStatus,
+    TriggerSourceType,
+    UpsellSuggestionStatus,
+    UserRole,
+    VariantAliasType,
     WebhookDedupeOutcome,
     WebhookProcessingStatus,
     WebhookProvider,
+    WhatsAppTemplateCategory,
+    WhatsAppTemplateStatus,
 )
 from app.domain.mixins import TimestampMixin
 
@@ -596,6 +599,15 @@ class ConversationEvent(Base):
 
 class WebhookEvent(Base, TimestampMixin):
     __tablename__ = "webhook_events"
+    __table_args__ = (
+        Index(
+            "uq_webhook_events_provider_idempotency",
+            "provider",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     provider: Mapped[WebhookProvider] = mapped_column(

@@ -1,20 +1,23 @@
 import hashlib
 import hmac
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.orm import sessionmaker
 
 from app.core.config import Settings
 from app.core.security import encrypt_secret
-from app.domain.enums import ChannelProvider
+from app.domain.enums import ChannelProvider, WebhookProvider
 from app.domain.models import (
     ChannelAccount,
     ChannelMessage,
     InstagramAccount,
     OutboxEvent,
+    Shop,
     WebhookEvent,
 )
 from app.tests.fixtures.instagram_webhook import SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD
@@ -177,3 +180,70 @@ def test_legacy_instagram_webhook_uses_global_meta_secret(
 
     assert response.status_code == 200, response.text
     assert db_session.scalar(select(func.count()).select_from(ChannelMessage)) == 1
+
+
+def test_concurrent_duplicate_webhook_attempts_are_database_idempotent(engine):
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    with SessionLocal() as setup_session:
+        shop = Shop(name="Concurrent webhook shop", slug="concurrent-webhook-shop")
+        setup_session.add(shop)
+        setup_session.flush()
+        account = ChannelAccount(
+            shop_id=shop.id,
+            provider=ChannelProvider.TELEGRAM,
+            display_name="telegram concurrent test",
+            webhook_secret_encrypted=encrypt_secret("webhook-secret"),
+            webhook_verify_token="verify-token",
+        )
+        setup_session.add(account)
+        setup_session.commit()
+        account_id = account.id
+
+    payload = json.loads((FIXTURES / "telegram_text.json").read_text())
+
+    def ingest_once() -> str:
+        with SessionLocal() as session:
+            service = __import__(
+                "app.services.channel_webhook_ingestion_service",
+                fromlist=["ChannelWebhookIngestionService"],
+            ).ChannelWebhookIngestionService(session)
+            response = service.handle_payload(
+                ChannelProvider.TELEGRAM,
+                payload,
+                headers={"X-Webhook-Secret": "webhook-secret"},
+                channel_account_id=account_id,
+            )
+            return response.dedupe_outcome or "ignored"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(lambda _: ingest_once(), range(2)))
+
+    with SessionLocal() as assert_session:
+        assert sorted(outcomes) == ["duplicate", "processed"]
+        assert assert_session.scalar(select(func.count()).select_from(WebhookEvent)) == 1
+        assert assert_session.scalar(select(func.count()).select_from(ChannelMessage)) == 1
+        assert assert_session.scalar(select(func.count()).select_from(OutboxEvent)) == 1
+
+
+def test_null_webhook_idempotency_keys_are_not_deduped(db_session, demo_shop):
+    db_session.add_all(
+        [
+            WebhookEvent(
+                provider=WebhookProvider.TELEGRAM,
+                shop_id=demo_shop.id,
+                event_type="channel.webhook.received",
+                raw_payload={"attempt": 1},
+                idempotency_key=None,
+            ),
+            WebhookEvent(
+                provider=WebhookProvider.TELEGRAM,
+                shop_id=demo_shop.id,
+                event_type="channel.webhook.received",
+                raw_payload={"attempt": 2},
+                idempotency_key=None,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    assert db_session.scalar(select(func.count()).select_from(WebhookEvent)) == 2
