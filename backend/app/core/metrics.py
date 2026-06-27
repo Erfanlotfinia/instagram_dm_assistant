@@ -30,6 +30,14 @@ QUEUE_LAG = Gauge(
     "instagram_queue_lag_messages",
     "Approximate number of messages waiting in the primary queue",
 )
+RETRIED_MESSAGES = Counter(
+    "instagram_retried_messages_total",
+    "Total inbound messages scheduled for delayed retry by the worker",
+)
+DLQ_MESSAGES = Counter(
+    "instagram_dlq_messages_total",
+    "Total inbound messages published to the dead-letter queue by the worker",
+)
 HTTP_REQUEST_DURATION = Histogram(
     "http_request_duration_seconds",
     "HTTP request duration in seconds",
