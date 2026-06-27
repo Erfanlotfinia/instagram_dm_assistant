@@ -116,6 +116,8 @@ class ChannelWebhookIngestionService:
         )
         self.db.add(webhook_event)
         try:
+            # The lookup above is only a fast path; the database unique index is the
+            # final concurrency guard when duplicate deliveries race this insert.
             self.db.flush()
         except IntegrityError:
             self.db.rollback()
