@@ -22,7 +22,7 @@ def test_invalid_llm_json_fallback_masks_sensitive_output():
     assert error
     assert result.needs_human is True
     assert result.intent.value == 'unclear'
-    assert '[masked_phone]' in mask_sensitive_llm_output(service.last_invalid_output)
+    assert '[REDACTED]' in mask_sensitive_llm_output(service.last_invalid_output)
 
 
 def test_invalid_confidence_values_rejected_by_schema():

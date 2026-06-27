@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.core.log_masking import redact_value
 from app.core.metrics import CREATED_ORDERS, FAILED_AGENT_RUNS, HANDOFF_COUNT
 from app.domain.enums import (
     AgentActionStatus,
@@ -1041,13 +1042,13 @@ class ConversationOrchestrator:
             message_id=message.id,
             agent_run_id=agent_run.id,
             intent=extraction.intent.value,
-            extracted_slots=extraction.slots.model_dump(mode="json"),
-            normalized_slots=slots_to_dict(slots),
+            extracted_slots=redact_value(extraction.slots.model_dump(mode="json")),
+            normalized_slots=redact_value(slots_to_dict(slots)),
             product_candidates=getattr(slots, "product_candidates", []) or [],
             selected_product_id=product.id if product is not None else None,
             variant_resolution=variant_result.model_dump(mode="json") if variant_result else {"variant_id": str(selected_variant_id) if selected_variant_id else None},
             inventory_result={"available": inventory_available},
-            risk_score=enriched_risk,
+            risk_score=redact_value(enriched_risk),
             order_action={"order_id": str(order.id) if order else None, "status": order.status.value if order else None},
             next_state=conversation.workflow_state.value,
             outbound_message_id=outbound_message_id,

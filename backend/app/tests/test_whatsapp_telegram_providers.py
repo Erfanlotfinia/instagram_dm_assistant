@@ -14,10 +14,10 @@ from app.channels.adapters import (
     TelegramProviderAdapter,
     WhatsAppProviderAdapter,
 )
+from app.core.log_masking import redact_value
 from app.domain.enums import ChannelMessageType, ChannelProvider
 from app.schemas.channels import MediaItem, NormalizedOutboundMessage
 from app.services.channel_policy_service import ChannelPolicyService
-from app.services.channel_webhook_ingestion_service import mask_pii
 
 FIXTURES = Path(__file__).parent / "fixtures" / "channels"
 
@@ -285,10 +285,10 @@ async def test_bale_and_rubika_endpoint_generation_and_rubika_keypad(
 
 
 def test_token_masking() -> None:
-    assert mask_pii({"token": "secret", "access_token": "secret", "from": "1555"}) == {
-        "token": "***",
-        "access_token": "***",
-        "from": "***",
+    assert redact_value({"token": "secret", "access_token": "secret", "from": "1555"}) == {
+        "token": "[REDACTED]",
+        "access_token": "[REDACTED]",
+        "from": "[REDACTED]",
     }
 
 
