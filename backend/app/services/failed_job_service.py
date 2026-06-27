@@ -192,9 +192,7 @@ class FailedJobService:
 
         publisher = RabbitMQPublisher(self.settings)
         try:
-            publisher.publish(
-                self.settings.rabbitmq_queue_message_received, job.payload, retry_count=0
-            )
+            publisher.publish_to_main(job.payload, retry_count=0)
         finally:
             publisher.close()
 
