@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.log_masking import redact_value
 from app.core.request_context import get_trace_id, set_trace_context
 from app.domain.enums import TraceEventType
 from app.domain.models import AgentDecisionTrace, TraceEvent
@@ -45,7 +46,7 @@ class DecisionTraceService:
             conversation_id=conversation_id,
             sequence=sequence,
             event_type=event_type,
-            payload_json=payload,
+            payload_json=redact_value(payload),
         )
         self.db.add(event)
         if commit:

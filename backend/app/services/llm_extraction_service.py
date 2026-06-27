@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from typing import Any, Protocol
 
 from pydantic import ValidationError
 
 from app.core.config import Settings, get_settings
+from app.core.log_masking import redact_value
 from app.integrations.llm_client import build_chat_client
 from app.integrations.openai_client import OpenAIChatClient
 from app.schemas.agent import AgentExtractionInput, AgentExtractionResult, AgentIntent, ExtractionConfidence
@@ -107,16 +107,10 @@ class LLMExtractionService:
         )
 
 
-SENSITIVE_KEYS = {"phone", "address", "customer_name", "postal_code", "email", "payment", "card"}
-
-
 def mask_sensitive_llm_output(value: Any) -> Any:
-    if isinstance(value, str):
-        masked = re.sub(r"\+?\d[\d\s().-]{6,}\d", "[masked_phone]", value)
-        masked = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "[masked_email]", masked)
-        return masked[:4000]
-    if isinstance(value, dict):
-        return {key: ("[masked]" if key.lower() in SENSITIVE_KEYS else mask_sensitive_llm_output(item)) for key, item in value.items()}
-    if isinstance(value, list):
-        return [mask_sensitive_llm_output(item) for item in value[:50]]
-    return value
+    redacted = redact_value(value)
+    if isinstance(redacted, str):
+        return redacted[:4000]
+    if isinstance(redacted, list):
+        return redacted[:50]
+    return redacted

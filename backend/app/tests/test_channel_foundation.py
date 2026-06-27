@@ -4,10 +4,10 @@ from datetime import UTC, datetime, timedelta
 from starlette.requests import Request
 
 from app.channels.adapters import TelegramProviderAdapter, WhatsAppProviderAdapter
+from app.core.log_masking import redact_value
 from app.domain.enums import ChannelMessageType, ChannelProvider, WebhookSecurityType
 from app.schemas.channels import NormalizedOutboundMessage
 from app.services.channel_policy_service import ChannelPolicyService
-from app.services.channel_webhook_ingestion_service import mask_pii
 
 
 def test_provider_capabilities_cover_whatsapp_and_telegram() -> None:
@@ -96,9 +96,9 @@ def test_channel_policy_blocks_whatsapp_without_template_after_window() -> None:
 
 
 def test_mask_pii_redacts_phone_like_fields() -> None:
-    assert mask_pii(
+    assert redact_value(
         {"from": "15551234567", "nested": {"access_token": "secret", "safe": "ok"}}
-    ) == {"from": "***", "nested": {"access_token": "***", "safe": "ok"}}
+    ) == {"from": "[REDACTED]", "nested": {"access_token": "[REDACTED]", "safe": "ok"}}
 
 
 def _request_with_headers(headers: dict[str, str], body: bytes = b"{}") -> Request:

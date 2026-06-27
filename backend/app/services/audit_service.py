@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.core.log_masking import redact_value
 from app.core.request_context import get_request_context
 from app.domain.models import AdminAuditLog
 from app.repositories.audit_log_repository import AuditLogRepository
@@ -37,7 +38,7 @@ class AuditService:
             action=action,
             entity_type=entity_type,
             entity_id=entity_id,
-            details=metadata or {},
+            details=redact_value(metadata or {}),
             ip_address=resolved_ip,
             user_agent=resolved_ua,
         )

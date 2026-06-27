@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.core.log_masking import redact_value
 from app.domain.enums import FailedJobStatus, PilotEventSeverity, UserRole
 from app.domain.models import FailedJob, ShopMember, User
 from app.integrations.rabbitmq import RabbitMQPublisher
@@ -17,8 +18,8 @@ from app.repositories.failed_job_repository import FailedJobRepository
 from app.schemas.failed_job import FailedJobActionResponse, FailedJobListResponse, FailedJobRead
 from app.schemas.queue_events import InvalidJobPayloadError, validate_message_received_payload
 from app.services.audit_service import AuditService
-from app.services.shop_service import ShopService
 from app.services.pilot_service import PilotService
+from app.services.shop_service import ShopService
 
 
 class FailedJobService:
@@ -53,7 +54,7 @@ class FailedJobService:
             shop_id=shop_id,
             queue_name=queue_name,
             job_type=job_type,
-            payload=payload,
+            payload=redact_value(payload),
             error_message=error_message,
             traceback=tb,
             retry_count=retry_count,
