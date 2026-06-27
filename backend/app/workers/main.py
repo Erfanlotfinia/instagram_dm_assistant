@@ -3,12 +3,14 @@ from __future__ import annotations
 import logging
 import signal
 import sys
+from typing import Any
+from uuid import uuid4
 
 import pika
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
-from app.core.metrics import PROCESSED_MESSAGES, QUEUE_LAG
+from app.core.metrics import DLQ_MESSAGES, PROCESSED_MESSAGES, QUEUE_LAG, RETRIED_MESSAGES
 from app.integrations.rabbitmq import RETRY_COUNT_HEADER, RabbitMQPublisher, setup_message_queues
 from app.services.failed_job_service import FailedJobService, format_traceback
 from app.workers.message_consumer import (
@@ -82,37 +84,116 @@ class WorkerApp:
         body: bytes,
     ) -> None:
         retry_count = self._retry_count(properties)
+        metadata = self._message_metadata(properties, retry_count)
         try:
             handle_delivery(body)
             channel.basic_ack(delivery_tag=method.delivery_tag)
             PROCESSED_MESSAGES.inc()
             self._update_queue_lag()
-        except ConversationLockedError:
-            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        except ConversationLockedError as exc:
+            next_retry = retry_count + 1
+            if next_retry > self.settings.rabbitmq_max_retries:
+                logger.error(
+                    "Conversation lock retry limit exceeded retry_count=%s correlation_id=%s",
+                    next_retry,
+                    metadata["correlation_id"],
+                )
+                payload = self._payload_from_body(body)
+                reason = f"Conversation lock retry limit exceeded: {exc}"
+                self._publish_dlq_then_ack(channel, method, payload, next_retry, reason, metadata)
+                self._persist_failed_job(payload, next_retry, exc)
+            else:
+                logger.info(
+                    "Conversation locked; delayed retry retry_count=%s correlation_id=%s",
+                    next_retry,
+                    metadata["correlation_id"],
+                )
+                self._publish_retry_then_ack(channel, method, body, retry_count, str(exc), metadata)
         except InvalidJobPayloadError as exc:
             logger.error(
-                "Worker received non-retryable payload retry_count=%s: %s",
+                "Worker received non-retryable payload retry_count=%s correlation_id=%s: %s",
                 retry_count,
+                metadata["correlation_id"],
                 exc,
             )
-            channel.basic_ack(delivery_tag=method.delivery_tag)
             payload = self._payload_from_body(body)
-            self._publisher.publish_to_dlq(payload, retry_count)
+            self._publish_dlq_then_ack(channel, method, payload, retry_count, str(exc), metadata)
             self._persist_failed_job(payload, retry_count, exc)
         except Exception as exc:
             logger.exception("Worker failed to process message retry_count=%s", retry_count)
-            channel.basic_ack(delivery_tag=method.delivery_tag)
             next_retry = retry_count + 1
             payload = self._payload_from_body(body)
             if next_retry > self.settings.rabbitmq_max_retries:
-                self._publisher.publish_to_dlq(payload, next_retry)
+                reason = f"Max retries exceeded: {exc}"
+                self._publish_dlq_then_ack(channel, method, payload, next_retry, reason, metadata)
                 self._persist_failed_job(payload, next_retry, exc)
             else:
-                self._publisher.publish(
-                    self.settings.rabbitmq_queue_message_received,
-                    payload,
-                    retry_count=next_retry,
-                )
+                self._publish_retry_then_ack(channel, method, body, retry_count, str(exc), metadata)
+
+    def _publish_retry_then_ack(
+        self,
+        channel: pika.adapters.blocking_connection.BlockingChannel,
+        method: pika.spec.Basic.Deliver,
+        body: bytes,
+        retry_count: int,
+        reason: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        next_retry = retry_count + 1
+        payload = self._payload_from_body(body)
+        self._publisher.publish_to_retry(
+            payload,
+            retry_count=next_retry,
+            error_reason=reason,
+            correlation_id=metadata["correlation_id"],
+            message_id=metadata["message_id"],
+        )
+        channel.basic_ack(delivery_tag=method.delivery_tag)
+        RETRIED_MESSAGES.inc()
+        logger.warning(
+            "Published message to retry queue retry_count=%s correlation_id=%s reason=%s",
+            next_retry,
+            metadata["correlation_id"],
+            reason,
+        )
+
+    def _publish_dlq_then_ack(
+        self,
+        channel: pika.adapters.blocking_connection.BlockingChannel,
+        method: pika.spec.Basic.Deliver,
+        payload: dict[str, Any],
+        retry_count: int,
+        reason: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        self._publisher.publish_to_dlq(
+            payload,
+            retry_count=retry_count,
+            error_reason=reason,
+            correlation_id=metadata["correlation_id"],
+            message_id=metadata["message_id"],
+        )
+        channel.basic_ack(delivery_tag=method.delivery_tag)
+        DLQ_MESSAGES.inc()
+        logger.error(
+            "Published message to DLQ retry_count=%s correlation_id=%s reason=%s",
+            retry_count,
+            metadata["correlation_id"],
+            reason,
+        )
+
+    def _message_metadata(
+        self, properties: pika.spec.BasicProperties | None, retry_count: int
+    ) -> dict[str, str | int]:
+        headers = properties.headers if properties and properties.headers else {}
+        correlation_id = properties.correlation_id if properties else None
+        message_id = properties.message_id if properties else None
+        return {
+            "correlation_id": correlation_id or str(uuid4()),
+            "message_id": message_id or str(uuid4()),
+            "retry_count": retry_count,
+            "error_reason": str(headers.get("x-error-reason", "")),
+        }
 
     def _payload_from_body(self, body: bytes) -> dict:
         try:
