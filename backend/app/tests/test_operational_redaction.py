@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from sqlalchemy import select
 
 from app.core.log_masking import REDACTED, redact_value, stable_hash_identifier
-from app.domain.enums import FailedJobStatus, TraceEventType, WebhookProvider
+from app.domain.enums import (
+    ChannelMessageType,
+    ChannelProvider,
+    FailedJobStatus,
+    TraceEventType,
+    WebhookProvider,
+)
 from app.domain.models import AdminAuditLog, FailedJob, TraceEvent, WebhookEvent
+from app.schemas.channels import NormalizedInboundMessage
+from app.schemas.failed_job import FailedJobRead
 from app.services.audit_service import AuditService
+from app.services.channel_webhook_ingestion_service import redacted_normalized_payload
 from app.services.decision_trace_service import DecisionTraceService
 from app.services.failed_job_service import FailedJobService
 from app.services.webhook_ingestion_service import WebhookIngestionService
@@ -58,7 +69,9 @@ def test_stable_hash_identifier_groups_without_raw_identifier() -> None:
     assert "customer@example.com" not in first
 
 
-def test_failed_job_record_failure_persists_redacted_payload(db_session, demo_shop) -> None:
+def test_failed_job_record_failure_keeps_retry_payload_but_exposes_redacted_view(
+    db_session, demo_shop
+) -> None:
     job = FailedJobService.record_failure(
         db_session,
         queue_name="channel.message.received",
@@ -74,14 +87,45 @@ def test_failed_job_record_failure_persists_redacted_payload(db_session, demo_sh
 
     persisted = db_session.get(FailedJob, job.id)
     assert persisted is not None
-    serialized = _serialized(persisted.payload)
+    assert persisted.payload["access_token"] == "provider-access-token"
+    assert persisted.payload["headers"]["authorization"] == "Bearer raw-auth"
+
+    redacted = FailedJobRead.from_job(persisted).redacted_payload
+    serialized = _serialized(redacted)
     assert "provider-access-token" not in serialized
     assert "raw-auth" not in serialized
     assert "raw-cookie" not in serialized
     assert "customer@example.com" not in serialized
     assert "+14155552671" not in serialized
-    assert persisted.payload["access_token"] == REDACTED
+    assert redacted["access_token"] == REDACTED
     assert persisted.status == FailedJobStatus.FAILED
+
+
+def test_normalized_payload_redacts_embedded_raw_payload() -> None:
+    normalized = NormalizedInboundMessage(
+        provider=ChannelProvider.WHATSAPP,
+        channel_account_id=uuid4(),
+        external_chat_id="chat-1",
+        external_user_id="user-1",
+        message_type=ChannelMessageType.TEXT,
+        text="hello",
+        raw_payload={
+            "from": "+14155552671",
+            "wa_id": "+14155552671",
+            "headers": {"authorization": "Bearer raw-auth", "cookie": "sid=raw-cookie"},
+            "contact": {"email": "customer@example.com"},
+        },
+    )
+
+    payload = redacted_normalized_payload(normalized)
+
+    assert payload["provider"] == ChannelProvider.WHATSAPP.value
+    assert payload["raw_payload"]["headers"]["authorization"] == REDACTED
+    serialized = _serialized(payload)
+    assert "+14155552671" not in serialized
+    assert "customer@example.com" not in serialized
+    assert "raw-auth" not in serialized
+    assert "raw-cookie" not in serialized
 
 
 def test_audit_metadata_is_redacted(db_session, demo_shop, admin_user) -> None:

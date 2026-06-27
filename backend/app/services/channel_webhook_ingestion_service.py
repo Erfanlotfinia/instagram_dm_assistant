@@ -59,11 +59,19 @@ def channel_idempotency_key(message: NormalizedInboundMessage) -> str:
     return f"{message.provider.value}:{message.channel_account_id}:{identity}"
 
 
+def redacted_normalized_payload(message: NormalizedInboundMessage) -> dict[str, Any]:
+    payload = message.model_dump(mode="json")
+    payload["raw_payload"] = redact_value(message.raw_payload)
+    return payload
+
+
 class ChannelWebhookIngestionService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def adapter_for_provider(self, provider: ChannelProvider, account: ChannelAccount | None = None):
+    def adapter_for_provider(
+        self, provider: ChannelProvider, account: ChannelAccount | None = None
+    ):
         if account is not None:
             return adapter_for_provider(provider, account)
         return {
@@ -116,7 +124,9 @@ class ChannelWebhookIngestionService:
         if provider == ChannelProvider.TELEGRAM:
             TelegramBusinessUpdateService(self.db).handle_update(account, payload)
 
-        messages = self.adapter_for_provider(provider, account).parse_inbound_update(payload, headers)
+        messages = self.adapter_for_provider(provider, account).parse_inbound_update(
+            payload, headers
+        )
         if not messages:
             webhook_event.processing_status = WebhookProcessingStatus.PROCESSED
             webhook_event.dedupe_outcome = WebhookDedupeOutcome.IGNORED
@@ -288,7 +298,7 @@ class ChannelWebhookIngestionService:
             content=text,
             raw_payload=redact_value(normalized.raw_payload),
             raw_payload_json=redact_value(normalized.raw_payload),
-            normalized_payload_json=normalized.model_dump(mode="json"),
+            normalized_payload_json=redacted_normalized_payload(normalized),
         )
         self.db.add(internal_message)
         self.db.flush()
@@ -310,7 +320,7 @@ class ChannelWebhookIngestionService:
                 "button_text": normalized.button_text,
             },
             raw_payload_json=redact_value(normalized.raw_payload),
-            normalized_payload_json=normalized.model_dump(mode="json"),
+            normalized_payload_json=redacted_normalized_payload(normalized),
             idempotency_key=idempotency_key,
         )
         try:
