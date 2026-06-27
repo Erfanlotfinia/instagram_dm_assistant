@@ -54,7 +54,7 @@ class SessionService:
         token = secrets.token_urlsafe(48)
         new_session = RefreshSession(
             user_id=session.user_id,
-            session_id=session.session_id,
+            session_id=secrets.token_urlsafe(24),
             refresh_token_hash=hash_token(token),
             expires_at=now + timedelta(days=get_settings().refresh_token_expire_days),
             user_agent_hash=fingerprint(user_agent),

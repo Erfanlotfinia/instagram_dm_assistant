@@ -30,7 +30,7 @@ def _set_access(response: Response, user_id: str) -> None:
 
 
 def _set_refresh(response: Response, token: str) -> None:
-    response.set_cookie(REFRESH_COOKIE, token, httponly=True, secure=_secure(), samesite="lax", path="/api/v1/auth/refresh", max_age=get_settings().refresh_token_expire_days * 86400)
+    response.set_cookie(REFRESH_COOKIE, token, httponly=True, secure=_secure(), samesite="lax", path="/", max_age=get_settings().refresh_token_expire_days * 86400)
 
 
 def _set_csrf(response: Response) -> None:
@@ -40,7 +40,7 @@ def _set_csrf(response: Response) -> None:
 
 def _clear(response: Response) -> None:
     response.delete_cookie(ACCESS_COOKIE, path="/")
-    response.delete_cookie(REFRESH_COOKIE, path="/api/v1/auth/refresh")
+    response.delete_cookie(REFRESH_COOKIE, path="/")
     response.delete_cookie(CSRF_COOKIE, path="/")
 
 
