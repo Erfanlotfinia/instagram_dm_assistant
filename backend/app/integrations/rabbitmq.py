@@ -12,6 +12,7 @@ from app.core.config import Settings, get_settings
 logger = logging.getLogger(__name__)
 
 RETRY_COUNT_HEADER = "x-retry-count"
+ERROR_REASON_HEADER = "x-error-reason"
 
 
 class MessagePublisher(Protocol):
@@ -100,6 +101,7 @@ class RabbitMQPublisher:
         parameters = pika.URLParameters(self.settings.rabbitmq_url)
         self._connection = pika.BlockingConnection(parameters)
         self._channel = self._connection.channel()
+        self._channel.confirm_delivery()
         setup_message_queues(self._channel, self.settings)
         logger.info("Connected to RabbitMQ")
 
@@ -122,7 +124,88 @@ class RabbitMQPublisher:
         channel.queue_declare(queue=queue_name, durable=True)
 
     def publish(self, queue_name: str, payload: dict[str, Any], retry_count: int = 0) -> None:
+        self._publish(queue_name, payload, retry_count=retry_count)
+
+    def publish_to_main(
+        self,
+        payload: dict[str, Any],
+        retry_count: int = 0,
+        *,
+        error_reason: str | None = None,
+        correlation_id: str | None = None,
+        message_id: str | None = None,
+    ) -> None:
+        self._publish(
+            self.settings.rabbitmq_queue_message_received,
+            payload,
+            retry_count=retry_count,
+            error_reason=error_reason,
+            correlation_id=correlation_id,
+            message_id=message_id,
+        )
+
+    def publish_to_retry(
+        self,
+        payload: dict[str, Any],
+        retry_count: int,
+        *,
+        error_reason: str | None = None,
+        correlation_id: str | None = None,
+        message_id: str | None = None,
+    ) -> None:
+        self._publish(
+            self.settings.rabbitmq_queue_retry,
+            payload,
+            retry_count=retry_count,
+            error_reason=error_reason,
+            correlation_id=correlation_id,
+            message_id=message_id,
+        )
+        logger.warning(
+            "Message scheduled on retry queue retry_count=%s correlation_id=%s reason=%s",
+            retry_count,
+            correlation_id,
+            error_reason,
+        )
+
+    def publish_to_dlq(
+        self,
+        payload: dict[str, Any],
+        retry_count: int,
+        *,
+        error_reason: str | None = None,
+        correlation_id: str | None = None,
+        message_id: str | None = None,
+    ) -> None:
+        self._publish(
+            self.settings.rabbitmq_queue_dlq,
+            payload,
+            retry_count=retry_count,
+            error_reason=error_reason,
+            correlation_id=correlation_id,
+            message_id=message_id,
+        )
+        logger.error(
+            "Message moved to DLQ retry_count=%s correlation_id=%s reason=%s",
+            retry_count,
+            correlation_id,
+            error_reason,
+        )
+
+    def _publish(
+        self,
+        queue_name: str,
+        payload: dict[str, Any],
+        *,
+        retry_count: int = 0,
+        error_reason: str | None = None,
+        correlation_id: str | None = None,
+        message_id: str | None = None,
+    ) -> None:
         channel = self._ensure_channel()
+        headers: dict[str, Any] = {RETRY_COUNT_HEADER: retry_count}
+        if error_reason:
+            headers[ERROR_REASON_HEADER] = error_reason
         channel.basic_publish(
             exchange="",
             routing_key=queue_name,
@@ -130,26 +213,29 @@ class RabbitMQPublisher:
             properties=pika.BasicProperties(
                 delivery_mode=2,
                 content_type="application/json",
-                headers={RETRY_COUNT_HEADER: retry_count},
+                headers=headers,
+                correlation_id=correlation_id,
+                message_id=message_id,
             ),
+            mandatory=True,
         )
-        logger.info("Published message to queue %s retry_count=%s", queue_name, retry_count)
-
-    def publish_to_dlq(self, payload: dict[str, Any], retry_count: int) -> None:
-        channel = self._ensure_channel()
-        channel.basic_publish(
-            exchange="",
-            routing_key=self.settings.rabbitmq_queue_dlq,
-            body=json.dumps(payload),
-            properties=pika.BasicProperties(
-                delivery_mode=2,
-                content_type="application/json",
-                headers={RETRY_COUNT_HEADER: retry_count},
-            ),
+        logger.info(
+            "Published message to queue %s retry_count=%s correlation_id=%s",
+            queue_name,
+            retry_count,
+            correlation_id,
         )
-        logger.error("Message moved to DLQ after %s retries", retry_count)
 
 
 class NoOpPublisher:
     def publish(self, queue_name: str, payload: dict[str, Any], retry_count: int = 0) -> None:
         logger.info("No-op publish to %s retry_count=%s: %s", queue_name, retry_count, payload)
+
+    def publish_to_main(self, payload: dict[str, Any], retry_count: int = 0, **_: Any) -> None:
+        self.publish("main", payload, retry_count)
+
+    def publish_to_retry(self, payload: dict[str, Any], retry_count: int, **_: Any) -> None:
+        self.publish("retry", payload, retry_count)
+
+    def publish_to_dlq(self, payload: dict[str, Any], retry_count: int, **_: Any) -> None:
+        self.publish("dlq", payload, retry_count)
