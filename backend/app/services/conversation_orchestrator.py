@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.log_masking import redact_value
-from app.core.metrics import CREATED_ORDERS, FAILED_AGENT_RUNS, HANDOFF_COUNT
+from app.core.metric_labels import HandoffMetricReason
+from app.core.metrics import record_agent_failure, record_handoff, record_order_created
 from app.domain.enums import (
     AgentActionStatus,
     AgentIntent,
@@ -21,7 +22,18 @@ from app.domain.enums import (
     PilotOperatingMode,
     TraceEventType,
 )
-from app.domain.models import AgentAction, AgentDecisionAudit, AgentDecisionTrace, AgentRun, Conversation, Message, Order, Product, ProductVariant, ShopAgentSettings
+from app.domain.models import (
+    AgentAction,
+    AgentDecisionAudit,
+    AgentDecisionTrace,
+    AgentRun,
+    Conversation,
+    Message,
+    Order,
+    Product,
+    ProductVariant,
+    ShopAgentSettings,
+)
 from app.integrations.llm_client import build_chat_client, build_embedding_client
 from app.integrations.openai_client import OpenAIChatClient
 from app.integrations.qdrant_client import LiveQdrantClient, QdrantClient
@@ -35,35 +47,50 @@ from app.repositories.product_repository import ProductRepository
 from app.repositories.variant_repository import VariantRepository
 from app.schemas.agent import AgentExtractionInput, AgentExtractionResult, ExtractionConfidence
 from app.schemas.instagram_product_map import ResolveInstagramProductRequest
+from app.services.agent_risk_scoring_service import AgentRiskScoringInput, AgentRiskScoringService
 from app.services.agent_settings_live import resolve_live_agent_settings
 from app.services.audit_service import AuditService
+from app.services.auto_send_decision_service import AutoSendDecisionInput, AutoSendDecisionService
+from app.services.channel_outbound_service import (
+    ChannelOutboundService,
+    agent_run_outbound_key,
+    inbound_message_outbound_key,
+)
 from app.services.conversation_event_service import ConversationEventService
 from app.services.conversation_priority_service import ConversationPriorityService
 from app.services.customer_preferences_service import CustomerPreferencesService
-from app.services.auto_send_decision_service import AutoSendDecisionInput, AutoSendDecisionService
 from app.services.decision_trace_service import DecisionTraceService
 from app.services.handoff_service import evaluate_handoff
 from app.services.instagram_product_resolver import InstagramProductResolver
-from app.services.channel_outbound_service import ChannelOutboundService
-from app.services.llm_extraction_service import LLMExtractionProtocol, LLMExtractionService, mask_sensitive_llm_output
+from app.services.llm_extraction_service import (
+    LLMExtractionProtocol,
+    LLMExtractionService,
+    mask_sensitive_llm_output,
+)
 from app.services.order_service import OrderService
-from app.services.agent_risk_scoring_service import AgentRiskScoringInput, AgentRiskScoringService
 from app.services.payment_service import PaymentService
 from app.services.pilot_mode_service import PilotModeService
 from app.services.pilot_service import PilotService
 from app.services.policy_engine import PolicyEngine, PolicyEvaluationContext, merge_policy_config
-from app.services.product_semantic_search_service import InternalSemanticSearch, ProductSemanticSearchService
+from app.services.product_semantic_search_service import (
+    InternalSemanticSearch,
+    ProductSemanticSearchService,
+)
 from app.services.response_generation_service import ReplyFacts, ResponseGenerationService
-from app.services.suggested_reply_service import SuggestedReplyService
-from app.services.upsell_service import UpsellService
-from app.services.variant_resolver import VariantResolver
-from app.services.slot_merge_service import compute_missing_fields, merge_extracted_slots, slots_to_dict
+from app.services.slot_merge_service import (
+    compute_missing_fields,
+    merge_extracted_slots,
+    slots_to_dict,
+)
 from app.services.social_admin.orchestrator import SocialAdminOrchestrator
 from app.services.state_machine_service import (
     check_inventory,
     decide_next_state,
     match_variant,
 )
+from app.services.suggested_reply_service import SuggestedReplyService
+from app.services.upsell_service import UpsellService
+from app.services.variant_resolver import VariantResolver
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +235,7 @@ class ConversationOrchestrator:
             extraction=extraction,
             error_message=extraction_error,
             is_simulation=conversation.is_simulation,
+            channel_provider=conversation.channel_provider,
         )
 
         if extraction_error:
@@ -289,7 +317,7 @@ class ConversationOrchestrator:
             conversation.handoff_reason = handoff.reason
             conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
             conversation.state = ConversationState.PENDING_HANDOFF
-            HANDOFF_COUNT.inc()
+            record_handoff(conversation.channel_provider, HandoffMetricReason.POLICY)
 
         active_order = self.order_service.orders.get_active_for_conversation(conversation_id)
         estimated_order_value = self._estimated_order_value(active_order, variant, slots)
@@ -418,7 +446,7 @@ class ConversationOrchestrator:
             )
             order_was_created = active_order is not None and existing_order is None
             if active_order is not None:
-                CREATED_ORDERS.inc()
+                record_order_created(conversation.channel_provider)
                 AuditService(self.db).log(action="pilot_auto_order_created", entity_type="order", shop_id=conversation.shop_id, entity_id=str(active_order.id), metadata={"conversation_id": str(conversation.id)})
                 high_value_threshold = float(live_agent_settings.get("high_value_order_threshold", 500.0))
                 preview_high_value_orders = live_agent_settings.get("preview_required_for_high_value_order", True)
@@ -616,7 +644,11 @@ class ConversationOrchestrator:
             and not pilot_service.is_emergency_stop_active(conversation.shop_id)
         ):
             outbound = self.send_service.send_text_message(
-                conversation_id, reply, commit=False, is_simulation=False
+                conversation_id,
+                reply,
+                commit=False,
+                is_simulation=False,
+                idempotency_key=agent_run_outbound_key(agent_run.id),
             )
             AuditService(self.db).log(action="message_auto_sent", entity_type="conversation", shop_id=conversation.shop_id, entity_id=str(conversation.id), metadata={"message_id": str(outbound.id)})
             self._log_action(conversation_id, "send_outbound", {"reply": reply}, {"message_id": str(outbound.id)}, confidence=None)
@@ -776,6 +808,7 @@ class ConversationOrchestrator:
         extraction: AgentExtractionResult,
         error_message: str | None,
         is_simulation: bool = False,
+        channel_provider: object | None = None,
     ) -> AgentRun:
         run = AgentRun(
             conversation_id=conversation_id,
@@ -789,7 +822,7 @@ class ConversationOrchestrator:
             is_simulation=is_simulation,
         )
         if error_message:
-            FAILED_AGENT_RUNS.inc()
+            record_agent_failure(channel_provider)
         return self.agent_runs.create(run)
 
 
@@ -1182,7 +1215,7 @@ class ConversationOrchestrator:
             conversation.handoff_reason = result.handoff_reason or "social_admin_handoff"
             conversation.workflow_state = AgentWorkflowState.HUMAN_HANDOFF
             conversation.state = ConversationState.PENDING_HANDOFF
-            HANDOFF_COUNT.inc()
+            record_handoff(conversation.channel_provider, HandoffMetricReason.SOCIAL_ADMIN)
             if reply:
                 SuggestedReplyService(self.db).create_agent_suggestion(
                     shop_id=conversation.shop_id,
@@ -1212,7 +1245,11 @@ class ConversationOrchestrator:
             )
             if can_auto_send:
                 outbound = self.send_service.send_text_message(
-                    conversation_id, reply, commit=False, is_simulation=False
+                    conversation_id,
+                    reply,
+                    commit=False,
+                    is_simulation=False,
+                    idempotency_key=inbound_message_outbound_key(message_id),
                 )
                 AuditService(self.db).log(
                     action="message_auto_sent",

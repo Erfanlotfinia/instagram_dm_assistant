@@ -37,6 +37,36 @@ from app.services.telegram_outbound_router import TelegramOutboundRouter
 
 logger = logging.getLogger(__name__)
 
+_FALLBACK_ALLOWED_ENVS = frozenset({"test", "local", "development"})
+
+
+def agent_run_outbound_key(agent_run_id: UUID) -> str:
+    return f"agent-run:{agent_run_id}:outbound"
+
+
+def suggested_reply_send_key(suggested_reply_id: UUID) -> str:
+    return f"suggested-reply:{suggested_reply_id}:send"
+
+
+def operator_action_send_key(action_id: UUID, action: str = "send") -> str:
+    return f"operator-action:{action_id}:{action}"
+
+
+def outbox_send_key(outbox_event_id: UUID) -> str:
+    return f"outbox:{outbox_event_id}:send"
+
+
+def inbound_message_outbound_key(message_id: UUID) -> str:
+    return f"inbound-message:{message_id}:outbound"
+
+
+def payment_paid_key(payment_id: UUID) -> str:
+    return f"payment:{payment_id}:paid"
+
+
+def order_recovery_send_key(attempt_id: UUID) -> str:
+    return f"order-recovery:{attempt_id}:send"
+
 
 class ChannelOutboundError(RuntimeError):
     """Raised when an outbound provider send does not succeed."""
@@ -44,6 +74,10 @@ class ChannelOutboundError(RuntimeError):
     def __init__(self, result: ProviderSendResult) -> None:
         self.result = result
         super().__init__(result.error_message or result.error_code or "Outbound send failed")
+
+
+class OutboundSyncContextError(RuntimeError):
+    """Raised when sync send_text_message is called inside an active event loop."""
 
 
 class ChannelOutboundService:
@@ -88,15 +122,58 @@ class ChannelOutboundService:
                 safe = safe.replace(credential, "[REDACTED]")
         return safe
 
+    @staticmethod
+    def _text_hash_idempotency_key(message: NormalizedOutboundMessage) -> str:
+        return hashlib.sha256(
+            f"{message.channel_account_id}:{message.external_chat_id}:{message.text}:{message.message_type.value}".encode()
+        ).hexdigest()
+
+    def _resolve_idempotency_key(
+        self, message: NormalizedOutboundMessage
+    ) -> tuple[str | None, ProviderSendResult | None]:
+        explicit = message.metadata.get("idempotency_key")
+        if explicit:
+            return str(explicit), None
+
+        is_simulation = bool(message.metadata.get("is_simulation", False))
+        real_send = self.settings.enable_real_provider_send and not is_simulation
+        fallback_allowed = (
+            is_simulation or not self.settings.enable_real_provider_send
+        ) and self.settings.app_env in _FALLBACK_ALLOWED_ENVS
+
+        if fallback_allowed:
+            return self._text_hash_idempotency_key(message), None
+
+        mode = self.settings.outbound_idempotency_fallback_mode
+        if self.settings.app_env == "production" and real_send:
+            mode = "reject"
+
+        if mode == "reject":
+            return None, self._result(
+                message,
+                success=False,
+                error_code="outbound_idempotency_key_required",
+                error_message="Explicit idempotency_key is required for outbound sends",
+            )
+
+        if mode == "warn":
+            logger.warning(
+                "Outbound send using text-hash idempotency fallback without explicit key "
+                "provider=%s account=%s conversation=%s",
+                message.provider.value,
+                message.channel_account_id,
+                message.metadata.get("conversation_id"),
+            )
+
+        return self._text_hash_idempotency_key(message), None
+
     async def send(
         self, message: NormalizedOutboundMessage, *, commit: bool = True
     ) -> ProviderSendResult:
-        idempotency_key = str(
-            message.metadata.get("idempotency_key")
-            or hashlib.sha256(
-                f"{message.channel_account_id}:{message.external_chat_id}:{message.text}:{message.message_type.value}".encode()
-            ).hexdigest()
-        )
+        idempotency_key, key_error = self._resolve_idempotency_key(message)
+        if key_error is not None:
+            return key_error
+
         existing = self.db.scalar(
             select(ChannelMessage).where(
                 ChannelMessage.channel_account_id == message.channel_account_id,
@@ -312,7 +389,7 @@ class ChannelOutboundService:
             return "unsupported_provider_capability:buttons"
         return None
 
-    def send_text_message(
+    async def send_text_message_async(
         self,
         conversation_id: UUID,
         text: str,
@@ -327,22 +404,20 @@ class ChannelOutboundService:
         if not conversation.channel_account_id or not conversation.external_conversation_id:
             raise ValueError("Conversation is missing channel routing information")
         provider = ChannelProvider(conversation.channel_provider)
-        result = asyncio.run(
-            self.send(
-                NormalizedOutboundMessage(
-                    provider=provider,
-                    channel_account_id=conversation.channel_account_id,
-                    external_chat_id=conversation.external_conversation_id,
-                    text=text,
-                    metadata={
-                        "shop_id": str(conversation.shop_id),
-                        "conversation_id": str(conversation.id),
-                        "is_simulation": is_simulation,
-                        **({"idempotency_key": idempotency_key} if idempotency_key else {}),
-                    },
-                ),
-                commit=commit,
-            )
+        result = await self.send(
+            NormalizedOutboundMessage(
+                provider=provider,
+                channel_account_id=conversation.channel_account_id,
+                external_chat_id=conversation.external_conversation_id,
+                text=text,
+                metadata={
+                    "shop_id": str(conversation.shop_id),
+                    "conversation_id": str(conversation.id),
+                    "is_simulation": is_simulation,
+                    **({"idempotency_key": idempotency_key} if idempotency_key else {}),
+                },
+            ),
+            commit=commit,
         )
         if not result.success:
             raise ChannelOutboundError(result)
@@ -367,3 +442,29 @@ class ChannelOutboundService:
         else:
             self.db.flush()
         return message
+
+    def send_text_message(
+        self,
+        conversation_id: UUID,
+        text: str,
+        *,
+        commit: bool = True,
+        is_simulation: bool = False,
+        idempotency_key: str | None = None,
+    ) -> Message:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(
+                self.send_text_message_async(
+                    conversation_id,
+                    text,
+                    commit=commit,
+                    is_simulation=is_simulation,
+                    idempotency_key=idempotency_key,
+                )
+            )
+        raise OutboundSyncContextError(
+            "send_text_message cannot be called from an active event loop; "
+            "use send_text_message_async instead"
+        )

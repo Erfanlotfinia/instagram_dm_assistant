@@ -10,7 +10,13 @@ import pika
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
-from app.core.metrics import DLQ_MESSAGES, PROCESSED_MESSAGES, QUEUE_LAG, RETRIED_MESSAGES
+from app.core.metric_labels import WorkerDlqReason, WorkerRetryReason
+from app.core.metrics import (
+    record_processed_message,
+    record_queue_dlq,
+    record_queue_lag,
+    record_queue_retry,
+)
 from app.integrations.rabbitmq import RETRY_COUNT_HEADER, RabbitMQPublisher, setup_message_queues
 from app.services.failed_job_service import FailedJobService, format_traceback
 from app.workers.message_consumer import (
@@ -18,6 +24,7 @@ from app.workers.message_consumer import (
     InvalidJobPayloadError,
     handle_delivery,
     parse_delivery_body,
+    validate_message_received_payload,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,7 +70,7 @@ class WorkerApp:
                 durable=True,
                 passive=True,
             ).method.message_count
-            QUEUE_LAG.set(depth)
+            record_queue_lag(self.settings.rabbitmq_queue_message_received, depth)
         except Exception:  # noqa: BLE001
             logger.debug("Unable to read queue depth", exc_info=True)
 
@@ -88,7 +95,7 @@ class WorkerApp:
         try:
             handle_delivery(body)
             channel.basic_ack(delivery_tag=method.delivery_tag)
-            PROCESSED_MESSAGES.inc()
+            self._record_processed(body)
             self._update_queue_lag()
         except ConversationLockedError as exc:
             next_retry = retry_count + 1
@@ -100,7 +107,15 @@ class WorkerApp:
                 )
                 payload = self._payload_from_body(body)
                 reason = f"Conversation lock retry limit exceeded: {exc}"
-                self._publish_dlq_then_ack(channel, method, payload, next_retry, reason, metadata)
+                self._publish_dlq_then_ack(
+                    channel,
+                    method,
+                    payload,
+                    next_retry,
+                    reason,
+                    metadata,
+                    WorkerDlqReason.CONVERSATION_LOCK_EXHAUSTED,
+                )
                 self._persist_failed_job(payload, next_retry, exc)
             else:
                 logger.info(
@@ -108,7 +123,15 @@ class WorkerApp:
                     next_retry,
                     metadata["correlation_id"],
                 )
-                self._publish_retry_then_ack(channel, method, body, retry_count, str(exc), metadata)
+                self._publish_retry_then_ack(
+                    channel,
+                    method,
+                    body,
+                    retry_count,
+                    str(exc),
+                    metadata,
+                    WorkerRetryReason.CONVERSATION_LOCKED,
+                )
         except InvalidJobPayloadError as exc:
             logger.error(
                 "Worker received non-retryable payload retry_count=%s correlation_id=%s: %s",
@@ -117,7 +140,15 @@ class WorkerApp:
                 exc,
             )
             payload = self._payload_from_body(body)
-            self._publish_dlq_then_ack(channel, method, payload, retry_count, str(exc), metadata)
+            self._publish_dlq_then_ack(
+                channel,
+                method,
+                payload,
+                retry_count,
+                str(exc),
+                metadata,
+                WorkerDlqReason.INVALID_PAYLOAD,
+            )
             self._persist_failed_job(payload, retry_count, exc)
         except Exception as exc:
             logger.exception("Worker failed to process message retry_count=%s", retry_count)
@@ -125,10 +156,35 @@ class WorkerApp:
             payload = self._payload_from_body(body)
             if next_retry > self.settings.rabbitmq_max_retries:
                 reason = f"Max retries exceeded: {exc}"
-                self._publish_dlq_then_ack(channel, method, payload, next_retry, reason, metadata)
+                self._publish_dlq_then_ack(
+                    channel,
+                    method,
+                    payload,
+                    next_retry,
+                    reason,
+                    metadata,
+                    WorkerDlqReason.MAX_RETRIES_EXCEEDED,
+                )
                 self._persist_failed_job(payload, next_retry, exc)
             else:
-                self._publish_retry_then_ack(channel, method, body, retry_count, str(exc), metadata)
+                self._publish_retry_then_ack(
+                    channel,
+                    method,
+                    body,
+                    retry_count,
+                    str(exc),
+                    metadata,
+                    WorkerRetryReason.PROCESSING_ERROR,
+                )
+
+    def _record_processed(self, body: bytes) -> None:
+        provider = None
+        try:
+            payload = parse_delivery_body(body)
+            provider = validate_message_received_payload(payload).channel_provider
+        except Exception:  # noqa: BLE001
+            logger.debug("Unable to resolve provider for processed metric", exc_info=True)
+        record_processed_message(provider)
 
     def _publish_retry_then_ack(
         self,
@@ -138,6 +194,7 @@ class WorkerApp:
         retry_count: int,
         reason: str,
         metadata: dict[str, Any],
+        metric_reason: WorkerRetryReason,
     ) -> None:
         next_retry = retry_count + 1
         payload = self._payload_from_body(body)
@@ -149,7 +206,7 @@ class WorkerApp:
             message_id=metadata["message_id"],
         )
         channel.basic_ack(delivery_tag=method.delivery_tag)
-        RETRIED_MESSAGES.inc()
+        record_queue_retry(self.settings.rabbitmq_queue_message_received, metric_reason)
         logger.warning(
             "Published message to retry queue retry_count=%s correlation_id=%s reason=%s",
             next_retry,
@@ -165,6 +222,7 @@ class WorkerApp:
         retry_count: int,
         reason: str,
         metadata: dict[str, Any],
+        metric_reason: WorkerDlqReason,
     ) -> None:
         self._publisher.publish_to_dlq(
             payload,
@@ -174,7 +232,7 @@ class WorkerApp:
             message_id=metadata["message_id"],
         )
         channel.basic_ack(delivery_tag=method.delivery_tag)
-        DLQ_MESSAGES.inc()
+        record_queue_dlq(self.settings.rabbitmq_queue_dlq, metric_reason)
         logger.error(
             "Published message to DLQ retry_count=%s correlation_id=%s reason=%s",
             retry_count,

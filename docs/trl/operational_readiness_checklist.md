@@ -83,7 +83,7 @@
 | # | Item | Status | Evidence / notes |
 |---|------|--------|------------------|
 | 1 | Structured JSON logs with request_id | ✅ Present | Sprint 7 |
-| 2 | Prometheus metrics endpoint | ✅ Present | `GET /api/v1/metrics` |
+| 2 | Prometheus metrics endpoint | ✅ Present | `GET /api/v1/metrics`; canonical names are `modira_*` with low-cardinality labels (`provider`, `queue_name`, `reason`); legacy `instagram_*` aliases deprecated for one release |
 | 3 | System health admin page | ✅ Present | `/system-health` |
 | 4 | Pilot metrics API | ✅ Present | `GET /api/v1/shops/{id}/pilot/metrics` |
 | 5 | Failed jobs admin UI + API | ✅ Present | Sprint F |

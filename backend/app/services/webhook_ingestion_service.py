@@ -9,6 +9,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.log_masking import redact_value
+from app.core.metric_labels import WebhookIgnoredReason, WebhookMetricResult
+from app.core.metrics import record_webhook_event
 from app.domain.enums import (
     ChannelProvider,
     WebhookDedupeOutcome,
@@ -44,6 +46,11 @@ class WebhookIngestionService:
         )
         if legacy_account is None:
             self._store_unmatched_webhook(payload)
+            record_webhook_event(
+                ChannelProvider.INSTAGRAM,
+                WebhookMetricResult.IGNORED,
+                WebhookIgnoredReason.UNMATCHED_RECIPIENT,
+            )
             return WebhookAckResponse(dedupe_outcome=WebhookDedupeOutcome.IGNORED.value)
         channel_account_id = get_instagram_channel_account_id(self.db, legacy_account.id)
         account = self.db.get(ChannelAccount, channel_account_id)

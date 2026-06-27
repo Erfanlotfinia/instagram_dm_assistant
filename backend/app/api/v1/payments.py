@@ -8,7 +8,7 @@ from app.core.config import Settings, get_settings
 from app.db.session import get_db_session
 from app.schemas.order import OrderRead
 from app.schemas.payment import MockPaymentCallbackRequest
-from app.services.channel_outbound_service import ChannelOutboundService
+from app.services.channel_outbound_service import ChannelOutboundService, payment_paid_key
 from app.services.order_service import OrderService
 from app.services.payment_service import PaymentService
 
@@ -37,7 +37,11 @@ def mock_payment_callback(
             f"مبلغ: {order.total_amount} {order.currency}\n"
             "به زودی سفارش شما ارسال می‌شود."
         )
-        send_service.send_text_message(order.conversation_id, message)
+        send_service.send_text_message(
+            order.conversation_id,
+            message,
+            idempotency_key=payment_paid_key(payload.payment_id),
+        )
 
     return OrderService(db, settings=settings)._to_read(order)
 
@@ -60,5 +64,9 @@ def mock_payment_page(
         f"مبلغ: {order.total_amount} {order.currency}\n"
         "به زودی سفارش شما ارسال می‌شود."
     )
-    send_service.send_text_message(order.conversation_id, message)
+    send_service.send_text_message(
+        order.conversation_id,
+        message,
+        idempotency_key=payment_paid_key(payment_id),
+    )
     return {"status": "paid", "order_id": str(order.id)}

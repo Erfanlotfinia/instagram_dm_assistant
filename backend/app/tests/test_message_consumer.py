@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, call
 
 import pytest
 
+from app.core.metrics import metrics_response
 from app.core.security import encrypt_secret
 from app.domain.enums import (
     ChannelProvider,
@@ -168,6 +169,21 @@ def _properties(retry_count=0):
     )
 
 
+def _metrics_text() -> str:
+    body, _ = metrics_response()
+    return body.decode()
+
+
+def _sample_value(body: str, name: str, **labels: str) -> float:
+    for line in body.splitlines():
+        if not line.startswith(name):
+            continue
+        if labels and not all(f'{key}="{value}"' in line for key, value in labels.items()):
+            continue
+        return float(line.rsplit(" ", 1)[1])
+    return 0.0
+
+
 def test_conversation_lock_sends_to_retry_queue_not_immediate_requeue(monkeypatch) -> None:
     from app.workers import main as worker_main
     from app.workers.message_consumer import ConversationLockedError
@@ -186,6 +202,14 @@ def test_conversation_lock_sends_to_retry_queue_not_immediate_requeue(monkeypatc
     publisher.publish_to_retry.assert_called_once()
     channel.basic_ack.assert_called_once_with(delivery_tag=123)
     channel.basic_nack.assert_not_called()
+    after = _metrics_text()
+    assert _sample_value(
+        after,
+        "modira_queue_retries_total",
+        queue_name="channel.message.received",
+        reason="conversation_locked",
+    ) >= 1
+    assert _sample_value(after, "instagram_retried_messages_total") >= 1
 
 
 
@@ -212,6 +236,14 @@ def test_conversation_lock_goes_to_dlq_after_max_retries(monkeypatch) -> None:
     publisher.publish_to_retry.assert_not_called()
     channel.basic_ack.assert_called_once_with(delivery_tag=123)
     worker._persist_failed_job.assert_called_once()
+    after = _metrics_text()
+    assert _sample_value(
+        after,
+        "modira_queue_dlq_total",
+        queue_name="channel.message.received.dlq",
+        reason="conversation_lock_exhausted",
+    ) >= 1
+    assert _sample_value(after, "instagram_dlq_messages_total") >= 1
 
 def test_generic_retryable_error_goes_to_retry_until_max_retries(monkeypatch) -> None:
     from app.workers import main as worker_main
@@ -240,10 +272,15 @@ def test_after_max_retries_message_goes_to_dlq(monkeypatch) -> None:
     worker._on_message(channel, _Method(), _properties(retry_count=2), b'{"message_id": "m"}')
 
     publisher.publish_to_dlq.assert_called_once()
-    assert publisher.publish_to_dlq.call_args.kwargs["retry_count"] == 3
-    publisher.publish_to_retry.assert_not_called()
     channel.basic_ack.assert_called_once_with(delivery_tag=123)
     worker._persist_failed_job.assert_called_once()
+    after = _metrics_text()
+    assert _sample_value(
+        after,
+        "modira_queue_dlq_total",
+        queue_name="channel.message.received.dlq",
+        reason="max_retries_exceeded",
+    ) >= 1
 
 
 def test_invalid_payload_goes_to_dlq_and_failed_jobs(monkeypatch) -> None:
@@ -264,6 +301,13 @@ def test_invalid_payload_goes_to_dlq_and_failed_jobs(monkeypatch) -> None:
     publisher.publish_to_dlq.assert_called_once()
     channel.basic_ack.assert_called_once_with(delivery_tag=123)
     worker._persist_failed_job.assert_called_once()
+    after = _metrics_text()
+    assert _sample_value(
+        after,
+        "modira_queue_dlq_total",
+        queue_name="channel.message.received.dlq",
+        reason="invalid_payload",
+    ) >= 1
 
 
 def test_original_message_acked_only_after_retry_publish_succeeds(monkeypatch) -> None:

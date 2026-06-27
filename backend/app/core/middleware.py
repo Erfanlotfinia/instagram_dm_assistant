@@ -15,6 +15,13 @@ from app.core.request_context import new_request_id, set_request_context
 logger = logging.getLogger(__name__)
 
 
+def _metric_path(request: Request) -> str:
+    route = request.scope.get("route")
+    if route is not None and getattr(route, "path", None):
+        return route.path
+    return "unmatched"
+
+
 class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         request_id = request.headers.get("X-Request-ID") or new_request_id()
@@ -36,7 +43,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         duration = time.perf_counter() - start
 
         path = request.url.path
-        HTTP_REQUEST_DURATION.labels(request.method, path).observe(duration)
+        metric_path = _metric_path(request)
+        HTTP_REQUEST_DURATION.labels(request.method, metric_path).observe(duration)
 
         response.headers["X-Request-ID"] = ctx.request_id
         logger.info(

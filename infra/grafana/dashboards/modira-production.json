@@ -8,6 +8,9 @@
     {"type": "timeseries", "title": "Automation success rate", "targets": [{"expr": "sum(rate(soc_automation_success_total[5m])) / sum(rate(soc_scenario_routed_total[5m]))"}]},
     {"type": "timeseries", "title": "LLM fallback rate", "targets": [{"expr": "sum(rate(soc_llm_fallback_total[5m])) by (tenant_id)"}]},
     {"type": "timeseries", "title": "Worker failures", "targets": [{"expr": "sum(rate(soc_worker_failures_total[5m])) by (worker_type)"}]},
+    {"type": "timeseries", "title": "Channel webhook outcomes", "targets": [{"expr": "sum(rate(modira_webhook_events_total[5m])) by (provider,result)"}]},
+    {"type": "timeseries", "title": "Message queue lag", "targets": [{"expr": "max(modira_queue_lag_messages) by (queue_name)"}]},
+    {"type": "timeseries", "title": "Worker retries and DLQ", "targets": [{"expr": "sum(rate(modira_queue_retries_total[5m])) by (queue_name,reason)"}, {"expr": "sum(rate(modira_queue_dlq_total[5m])) by (queue_name,reason)"}]},
     {"type": "timeseries", "title": "API p95/p99 latency", "targets": [{"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le,path))"}, {"expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le,path))"}]}
   ]
 }

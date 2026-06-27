@@ -18,6 +18,8 @@ from app.channels.adapters import (
 )
 from app.core.config import get_settings
 from app.core.log_masking import redact_value
+from app.core.metric_labels import WebhookIgnoredReason, WebhookMetricResult
+from app.core.metrics import record_inbound_message, record_webhook_event
 from app.core.request_context import get_request_id
 from app.domain.enums import (
     ChannelConversationStatus,
@@ -92,6 +94,11 @@ class ChannelWebhookIngestionService:
     ) -> WebhookAckResponse | WebhookIgnoredResponse:
         account = self._account_by_id(provider, channel_account_id)
         if account is None:
+            record_webhook_event(
+                provider,
+                WebhookMetricResult.IGNORED,
+                WebhookIgnoredReason.CHANNEL_ACCOUNT_NOT_FOUND,
+            )
             return WebhookIgnoredResponse(reason="channel_account_not_found")
 
         webhook_key = self._webhook_idempotency_key(provider, account, payload)
@@ -102,6 +109,7 @@ class ChannelWebhookIngestionService:
             )
         )
         if existing_event is not None:
+            record_webhook_event(provider, WebhookMetricResult.DUPLICATE)
             return WebhookAckResponse(dedupe_outcome=WebhookDedupeOutcome.DUPLICATE.value)
 
         webhook_event = WebhookEvent(
@@ -121,6 +129,7 @@ class ChannelWebhookIngestionService:
             self.db.flush()
         except IntegrityError:
             self.db.rollback()
+            record_webhook_event(provider, WebhookMetricResult.DUPLICATE)
             return WebhookAckResponse(dedupe_outcome=WebhookDedupeOutcome.DUPLICATE.value)
 
         if provider == ChannelProvider.TELEGRAM:
@@ -133,6 +142,11 @@ class ChannelWebhookIngestionService:
             webhook_event.processing_status = WebhookProcessingStatus.PROCESSED
             webhook_event.dedupe_outcome = WebhookDedupeOutcome.IGNORED
             self.db.commit()
+            record_webhook_event(
+                provider,
+                WebhookMetricResult.IGNORED,
+                WebhookIgnoredReason.NO_CHANNEL_MESSAGES,
+            )
             return WebhookIgnoredResponse(reason="no_channel_messages")
         jobs = []
         for normalized in messages:
@@ -148,6 +162,14 @@ class ChannelWebhookIngestionService:
             WebhookDedupeOutcome.PROCESSED if jobs else WebhookDedupeOutcome.IGNORED
         )
         self.db.commit()
+        if jobs:
+            record_webhook_event(provider, WebhookMetricResult.PROCESSED)
+        else:
+            record_webhook_event(
+                provider,
+                WebhookMetricResult.IGNORED,
+                WebhookIgnoredReason.NO_CHANNEL_MESSAGES,
+            )
         return WebhookAckResponse(dedupe_outcome="processed" if jobs else "ignored")
 
     def _account_by_id(
@@ -330,6 +352,11 @@ class ChannelWebhookIngestionService:
             self.db.flush()
         except IntegrityError:
             self.db.rollback()
+            record_webhook_event(
+                account.provider,
+                WebhookMetricResult.IGNORED,
+                WebhookIgnoredReason.MESSAGE_DUPLICATE,
+            )
             return None
         conversation.last_message_at = normalized.received_at or datetime.now(UTC)
         job = MessageReceivedJob(
@@ -356,4 +383,5 @@ class ChannelWebhookIngestionService:
                 status=OutboxEventStatus.PENDING,
             )
         )
+        record_inbound_message(account.provider)
         return job

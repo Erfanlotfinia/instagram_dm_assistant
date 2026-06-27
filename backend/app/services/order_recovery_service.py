@@ -25,7 +25,7 @@ from app.domain.models import (
     User,
 )
 from app.schemas.recovery import RecoveryRuleCreate, RecoveryRuleRead, RecoveryRuleUpdate
-from app.services.channel_outbound_service import ChannelOutboundService
+from app.services.channel_outbound_service import ChannelOutboundService, order_recovery_send_key
 from app.services.shop_service import ShopService
 
 logger = logging.getLogger(__name__)
@@ -228,6 +228,7 @@ class OrderRecoveryService:
             status=OrderRecoveryAttemptStatus.CREATED,
         )
         self.db.add(attempt)
+        self.db.flush()
         order.recovery_status = OrderRecoveryStatus.IN_PROGRESS
 
         if rule.only_inside_allowed_messaging_window and not self._inside_messaging_window(
@@ -253,7 +254,12 @@ class OrderRecoveryService:
             return attempt
 
         try:
-            self.send_service.send_text_message(order.conversation_id, message_text, commit=False)
+            self.send_service.send_text_message(
+                order.conversation_id,
+                message_text,
+                commit=False,
+                idempotency_key=order_recovery_send_key(attempt.id),
+            )
             attempt.status = OrderRecoveryAttemptStatus.SENT
             order.recovery_attempt_count += 1
             order.last_recovery_at = now

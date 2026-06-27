@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.roles import has_minimum_role
 from app.domain.enums import (
+    AgentActionStatus,
     AgentWorkflowState,
     ChannelProvider,
     ConversationEventType,
@@ -17,7 +18,7 @@ from app.domain.enums import (
     SuggestedReplyStatus,
     UserRole,
 )
-from app.domain.models import AgentDecisionTrace, Message, SuggestedReply, User
+from app.domain.models import AgentAction, AgentDecisionTrace, Message, SuggestedReply, User
 from app.repositories.agent_action_repository import AgentActionRepository
 from app.repositories.agent_run_repository import AgentRunRepository
 from app.repositories.conversation_repository import ConversationRepository
@@ -52,7 +53,7 @@ from app.services.audit_service import AuditService
 from app.services.conversation_event_service import ConversationEventService
 from app.services.conversation_priority_service import ConversationPriorityService
 from app.services.customer_service import CustomerService
-from app.services.channel_outbound_service import ChannelOutboundService
+from app.services.channel_outbound_service import ChannelOutboundService, operator_action_send_key
 from app.services.order_service import OrderService
 from app.services.shop_service import ShopService
 
@@ -254,7 +255,20 @@ class ConversationService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Take over the conversation before sending manual messages",
             )
-        message = ChannelOutboundService(self.db).send_text_message(conversation.id, payload.text)
+        action = AgentAction(
+            conversation_id=conversation.id,
+            action_name="manual_send",
+            input_json={"text": payload.text},
+            output_json={},
+            status=AgentActionStatus.SUCCESS,
+        )
+        self.agent_actions.create(action)
+        self.db.flush()
+        message = ChannelOutboundService(self.db).send_text_message(
+            conversation.id,
+            payload.text,
+            idempotency_key=operator_action_send_key(action.id),
+        )
         conversation.last_message_at = message.created_at
         conversation.last_operator_action_at = datetime.now(UTC)
         self.event_service.record(

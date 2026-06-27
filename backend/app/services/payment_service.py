@@ -24,7 +24,7 @@ from app.repositories.payment_repository import PaymentRepository
 from app.services.audit_service import AuditService
 from app.services.conversation_event_service import ConversationEventService
 from app.services.conversation_priority_service import ConversationPriorityService
-from app.services.channel_outbound_service import ChannelOutboundService
+from app.services.channel_outbound_service import ChannelOutboundService, operator_action_send_key
 from app.services.order_service import OrderService
 from app.services.payment_providers import get_payment_provider
 from app.services.pilot_service import PilotService
@@ -90,9 +90,9 @@ class PaymentService:
             PAYMENT_STATE_MACHINE.transition(payment, PaymentRecordStatus.PAID)
             payment.callback_processed_at = datetime.now(UTC)
             order = self.order_service.mark_paid_internal(payment.order_id, payment=payment)
-            from app.core.metrics import PAID_ORDERS
+            from app.core.metrics import record_order_paid
 
-            PAID_ORDERS.inc()
+            record_order_paid()
             self.payments.commit()
             logger.info("Mock payment callback paid order=%s payment=%s", order.id, payment.id)
             return order
@@ -178,7 +178,11 @@ class PaymentService:
         payment = pending or self.initiate_payment(order)
         if order.conversation_id and payment.payment_url:
             message_text = f"لینک پرداخت سفارش شما:\n{payment.payment_url}"
-            ChannelOutboundService(self.db).send_text_message(order.conversation_id, message_text)
+            ChannelOutboundService(self.db).send_text_message(
+                order.conversation_id,
+                message_text,
+                idempotency_key=operator_action_send_key(payment.id, "send-payment-link"),
+            )
             ConversationEventService(self.db).record(
                 order.conversation_id,
                 ConversationEventType.PAYMENT_LINK_SENT,
@@ -245,9 +249,9 @@ class PaymentService:
         )
         self.payments.create(payment)
         order = self.order_service.mark_paid_internal(order.id, payment=payment, user=user)
-        from app.core.metrics import PAID_ORDERS
+        from app.core.metrics import record_order_paid
 
-        PAID_ORDERS.inc()
+        record_order_paid()
         if order.conversation_id:
             ConversationEventService(self.db).record(
                 order.conversation_id,

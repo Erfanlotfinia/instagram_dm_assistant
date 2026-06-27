@@ -91,6 +91,14 @@ class Settings(BaseSettings):
     meta_privacy_policy_url: str = ""
     enabled_channel_providers: str = "instagram,whatsapp,telegram,bale,rubika"
     enable_real_provider_send: bool = False
+    outbound_idempotency_fallback_mode: Literal["allow", "warn", "reject"] = Field(
+        default="allow",
+        description=(
+            "When no explicit outbound idempotency_key is provided: "
+            "allow text-hash fallback in simulation/test/local only; "
+            "warn logs and still hashes; reject blocks real sends"
+        ),
+    )
     conversation_lock_ttl_seconds: int = Field(default=120, ge=1)
     rabbitmq_queue_message_received: str = "channel.message.received"
     rabbitmq_queue_retry: str = "channel.message.received.retry"

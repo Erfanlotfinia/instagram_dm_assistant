@@ -22,7 +22,7 @@ from app.schemas.order import OrderShipRequest
 from app.services.audit_service import AuditService
 from app.services.conversation_event_service import ConversationEventService
 from app.services.conversation_priority_service import ConversationPriorityService
-from app.services.channel_outbound_service import ChannelOutboundService
+from app.services.channel_outbound_service import ChannelOutboundService, operator_action_send_key
 from app.services.order_service import OrderService
 from app.services.shop_service import ShopService
 
@@ -100,7 +100,17 @@ class ShippingService:
             tracking_text = f"کد رهگیری سفارش شما: {payload.tracking_code}"
             if payload.tracking_url:
                 tracking_text += f"\n{payload.tracking_url}"
-            ChannelOutboundService(self.db).send_text_message(order.conversation_id, tracking_text)
+            shipment = self.shipments.get_latest_for_order(order.id)
+            idempotency_key = (
+                operator_action_send_key(shipment.id, "send-tracking")
+                if shipment is not None
+                else operator_action_send_key(order.id, "send-tracking")
+            )
+            ChannelOutboundService(self.db).send_text_message(
+                order.conversation_id,
+                tracking_text,
+                idempotency_key=idempotency_key,
+            )
             ConversationEventService(self.db).record(
                 order.conversation_id,
                 ConversationEventType.ORDER_SHIPPED,
