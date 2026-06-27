@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -19,31 +19,40 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 def rate_limit_login(
     request: Request,
+    response: Response,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
     enforce_rate_limit(
         request,
         RateLimitRule("login", settings.rate_limit_login_per_minute, 60),
+        response,
+        settings=settings,
     )
 
 
 def rate_limit_webhook(
     request: Request,
+    response: Response,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
     enforce_rate_limit(
         request,
         RateLimitRule("webhook", settings.rate_limit_webhook_per_minute, 60),
+        response,
+        settings=settings,
     )
 
 
 def rate_limit_outbound_message(
     request: Request,
+    response: Response,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
     enforce_rate_limit(
         request,
         RateLimitRule("outbound_message", settings.rate_limit_outbound_message_per_minute, 60),
+        response,
+        settings=settings,
     )
 
 
