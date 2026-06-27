@@ -17,8 +17,8 @@ from app.repositories.failed_job_repository import FailedJobRepository
 from app.schemas.failed_job import FailedJobActionResponse, FailedJobListResponse, FailedJobRead
 from app.schemas.queue_events import InvalidJobPayloadError, validate_message_received_payload
 from app.services.audit_service import AuditService
-from app.services.shop_service import ShopService
 from app.services.pilot_service import PilotService
+from app.services.shop_service import ShopService
 
 
 class FailedJobService:
@@ -70,7 +70,11 @@ class FailedJobService:
                 PilotEventSeverity.ERROR,
                 "Worker job failed",
                 description=error_message,
-                metadata={"queue_name": queue_name, "job_type": job_type, "retry_count": retry_count},
+                metadata={
+                    "queue_name": queue_name,
+                    "job_type": job_type,
+                    "retry_count": retry_count,
+                },
             )
         repo.commit()
         return created
@@ -118,10 +122,15 @@ class FailedJobService:
     ) -> FailedJobListResponse:
         admin_shop_ids = self._admin_shop_ids(user)
         if not admin_shop_ids:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires admin role or higher")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Requires admin role or higher"
+            )
         if shop_id is not None:
             if shop_id not in admin_shop_ids:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this shop")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have access to this shop",
+                )
         if unscoped_only and shop_id is not None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -165,9 +174,13 @@ class FailedJobService:
         self._require_admin(audit_shop_id, user)
         return self._ignore_job(job, audit_shop_id=audit_shop_id, user=user)
 
-    def _retry_job(self, job: FailedJob, *, audit_shop_id: UUID, user: User) -> FailedJobActionResponse:
+    def _retry_job(
+        self, job: FailedJob, *, audit_shop_id: UUID, user: User
+    ) -> FailedJobActionResponse:
         if job.status != FailedJobStatus.FAILED:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only failed jobs can be retried")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Only failed jobs can be retried"
+            )
         if job.job_type == "message_received":
             try:
                 validate_message_received_payload(job.payload)
@@ -179,7 +192,9 @@ class FailedJobService:
 
         publisher = RabbitMQPublisher(self.settings)
         try:
-            publisher.publish(self.settings.rabbitmq_queue_message_received, job.payload, retry_count=0)
+            publisher.publish(
+                self.settings.rabbitmq_queue_message_received, job.payload, retry_count=0
+            )
         finally:
             publisher.close()
 
@@ -198,9 +213,13 @@ class FailedJobService:
         self.repo.commit()
         return FailedJobActionResponse(id=job.id, status=job.status, message="Job requeued")
 
-    def _ignore_job(self, job: FailedJob, *, audit_shop_id: UUID, user: User) -> FailedJobActionResponse:
+    def _ignore_job(
+        self, job: FailedJob, *, audit_shop_id: UUID, user: User
+    ) -> FailedJobActionResponse:
         if job.status != FailedJobStatus.FAILED:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only failed jobs can be ignored")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Only failed jobs can be ignored"
+            )
 
         job.status = FailedJobStatus.IGNORED
         job.resolved = True
@@ -259,7 +278,9 @@ class FailedJobService:
     def _get_accessible_job_or_404(self, job_id: UUID, user: User) -> FailedJob:
         job = self.repo.get_if_accessible(job_id, self._accessible_shop_ids(user))
         if job is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Failed job not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Failed job not found"
+            )
         return job
 
     def _audit_shop_for_job(self, user: User, job: FailedJob) -> UUID:
@@ -269,18 +290,24 @@ class FailedJobService:
         for membership in memberships:
             if membership.role in {UserRole.OWNER, UserRole.ADMIN}:
                 return membership.shop_id
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires admin role or higher")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Requires admin role or higher"
+        )
 
     def _get_job_or_404(self, shop_id: UUID, job_id: UUID) -> FailedJob:
         job = self.repo.get_for_shop(shop_id, job_id)
         if job is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Failed job not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Failed job not found"
+            )
         return job
 
     def _require_admin(self, shop_id: UUID, user: User) -> None:
         membership = self.shop_service.get_membership(shop_id, user.id)
         if membership is None or membership.role not in {UserRole.OWNER, UserRole.ADMIN}:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requires admin role or higher")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Requires admin role or higher"
+            )
 
 
 def format_traceback(exc: BaseException) -> str:

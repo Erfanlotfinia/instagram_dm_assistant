@@ -8,7 +8,13 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.enums import ChannelProvider, WebhookDedupeOutcome, WebhookProcessingStatus, WebhookProvider
+from app.core.log_masking import redact_value
+from app.domain.enums import (
+    ChannelProvider,
+    WebhookDedupeOutcome,
+    WebhookProcessingStatus,
+    WebhookProvider,
+)
 from app.domain.models import ChannelAccount, WebhookEvent
 from app.repositories.instagram_account_repository import InstagramAccountRepository
 from app.schemas.webhook import WebhookAckResponse, WebhookIgnoredResponse
@@ -54,7 +60,7 @@ class WebhookIngestionService:
             provider=WebhookProvider.INSTAGRAM,
             shop_id=None,
             event_type="instagram.webhook.received",
-            raw_payload=payload,
+            raw_payload=redact_value(payload),
             processing_status=WebhookProcessingStatus.RECEIVED,
             idempotency_key=webhook_key,
             dedupe_outcome=WebhookDedupeOutcome.IGNORED,
