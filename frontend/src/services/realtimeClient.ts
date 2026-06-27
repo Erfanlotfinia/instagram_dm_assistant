@@ -1,5 +1,3 @@
-import { tokenStorage } from './tokenStorage';
-
 export interface RealtimeEvent {
   type: string;
   payload: Record<string, unknown>;
@@ -10,11 +8,10 @@ type Listener = (event: RealtimeEvent) => void;
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
-function wsUrl(shopId: string, token: string): string {
+function wsUrl(shopId: string): string {
   const base = API_BASE_URL || window.location.origin;
   const url = new URL(`/api/v1/ws/shops/${shopId}`, base);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-  url.searchParams.set('token', token);
   return url.toString();
 }
 
@@ -33,13 +30,12 @@ export class RealtimeClient {
   constructor(private readonly shopId: string) {}
 
   connect(): void {
-    const token = tokenStorage.get();
-    if (!token || !this.shopId) {
+    if (!this.shopId) {
       return;
     }
     this.closedByUser = false;
     try {
-      this.socket = new WebSocket(wsUrl(this.shopId, token));
+      this.socket = new WebSocket(wsUrl(this.shopId));
     } catch {
       this.scheduleReconnect();
       return;

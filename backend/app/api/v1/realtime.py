@@ -1,6 +1,6 @@
 """WebSocket endpoint for realtime command-center updates.
 
-Clients connect to ``/api/v1/ws/shops/{shop_id}?token=<jwt>`` and receive
+Clients connect to ``/api/v1/ws/shops/{shop_id}`` with authentication cookies and receive
 JSON events of the form ``{"type": ..., "payload": ..., "timestamp": ...}``.
 Events are relayed from a Redis pub/sub channel populated by API handlers and
 workers via :func:`app.realtime.publisher.publish_event`.
@@ -30,8 +30,11 @@ router = APIRouter()
 HEARTBEAT_SECONDS = 25
 
 
+def _origin_allowed(origin: str | None) -> bool:
+    return bool(origin and origin in get_settings().cors_origins)
+
 def _authorize(token: str | None, shop_id: UUID) -> bool:
-    """Validate the JWT and confirm the user can access the shop."""
+    """Validate the cookie JWT and confirm the user can access the shop."""
     if not token:
         return False
     db = SessionLocal()
@@ -47,7 +50,10 @@ def _authorize(token: str | None, shop_id: UUID) -> bool:
 
 @router.websocket("/ws/shops/{shop_id}")
 async def shop_realtime(websocket: WebSocket, shop_id: UUID) -> None:
-    token = websocket.query_params.get("token")
+    if not _origin_allowed(websocket.headers.get("origin")):
+        await websocket.close(code=4403)
+        return
+    token = websocket.cookies.get("__Host-modira_access")
     if not await asyncio.to_thread(_authorize, token, shop_id):
         await websocket.close(code=4401)
         return

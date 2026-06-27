@@ -19,3 +19,13 @@ Automation rules, deterministic catalog resolution, order state transitions, and
 ## Catalog model
 
 Catalog attributes are generic key/value facts scoped by shop, category, and aliases. Clothing color and size are supported as ordinary attributes rather than product-wide architecture assumptions.
+
+## Cookie session authentication
+
+Browser authentication uses server-issued HttpOnly cookies rather than storing JWTs in `localStorage` or `sessionStorage`.
+
+- `__Host-modira_access` contains a short-lived access JWT with `jti`, `iat`, and `exp`; it is scoped to `Path=/`.
+- `__Host-modira_refresh` contains a rotating opaque refresh token; only its SHA-256 hash is stored in `refresh_sessions`, and it is scoped to `Path=/api/v1/auth/refresh`.
+- Refresh token reuse revokes the matching session family.
+- Unsafe cookie-authenticated browser requests must send `X-CSRF-Token` matching the non-HttpOnly `modira_csrf` double-submit cookie. Login, refresh, and provider webhook endpoints are exempt.
+- Realtime WebSockets authenticate with cookies only; token query parameters are rejected by omission and the `Origin` header must match `CORS_ORIGINS`.

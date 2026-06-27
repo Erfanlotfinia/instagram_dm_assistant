@@ -124,6 +124,22 @@ class User(Base, TimestampMixin):
     )
 
 
+class RefreshSession(Base):
+    __tablename__ = "refresh_sessions"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    refresh_token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    user_agent_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    ip_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    user: Mapped[User] = relationship()
+
+
 class Shop(Base, TimestampMixin):
     __tablename__ = "shops"
 

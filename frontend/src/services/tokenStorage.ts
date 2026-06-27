@@ -1,11 +1,7 @@
-const TOKEN_KEY = 'dm_assistant_access_token';
-
+// JWTs are stored in HttpOnly cookies by the backend. This compatibility shim
+// intentionally never persists tokens in browser storage.
 export const tokenStorage = {
-  get: (): string | null => localStorage.getItem(TOKEN_KEY),
-  set: (token: string): void => {
-    localStorage.setItem(TOKEN_KEY, token);
-  },
-  clear: (): void => {
-    localStorage.removeItem(TOKEN_KEY);
-  },
+  get: (): string | null => null,
+  set: (_token: string): void => {},
+  clear: (): void => {},
 };

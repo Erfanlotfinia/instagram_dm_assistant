@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.core.errors import add_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware, SecureHeadersMiddleware
+from app.core.csrf import CSRFMiddleware
 
 settings = get_settings()
 configure_logging(settings)
@@ -29,13 +30,14 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(SecureHeadersMiddleware, settings=settings)
+    app.add_middleware(CSRFMiddleware)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=settings.cors_allow_credentials,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Hub-Signature-256"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Hub-Signature-256", "X-CSRF-Token"],
     )
 
     add_exception_handlers(app)

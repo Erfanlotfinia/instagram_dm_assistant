@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import uuid4
 
 import jwt
 from cryptography.fernet import Fernet, InvalidToken
@@ -43,7 +44,8 @@ def decrypt_secret(encrypted_secret: str) -> str:
 def create_access_token(subject: str, extra_claims: dict[str, Any] | None = None) -> str:
     settings = get_settings()
     expire = datetime.now(UTC) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
-    payload: dict[str, Any] = {"sub": subject, "exp": expire}
+    now = datetime.now(UTC)
+    payload: dict[str, Any] = {"sub": subject, "exp": expire, "iat": now, "jti": uuid4().hex}
     if extra_claims:
         payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
