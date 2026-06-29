@@ -82,41 +82,8 @@ def get_simulator_run(
     )
 
 
-@router.get("/runs-legacy", response_model=list[SimulatorRunSummary], include_in_schema=False)
-def list_simulator_runs_legacy(
-    shop_id: UUID,
-    current_user: Annotated[User, Depends(get_current_user)],
-    _membership: Annotated[ShopMember, Depends(get_shop_membership)],
-    db: Annotated[Session, Depends(get_db_session)],
-) -> list[SimulatorRunSummary]:
-    return DMSimulatorService(db).list_runs(shop_id, current_user)
-
-
 @router.delete("/reset", response_model=SimulatorResetResponse)
 def reset_simulator(
-    shop_id: UUID,
-    current_user: Annotated[User, Depends(get_current_user)],
-    _membership: Annotated[ShopMember, Depends(get_shop_membership)],
-    db: Annotated[Session, Depends(get_db_session)],
-) -> SimulatorResetResponse:
-    deleted = DMSimulatorService(db).reset(shop_id, current_user)
-    return SimulatorResetResponse(deleted_conversations=deleted)
-
-
-# Backward-compatible aliases for earlier Sprint E drafts
-@router.post("/dm", response_model=DMSimulatorResponse, include_in_schema=False)
-def run_dm_simulator_legacy(
-    shop_id: UUID,
-    payload: DMSimulatorRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    _membership: Annotated[ShopMember, Depends(get_shop_membership)],
-    db: Annotated[Session, Depends(get_db_session)],
-) -> DMSimulatorResponse:
-    return DMSimulatorService(db).run(shop_id, payload, current_user)
-
-
-@router.delete("/dm", response_model=SimulatorResetResponse, include_in_schema=False)
-def reset_dm_simulator_legacy(
     shop_id: UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     _membership: Annotated[ShopMember, Depends(get_shop_membership)],

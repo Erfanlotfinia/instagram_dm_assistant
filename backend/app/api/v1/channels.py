@@ -9,12 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, rate_limit_webhook, require_shop_role
-from app.channels.adapters import InstagramProviderAdapter
 from app.core.config import get_settings
 from app.db.session import get_db_session
 from app.domain.enums import ChannelAccountStatus, ChannelProvider, UserRole
-from app.domain.models import ChannelAccount, InstagramAccount, ShopMember, User
-from app.services.legacy_channel_compat import ensure_channel_account_for_legacy_instagram
+from app.domain.models import ChannelAccount, ShopMember, User
 from app.schemas.channels import (
     ChannelAccountCreate,
     ChannelAccountCredentials,
@@ -148,39 +146,15 @@ def _candidate_webhook_accounts(
     return list(db.scalars(stmt).all())
 
 
-def _legacy_instagram_webhook_accounts(
-    db: Session, payload: dict[str, Any]
-) -> list[ChannelAccount]:
-    recipient_ids = _instagram_recipient_ids(payload)
-    if not recipient_ids:
-        return []
-    legacy_accounts = list(
-        db.scalars(
-            select(InstagramAccount).where(InstagramAccount.ig_user_id.in_(recipient_ids))
-        ).all()
-    )
-    return [
-        ensure_channel_account_for_legacy_instagram(db, legacy) for legacy in legacy_accounts
-    ]
-
-
 async def _verified_webhook_account(
     db: Session,
     provider: ChannelProvider,
     payload: dict[str, Any],
     request: Request,
     channel_account_id: UUID | None = None,
-    allow_legacy_meta_secret: bool = False,
 ) -> ChannelAccount:
     headers = dict(request.headers)
     candidates = _candidate_webhook_accounts(db, provider, payload, headers, channel_account_id)
-    if (
-        not candidates
-        and allow_legacy_meta_secret
-        and provider == ChannelProvider.INSTAGRAM
-        and channel_account_id is None
-    ):
-        candidates = _legacy_instagram_webhook_accounts(db, payload)
     if not candidates and channel_account_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -191,13 +165,6 @@ async def _verified_webhook_account(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No channel account configured for this webhook",
         )
-    if allow_legacy_meta_secret and provider == ChannelProvider.INSTAGRAM:
-        settings = get_settings()
-        if settings.webhook_signature_bypass:
-            return candidates[0]
-        if settings.meta_app_secret:
-            if await InstagramProviderAdapter(settings.meta_app_secret).verify_webhook(request):
-                return candidates[0]
     for account in candidates:
         if not account.webhook_secret_encrypted:
             continue
@@ -488,7 +455,6 @@ async def _receive_channel_webhook(
     request: Request,
     db: Session,
     channel_account_id: UUID | None = None,
-    allow_legacy_meta_secret: bool = False,
 ) -> WebhookAckResponse | WebhookIgnoredResponse:
     body = await request.body()
     try:
@@ -503,7 +469,6 @@ async def _receive_channel_webhook(
         payload,
         request,
         channel_account_id,
-        allow_legacy_meta_secret=allow_legacy_meta_secret,
     )
     return ChannelWebhookIngestionService(db).handle_payload(
         provider,

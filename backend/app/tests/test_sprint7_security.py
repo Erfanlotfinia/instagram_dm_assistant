@@ -23,7 +23,7 @@ def test_webhook_rejects_invalid_signature(client, demo_shop, db_session) -> Non
         return
 
     response = client.post(
-        "/api/v1/webhooks/instagram",
+        "/api/v1/channels/instagram/webhook",
         json=SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD,
         headers={"X-Hub-Signature-256": "sha256=bad"},
     )

@@ -105,8 +105,3 @@ def test_cross_shop_failed_job_not_visible(client, auth_headers, db_session, dem
 
     response = client.get(f"/api/v1/shops/{other_shop.id}/failed-jobs", headers=auth_headers)
     assert response.status_code == 403
-
-
-def test_legacy_failed_jobs_endpoint_gone(client, auth_headers) -> None:
-    response = client.get("/api/v1/jobs/failed", headers=auth_headers)
-    assert response.status_code == 410

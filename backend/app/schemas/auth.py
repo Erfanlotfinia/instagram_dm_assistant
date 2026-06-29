@@ -28,6 +28,8 @@ class UserRead(BaseModel):
 class LoginResponse(BaseModel):
     user: UserRead
     session_id: str
+    access_token: str
+    token_type: str = "bearer"
 
 
 class UserProfileUpdate(BaseModel):

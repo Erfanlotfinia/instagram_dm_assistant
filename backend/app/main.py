@@ -10,6 +10,7 @@ from app.core.errors import add_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware, SecureHeadersMiddleware
 from app.core.csrf import CSRFMiddleware
+from app.core.openapi import configure_openapi
 
 settings = get_settings()
 configure_logging(settings)
@@ -27,6 +28,11 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         docs_url=None if settings.is_production else "/docs",
         redoc_url=None if settings.is_production else "/redoc",
+        swagger_ui_parameters={
+            "persistAuthorization": True,
+            "displayRequestDuration": True,
+            "withCredentials": False,
+        },
     )
 
     app.add_middleware(SecureHeadersMiddleware, settings=settings)
@@ -47,6 +53,9 @@ def create_app() -> FastAPI:
 
     app.add_api_route("/health", root_health_check, methods=["GET"], tags=["health"])
     app.add_api_route("/ready", readiness_check, methods=["GET"], tags=["health"])
+
+    if not settings.is_production:
+        configure_openapi(app)
 
     return app
 

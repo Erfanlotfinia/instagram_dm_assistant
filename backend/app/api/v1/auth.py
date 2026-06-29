@@ -21,7 +21,11 @@ CSRF_COOKIE = "modira_csrf"
 
 def _secure() -> bool:
     settings = get_settings()
-    return settings.auth_cookie_secure if settings.auth_cookie_secure is not None else settings.is_production
+    if settings.auth_cookie_secure is not None:
+        return settings.auth_cookie_secure
+    # __Host- prefixed cookies require Secure. Localhost is a secure context in
+    # modern browsers, so this works for local HTTP dev (5173 → 8800).
+    return True
 
 
 def _set_access(response: Response, user_id: str) -> None:
@@ -45,12 +49,54 @@ def _clear(response: Response) -> None:
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(payload: LoginRequest, request: Request, response: Response, db: Annotated[Session, Depends(get_db_session)], _: Annotated[None, Depends(rate_limit_login)]) -> LoginResponse:
+def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+    db: Annotated[Session, Depends(get_db_session)],
+    _: Annotated[None, Depends(rate_limit_login)],
+    token_only: bool = False,
+) -> LoginResponse:
+    settings = get_settings()
     user = AuthService(db).verify_credentials(payload)
-    session, refresh_token = SessionService(db).create(user.id, request.headers.get("user-agent"), request.client.host if request.client else None)
-    _set_access(response, str(user.id)); _set_refresh(response, refresh_token); _set_csrf(response)
-    AuditService(db).log(action="login", entity_type="user", actor_user_id=user.id, entity_id=str(user.id), metadata={"email": user.email}); AuditService(db).commit()
-    return LoginResponse(user=UserRead.model_validate(user), session_id=session.session_id)
+    access_token = create_access_token(str(user.id))
+
+    if token_only and not settings.is_production:
+        AuditService(db).log(
+            action="login",
+            entity_type="user",
+            actor_user_id=user.id,
+            entity_id=str(user.id),
+            metadata={"email": user.email, "swagger_token_only": True},
+        )
+        AuditService(db).commit()
+        return LoginResponse(
+            user=UserRead.model_validate(user),
+            session_id="",
+            access_token=access_token,
+        )
+
+    session, refresh_token = SessionService(db).create(
+        user.id,
+        request.headers.get("user-agent"),
+        request.client.host if request.client else None,
+    )
+    _set_access(response, str(user.id))
+    _set_refresh(response, refresh_token)
+    _set_csrf(response)
+    AuditService(db).log(
+        action="login",
+        entity_type="user",
+        actor_user_id=user.id,
+        entity_id=str(user.id),
+        metadata={"email": user.email},
+    )
+    AuditService(db).commit()
+    return LoginResponse(
+        user=UserRead.model_validate(user),
+        session_id=session.session_id,
+        access_token=access_token,
+    )
 
 
 @router.post("/refresh", response_model=LoginResponse)
@@ -65,7 +111,11 @@ def refresh(request: Request, response: Response, db: Annotated[Session, Depends
     if user is None or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found or inactive")
     _set_access(response, str(user.id)); _set_refresh(response, refresh_token); _set_csrf(response)
-    return LoginResponse(user=UserRead.model_validate(user), session_id=session.session_id)
+    return LoginResponse(
+        user=UserRead.model_validate(user),
+        session_id=session.session_id,
+        access_token=create_access_token(str(user.id)),
+    )
 
 
 @router.post("/logout", status_code=204)

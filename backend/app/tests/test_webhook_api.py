@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import encrypt_secret
-from app.domain.enums import InstagramAccountStatus
 from app.domain.models import InstagramAccount, OutboxEvent
+from app.services.legacy_channel_compat import ensure_channel_account_for_legacy_instagram
 from app.services.webhook_ingestion_service import WebhookIngestionService
 from app.tests.fixtures.instagram_webhook import SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD
+from backend.app.domain.enums import InstagramAccountStatus
 
 
 @pytest.fixture()
@@ -38,7 +39,7 @@ def mock_publisher():
 def test_instagram_webhook_verification_success(client) -> None:
     settings = get_settings()
     response = client.get(
-        "/api/v1/webhooks/instagram",
+        "/api/v1/channels/instagram/webhook",
         params={
             "hub.mode": "subscribe",
             "hub.verify_token": settings.webhook_internal_secret,
@@ -51,7 +52,7 @@ def test_instagram_webhook_verification_success(client) -> None:
 
 def test_instagram_webhook_verification_failure(client) -> None:
     response = client.get(
-        "/api/v1/webhooks/instagram",
+        "/api/v1/channels/instagram/webhook",
         params={
             "hub.mode": "subscribe",
             "hub.verify_token": "wrong-token",
@@ -75,7 +76,11 @@ def test_instagram_webhook_receiver_via_service(
 
 
 def test_instagram_webhook_receiver_via_api(client, instagram_account, db_session) -> None:
-    response = client.post("/api/v1/webhooks/instagram", json=SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD)
+    ensure_channel_account_for_legacy_instagram(db_session, instagram_account)
+    response = client.post(
+        "/api/v1/channels/instagram/webhook",
+        json=SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD,
+    )
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "ok"
     outbox_count = db_session.scalar(select(func.count()).select_from(OutboxEvent))

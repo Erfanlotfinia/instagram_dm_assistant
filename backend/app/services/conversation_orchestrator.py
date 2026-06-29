@@ -24,12 +24,12 @@ from app.services.channel_outbound_service import ChannelOutboundService
 from app.services.decision_trace_service import DecisionTraceService
 from app.services.instagram_product_resolver import InstagramProductResolver
 from app.services.llm_extraction_service import LLMExtractionProtocol, LLMExtractionService
-from app.services.order_service import OrderService
 from app.services.orchestration import (
     ConversationPipeline,
     ConversationPipelineContext,
     OrchestrationServices,
 )
+from app.services.order_service import OrderService
 from app.services.payment_service import PaymentService
 from app.services.policy_engine import PolicyEngine
 from app.services.product_semantic_search_service import (
