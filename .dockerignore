@@ -1,0 +1,36 @@
+# Repo-root build context for frontend/landing production images.
+# Backend images use context ./backend and backend/.dockerignore instead.
+
+backend/
+
+# Node artifacts (reinstalled during image build)
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
+landing/node_modules/
+landing/dist/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS / VCS
+.git/
+.gitignore
+.github/
+.cursor/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docs and infra not needed in static app images
+docs/
+infra/
+scripts/
+docker/
+*.md

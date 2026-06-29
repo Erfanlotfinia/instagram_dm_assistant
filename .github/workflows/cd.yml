@@ -91,7 +91,8 @@ jobs:
       - id: build
         uses: docker/build-push-action@v7
         with:
-          context: ./frontend
+          context: .
+          file: frontend/Dockerfile
           target: production
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -134,7 +135,8 @@ jobs:
       - id: build
         uses: docker/build-push-action@v7
         with:
-          context: ./landing
+          context: .
+          file: landing/Dockerfile
           target: production
           push: true
           tags: ${{ steps.meta.outputs.tags }}

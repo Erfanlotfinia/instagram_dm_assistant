@@ -10,7 +10,7 @@ from app.domain.models import InstagramAccount, OutboxEvent
 from app.services.legacy_channel_compat import ensure_channel_account_for_legacy_instagram
 from app.services.webhook_ingestion_service import WebhookIngestionService
 from app.tests.fixtures.instagram_webhook import SAMPLE_INSTAGRAM_MESSAGE_PAYLOAD
-from backend.app.domain.enums import InstagramAccountStatus
+from app.domain.enums import InstagramAccountStatus
 
 
 @pytest.fixture()
