@@ -4,6 +4,9 @@ import { HubPage } from '../components/shell/HubPage';
 import { Card, CardHeader } from '../components/ui';
 import { DataTable } from '../components/data';
 import type { Column } from '../components/data';
+import { PostRevenueInsightPanel } from '../components/revenue/PostRevenueInsightPanel';
+import { buildPostRevenueInsights } from '../lib/revenueRecovery';
+import type { RevenueRecoveryAggregationInput } from '../types/sprint4Revenue';
 import { useShop } from '../contexts/ShopContext';
 import { apiClient } from '../services/apiClient';
 
@@ -73,6 +76,16 @@ export function PostRevenueAnalyticsPage() {
           emptyTitle="No post-attributed conversations yet"
         />
       </Card>
+
+      {/* Sprint 4 (additive): post-to-revenue insights from the same query. */}
+      <PostRevenueInsightPanel
+        insights={buildPostRevenueInsights({
+          shopId: selectedShopId ?? '',
+          postRevenue: revenue.data ?? null,
+        } as Pick<RevenueRecoveryAggregationInput, 'shopId' | 'postRevenue'>)}
+        isLoading={revenue.isLoading}
+        error={revenue.error instanceof Error ? revenue.error.message : null}
+      />
     </HubPage>
   );
 }

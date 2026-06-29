@@ -40,8 +40,8 @@ describe('PostRevenueAnalyticsPage', () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText('https://instagram.com/p/abc')).toBeInTheDocument();
+    expect((await screen.findAllByText('https://instagram.com/p/abc')).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('120.00')).toBeInTheDocument();
-    expect(screen.getByText('20.0%')).toBeInTheDocument();
+    expect(screen.getAllByText('20.0%').length).toBeGreaterThanOrEqual(1);
   });
 });

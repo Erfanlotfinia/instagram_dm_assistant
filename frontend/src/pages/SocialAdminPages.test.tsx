@@ -68,6 +68,23 @@ const mocks = vi.hoisted(() => ({
     updated_at: '2026-06-14T00:00:00Z',
   }),
   listOperatorCorrections: vi.fn().mockResolvedValue([]),
+  listReplayRuns: vi.fn().mockResolvedValue([]),
+  getReplayRun: vi.fn().mockResolvedValue({
+    id: 'r1',
+    shop_id: 'shop-1',
+    source_type: 'scenario_pack',
+    model_version: 'm1',
+    prompt_version: 'p1',
+    catalog_snapshot_hash: 'h',
+    status: 'completed',
+    total_items: 0,
+    passed_items: 0,
+    failed_items: 0,
+    diff_summary_json: {},
+    started_at: '2026-06-29T00:00:00Z',
+    items: [],
+    catalog_snapshot_json: {},
+  }),
 }));
 
 vi.mock('../services/apiClient', () => ({
@@ -85,6 +102,8 @@ vi.mock('../services/apiClient', () => ({
     listAdminTasks: mocks.listAdminTasks,
     createAdminTask: mocks.createAdminTask,
     listOperatorCorrections: mocks.listOperatorCorrections,
+    listReplayRuns: mocks.listReplayRuns,
+    getReplayRun: mocks.getReplayRun,
   },
 }));
 
@@ -120,7 +139,7 @@ test('renders automation rules priority', async () => {
 
 test('renders scenario simulator pack', async () => {
   renderWithProviders(<ScenarioSimulatorPage />);
-  expect(screen.getByText('Run scenario pack')).toBeInTheDocument();
+  expect(screen.getByText('Run regression suite')).toBeInTheDocument();
   await waitFor(() => expect(mocks.listShops).toHaveBeenCalled());
 });
 
@@ -128,7 +147,7 @@ test('run scenario pack calls regression API', async () => {
   const user = userEvent.setup();
   renderWithProviders(<ScenarioSimulatorPage />);
 
-  const runButton = screen.getByRole('button', { name: 'Run scenario pack' });
+  const runButton = screen.getByRole('button', { name: 'Run regression suite' });
   await waitFor(() => expect(runButton).toBeEnabled());
 
   await user.click(runButton);

@@ -1,14 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { HubPage } from '../components/shell/HubPage';
 import { Badge, Button, Card, CardBody, CardHeader, Field, Input } from '../components/ui';
+import { Callout } from '../components/ui';
 import { EmptyState } from '../components/data';
+import { RolloutGateChecklist } from '../components/rollout/RolloutGateChecklist';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { apiClient } from '../services/apiClient';
+import { evaluateRolloutGate } from '../lib/rolloutGate';
+import { useShopReadiness } from '../lib/useShopReadiness';
 import type { EmergencyStopScopePreview } from '../types/trust';
 
 const MODES = [
@@ -34,6 +38,68 @@ export function PilotControlCenterPage() {
     queryFn: () => apiClient.getPilotSettings(selectedShopId!),
     enabled: Boolean(selectedShopId),
   });
+
+  // Rollout gate inputs — all read-only, reused from existing endpoints.
+  const riskSettingsQuery = useQuery({
+    queryKey: ['agent-risk-settings', selectedShopId],
+    queryFn: () => apiClient.getAgentRiskSettings(selectedShopId!),
+    enabled: Boolean(selectedShopId),
+  });
+  const channelsQuery = useQuery({
+    queryKey: ['channel-accounts', selectedShopId],
+    queryFn: () => apiClient.listChannelAccounts(selectedShopId!),
+    enabled: Boolean(selectedShopId),
+  });
+  const replayRunsQuery = useQuery({
+    queryKey: ['replay-runs', selectedShopId],
+    queryFn: () => apiClient.listReplayRuns(selectedShopId!),
+    enabled: Boolean(selectedShopId),
+  });
+  const failedJobsQuery = useQuery({
+    queryKey: ['failed-jobs', selectedShopId, 'active'],
+    queryFn: () => apiClient.listFailedJobs(selectedShopId!, { status: 'failed', page: 1 }),
+    enabled: Boolean(selectedShopId),
+  });
+
+  // Sprint 2 shop readiness — feeds the rollout gate as an optional augment.
+  // Fails open: while loading or errored, the gate keeps its Sprint 3 behavior.
+  const shopReadinessQuery = useShopReadiness(selectedShopId);
+
+  const gateLoading =
+    riskSettingsQuery.isLoading ||
+    channelsQuery.isLoading ||
+    replayRunsQuery.isLoading ||
+    failedJobsQuery.isLoading;
+
+  const gateState = useMemo(() => {
+    if (!selectedShopId) return null;
+    return evaluateRolloutGate({
+      // The aggregate regression metrics are not auto-run here; the gate
+      // treats a missing regression as a blocker, prompting the operator to
+      // run the suite on the Regression tab.
+      regression: null,
+      latestRun: replayRunsQuery.data?.[0] ?? null,
+      riskSettings: riskSettingsQuery.data ?? null,
+      channels: channelsQuery.data ?? [],
+      pilot: settingsQuery.data ?? null,
+      failedJobsCount: failedJobsQuery.data?.total ?? 0,
+    });
+  }, [
+    selectedShopId,
+    replayRunsQuery.data,
+    riskSettingsQuery.data,
+    channelsQuery.data,
+    settingsQuery.data,
+    failedJobsQuery.data,
+  ]);
+
+  const enableAutomation = () => {
+    if (!gateState?.ready) {
+      showToast('Resolve all blocking reasons before enabling automation.', 'error');
+      return;
+    }
+    modeMutation.mutate('autonomous_low_risk');
+  };
 
   const modeMutation = useMutation({
     mutationFn: (operating_mode: string) =>
@@ -76,6 +142,22 @@ export function PilotControlCenterPage() {
         </Card>
       ) : (
         <>
+          <RolloutGateChecklist
+            state={gateState}
+            loading={gateLoading}
+            onEnableAutomation={enableAutomation}
+            enabling={modeMutation.isPending}
+            automationEnabled={currentMode === 'autonomous_low_risk'}
+            shopReadiness={shopReadinessQuery.shopReadiness}
+            shopReadinessLoading={shopReadinessQuery.isLoading}
+          />
+
+          {shopReadinessQuery.error ? (
+            <Callout title="Shop readiness unavailable">
+              Sprint 2 readiness could not be loaded — the rollout gate is using its existing checks only.
+            </Callout>
+          ) : null}
+
           <Card>
             <CardHeader
               title="Operating mode"
@@ -94,18 +176,29 @@ export function PilotControlCenterPage() {
               </Field>
 
               <div className="flex flex-wrap gap-2" role="group" aria-label="Operating mode">
-                {MODES.map((mode) => (
-                  <Button
-                    key={mode.id}
-                    type="button"
-                    size="sm"
-                    variant={currentMode === mode.id ? 'primary' : 'secondary'}
-                    disabled={modeMutation.isPending}
-                    onClick={() => modeMutation.mutate(mode.id)}
-                  >
-                    {mode.label}
-                  </Button>
-                ))}
+                {MODES.map((mode) => {
+                  const gateBlocksAutonomous = Boolean(
+                    mode.id === 'autonomous_low_risk' && gateState && !gateState.ready,
+                  );
+                  return (
+                    <Button
+                      key={mode.id}
+                      type="button"
+                      size="sm"
+                      variant={currentMode === mode.id ? 'primary' : 'secondary'}
+                      disabled={modeMutation.isPending || gateBlocksAutonomous}
+                      onClick={() => modeMutation.mutate(mode.id)}
+                      aria-disabled={gateBlocksAutonomous || undefined}
+                      title={
+                        gateBlocksAutonomous
+                          ? 'Rollout readiness gate must pass before enabling autonomous mode.'
+                          : undefined
+                      }
+                    >
+                      {mode.label}
+                    </Button>
+                  );
+                })}
               </div>
 
               <ul className="list-inside list-disc space-y-1 text-sm text-muted">

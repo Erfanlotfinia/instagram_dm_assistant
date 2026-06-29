@@ -6,6 +6,7 @@ import { AreaTrend } from '../components/charts/ChartKit';
 import { Card, CardBody, CardHeader, Badge } from '../components/ui';
 import { KpiCard, DataTable, FilterBar, LoadingState, ErrorState, EmptyState } from '../components/data';
 import type { Column } from '../components/data';
+import { AutomationCoachPanel } from '../components/ai/AutomationCoachPanel';
 import { useShop } from '../contexts/ShopContext';
 import { queryKeys } from '../lib/queryClient';
 import { apiClient } from '../services/apiClient';
@@ -248,9 +249,9 @@ export function AISafetyPage() {
         ) : blocked.length === 0 ? (
           <EmptyState title="No unsafe actions detected" description="Every decision passed safety thresholds." />
         ) : (
-          <CardBody className="flex flex-col gap-2">
+          <CardBody className="flex flex-col gap-3">
             {blocked.map((trace) => (
-              <div key={trace.id} className="rounded-lg border border-border p-3">
+              <div key={trace.id} className="grid gap-2 rounded-lg border border-border p-3">
                 <div className="flex items-center justify-between gap-2">
                   <Badge tone={riskTone(trace.risk_score?.risk_level)} dot>
                     {trace.risk_score?.risk_level ?? 'blocked'}
@@ -260,10 +261,11 @@ export function AISafetyPage() {
                   </Link>
                 </div>
                 {Array.isArray(trace.risk_score?.risk_reasons) && trace.risk_score.risk_reasons.length > 0 ? (
-                  <p className="mt-1.5 text-sm text-warning">{trace.risk_score.risk_reasons.join(' · ')}</p>
+                  <p className="text-sm text-warning">{trace.risk_score.risk_reasons.join(' · ')}</p>
                 ) : (
-                  <p className="mt-1.5 text-sm text-muted">{trace.reasoning_summary ?? 'Auto-send blocked.'}</p>
+                  <p className="text-sm text-muted">{trace.reasoning_summary ?? 'Auto-send blocked.'}</p>
                 )}
+                <AutomationCoachPanel trace={trace} compact />
               </div>
             ))}
           </CardBody>

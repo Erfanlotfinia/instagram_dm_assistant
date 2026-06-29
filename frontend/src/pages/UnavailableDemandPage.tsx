@@ -8,6 +8,10 @@ import { Badge, Button, Card, CardBody, CardHeader, Field, Select } from '../com
 import { DataTable, EmptyState, FilterBar, KpiCard, LoadingState } from '../components/data';
 import type { Column } from '../components/data';
 import type { BadgeTone } from '../components/ui';
+import { LostDemandTable } from '../components/revenue/LostDemandTable';
+import { buildLostDemandInsights } from '../lib/revenueRecovery';
+import type { RevenueRecoveryAggregationInput } from '../types/sprint4Revenue';
+import type { LostDemandRow } from '../types/competitive';
 import { cn } from '../lib/cn';
 import { useShop } from '../contexts/ShopContext';
 import { queryKeys } from '../lib/queryClient';
@@ -122,6 +126,26 @@ export function UnavailableDemandPage() {
       formatMismatchReason(a).localeCompare(formatMismatchReason(b)),
     );
   }, [demandQuery.data]);
+
+  // Sprint 4 (additive): group the same raw demand logs by product/variant for
+  // a recovery-oriented view. Reuses the pure builder so grouping logic lives
+  // in one place. No new fetch — derives from already-loaded data.
+  const lostDemandInsights = useMemo(() => {
+    const rows: LostDemandRow[] = (demandQuery.data ?? []).map((log) => ({
+      requested_product: productNames.get(log.product_id ?? '') ?? null,
+      requested_color: log.requested_color_normalized ?? log.requested_color_raw ?? null,
+      requested_size: log.requested_size_normalized ?? log.requested_size_raw ?? null,
+      product_id: log.product_id ?? null,
+      count: 1,
+      estimated_lost_revenue: String(log.estimated_lost_revenue ?? 0),
+      reason: log.reason,
+    }));
+    const input = { shopId: selectedShopId ?? '', lostDemand: rows, products: productsQuery.data ?? null } as Pick<
+      RevenueRecoveryAggregationInput,
+      'shopId' | 'lostDemand' | 'products'
+    >;
+    return buildLostDemandInsights(input);
+  }, [demandQuery.data, productNames, productsQuery.data, selectedShopId]);
 
   const summary = useMemo(() => {
     const rows = demandQuery.data ?? [];
@@ -253,7 +277,7 @@ export function UnavailableDemandPage() {
           <span className="text-subtle" aria-hidden="true">
             ·
           </span>
-          <Link className={ghostLinkClass} to="/variant-resolver">
+          <Link className={ghostLinkClass} to="/catalog/resolver">
             Test resolver
           </Link>
           <span className="text-subtle" aria-hidden="true">
@@ -473,6 +497,9 @@ export function UnavailableDemandPage() {
               </>
             )}
           </Card>
+
+          {/* Sprint 4 (additive): lost demand grouped by product/variant. */}
+          <LostDemandTable insights={lostDemandInsights} />
         </>
       )}
     </HubPage>

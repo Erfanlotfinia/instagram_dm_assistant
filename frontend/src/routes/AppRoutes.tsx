@@ -11,9 +11,11 @@ import {
   AISafetyPage,
   AnalyticsOverviewPage,
   AutomationRulesPage,
+  AutomationSuggestionsPage,
   AttributeDictionaryPage,
   ChannelAccountsPage,
   ChannelAnalyticsPage,
+  ChannelOnboardingPage,
   InstagramAccountSelectPage,
   InstagramConnectCallbackPage,
   ConversationIntelligencePage,
@@ -34,11 +36,13 @@ import {
   ProductDetailPage,
   ProductsPage,
   RecoveryRulesPage,
+  RevenueRecoveryPage,
   RiskSettingsPage,
   RolloutPage,
   ScenarioCoveragePage,
   ScenarioSimulatorPage,
   SettingsPage,
+  ShopReadinessPage,
   ShopsPage,
   SystemHealthPage,
   TriggerRulesPage,
@@ -116,6 +120,7 @@ export function AppRoutes() {
           <Route path="triggers" element={<TriggerRulesPage />} />
           <Route path="recovery" element={<RecoveryRulesPage />} />
           <Route path="upsell" element={<UpsellRulesPage />} />
+          <Route path="suggestions" element={<AutomationSuggestionsPage />} />
           <Route path="simulator" element={<DMSimulatorPage />} />
           <Route path="scenario-simulator" element={<ScenarioSimulatorPage />} />
           <Route path="risk" element={<RiskSettingsPage />} />
@@ -138,6 +143,7 @@ export function AppRoutes() {
           <Route path="overview" element={<AnalyticsOverviewPage />} />
           <Route path="revenue" element={<PostRevenueAnalyticsPage />} />
           <Route path="demand" element={<UnavailableDemandPage />} />
+          <Route path="recovery" element={<RevenueRecoveryPage />} />
           <Route path="channels" element={<ChannelAnalyticsPage />} />
         </Route>
 
@@ -147,10 +153,12 @@ export function AppRoutes() {
           <Route path="health" element={<SystemHealthPage />} />
           <Route path="jobs" element={<FailedJobsPage />} />
           <Route path="channels" element={<ChannelAccountsPage />} />
+          <Route path="channels/onboarding" element={<ChannelOnboardingPage />} />
           <Route path="channels/instagram/connect" element={<InstagramConnectCallbackPage />} />
           <Route path="channels/instagram/select" element={<InstagramAccountSelectPage />} />
           <Route path="shops" element={<ShopsPage />} />
           <Route path="rollout" element={<RolloutPage />} />
+          <Route path="readiness" element={<ShopReadinessPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
 

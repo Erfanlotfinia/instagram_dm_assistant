@@ -5,6 +5,7 @@ import { HubPage } from '../components/shell/HubPage';
 import { Badge, Button, Card, CardBody, CardHeader, Field, Input, Select } from '../components/ui';
 import { DataTable, EmptyState, LoadingState } from '../components/data';
 import type { Column } from '../components/data';
+import { CatalogCompletenessPanel } from '../components/catalog/CatalogCompletenessPanel';
 import { cn } from '../lib/cn';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
@@ -340,6 +341,7 @@ export function VariantResolverPage() {
       title="Product option resolver test"
       description="Test backend-only normalization, variant matching, stock checks, and alternatives without calling the LLM."
     >
+      <CatalogCompletenessPanel shopId={selectedShopId} />
       <Card>
         <CardHeader
           title="Test input"

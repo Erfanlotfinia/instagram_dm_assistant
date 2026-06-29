@@ -65,6 +65,10 @@ export const PostRevenueAnalyticsPage = lazyPage(
   () => import('../pages/PostRevenueAnalyticsPage'),
   'PostRevenueAnalyticsPage',
 );
+export const RevenueRecoveryPage = lazyPage(
+  () => import('../pages/RevenueRecoveryPage'),
+  'RevenueRecoveryPage',
+);
 export const RecoveryRulesPage = lazyPage(() => import('../pages/RecoveryRulesPage'), 'RecoveryRulesPage');
 export const RiskSettingsPage = lazyPage(() => import('../pages/RiskSettingsPage'), 'RiskSettingsPage');
 export const SystemHealthPage = lazyPage(() => import('../pages/SystemHealthPage'), 'SystemHealthPage');
@@ -78,6 +82,11 @@ export const UnavailableDemandPage = lazyPage(
 );
 export const VariantResolverPage = lazyPage(() => import('../pages/VariantResolverPage'), 'VariantResolverPage');
 export const ShopsPage = lazyPage(() => import('../pages/ShopsPage'), 'ShopsPage');
+export const ChannelOnboardingPage = lazyPage(
+  () => import('../pages/ChannelOnboardingPage'),
+  'ChannelOnboardingPage',
+);
+export const ShopReadinessPage = lazyPage(() => import('../pages/ShopReadinessPage'), 'ShopReadinessPage');
 
 export const AdminAITasksPage = lazyPage(() => import('../pages/SocialAdminPages'), 'AdminAITasksPage');
 export const AutomationRulesPage = lazyPage(() => import('../pages/SocialAdminPages'), 'AutomationRulesPage');
@@ -92,4 +101,8 @@ export const ScenarioCoveragePage = lazyPage(
 export const ScenarioSimulatorPage = lazyPage(
   () => import('../pages/SocialAdminPages'),
   'ScenarioSimulatorPage',
+);
+export const AutomationSuggestionsPage = lazyPage(
+  () => import('../pages/SocialAdminPages'),
+  'AutomationSuggestionsPage',
 );

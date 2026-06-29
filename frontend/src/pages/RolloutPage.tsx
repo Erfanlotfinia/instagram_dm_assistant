@@ -5,6 +5,8 @@ import { OnboardingPage } from './OnboardingPage';
 import { PilotControlCenterPage } from './PilotControlCenterPage';
 import { PilotReadinessPage } from './PilotReadinessPage';
 import { TRLValidationPage } from './TRLValidationPage';
+import { ShopReadinessPanel } from '../components/onboarding/ShopReadinessPanel';
+import { useShop } from '../contexts/ShopContext';
 import { cn } from '../lib/cn';
 
 type View = 'control' | 'readiness' | 'onboarding' | 'incidents' | 'trl';
@@ -19,10 +21,12 @@ const VIEWS: Array<{ id: View; label: string }> = [
 
 export function RolloutPage() {
   const [params, setParams] = useSearchParams();
+  const { selectedShopId } = useShop();
   const view = (params.get('view') as View | null) ?? 'control';
 
   return (
     <div className="flex flex-col gap-4">
+      <ShopReadinessPanel shopId={selectedShopId} />
       <div className="flex flex-wrap gap-1.5">
         {VIEWS.map((item) => (
           <button

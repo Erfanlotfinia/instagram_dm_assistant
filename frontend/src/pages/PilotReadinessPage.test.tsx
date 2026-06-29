@@ -129,7 +129,9 @@ describe('PilotReadinessPage', () => {
     expect(screen.getByText(/validation outdated/i)).toBeInTheDocument();
     expect(screen.getByText(/failed jobs present/i)).toBeInTheDocument();
     expect(screen.getByText(/Instagram webhook connected/i)).toBeInTheDocument();
-    expect(screen.getByText(/Inventory verified/i)).toBeInTheDocument();
+    // "Inventory verified" appears in both the new PilotChecklistPanel (missing
+    // requirements) and the existing operational checklist panel.
+    expect(screen.getAllByText(/Inventory verified/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Inbound messages/i)).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText(/Emergency stop activated/i)).toBeInTheDocument();

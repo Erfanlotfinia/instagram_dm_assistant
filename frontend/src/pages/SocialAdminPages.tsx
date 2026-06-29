@@ -17,6 +17,7 @@ import type {
   ScenarioCoverageRow,
   ScenarioRegressionMetrics,
 } from '../types/socialAdmin';
+import type { SimulatorRunItem, SimulatorRunSummary } from '../types/trust';
 
 const PROVIDER_LABELS = ['Instagram', 'WhatsApp', 'Telegram', 'Bale', 'Rubika'];
 
@@ -399,15 +400,59 @@ export function AutomationRulesPage() {
 
 /* ───────────────────────────── Scenario Simulator ───────────────────────────── */
 
+const LAST_METRICS_STORAGE_KEY = 'modira:last-regression-metrics';
+
+function loadLastMetrics(shopId: string): ScenarioRegressionMetrics | null {
+  try {
+    const raw = localStorage.getItem(LAST_METRICS_STORAGE_KEY);
+    if (!raw) return null;
+    const map = JSON.parse(raw) as Record<string, ScenarioRegressionMetrics>;
+    return map[shopId] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastMetrics(shopId: string, metrics: ScenarioRegressionMetrics): void {
+  try {
+    const raw = localStorage.getItem(LAST_METRICS_STORAGE_KEY);
+    const map = raw ? (JSON.parse(raw) as Record<string, ScenarioRegressionMetrics>) : {};
+    map[shopId] = metrics;
+    localStorage.setItem(LAST_METRICS_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // Ignore quota / privacy-mode errors — comparison is a best-effort UI hint.
+  }
+}
+
+function runStatusTone(status: string): 'success' | 'warning' | 'danger' | 'neutral' {
+  if (status === 'completed') return 'success';
+  if (status === 'running') return 'warning';
+  if (status === 'failed') return 'danger';
+  return 'neutral';
+}
+
+function deltaLabel(delta?: number): string {
+  if (delta === undefined) return '—';
+  if (delta === 0) return '0';
+  return delta > 0 ? `+${delta}` : `${delta}`;
+}
+
+function deltaTone(delta?: number): 'success' | 'danger' | 'accent' {
+  if (delta === undefined || delta === 0) return 'accent';
+  return delta > 0 ? 'success' : 'danger';
+}
+
 export function ScenarioSimulatorPage() {
   const { selectedShopId } = useShop();
   const { showToast } = useToast();
   const [metrics, setMetrics] = useState<ScenarioRegressionMetrics | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
   const runMutation = useMutation({
     mutationFn: () => apiClient.runScenarioRegression(selectedShopId!),
     onSuccess: (data) => {
       setMetrics(data);
+      if (selectedShopId) saveLastMetrics(selectedShopId, data);
       const safe =
         data.unsafe_action_count === 0 &&
         data.false_order_count === 0 &&
@@ -422,11 +467,123 @@ export function ScenarioSimulatorPage() {
     onError: (error: Error) => showToast(error.message, 'error'),
   });
 
+  // Recent replay runs (history) — separate from the aggregate scenario pack run.
+  const runsQuery = useQuery({
+    queryKey: ['replay-runs', selectedShopId],
+    queryFn: () => apiClient.listReplayRuns(selectedShopId!),
+    enabled: Boolean(selectedShopId),
+  });
+
+  // Selected run detail (item-level pass/fail).
+  const runDetailQuery = useQuery({
+    queryKey: ['replay-run', selectedShopId, selectedRunId],
+    queryFn: () => apiClient.getReplayRun(selectedShopId!, selectedRunId!),
+    enabled: Boolean(selectedShopId) && Boolean(selectedRunId),
+  });
+
+  const runs = runsQuery.data ?? [];
+  const completedRuns = useMemo(
+    () => runs.filter((run) => run.status === 'completed' || run.status === 'failed'),
+    [runs],
+  );
+  const currentRun = completedRuns[0];
+  const previousRun = completedRuns[1];
+
+  const comparison = useMemo(() => {
+    if (!currentRun) return null;
+    const total = previousRun ? currentRun.total_items - previousRun.total_items : undefined;
+    const passed = previousRun ? currentRun.passed_items - previousRun.passed_items : undefined;
+    const failed = previousRun ? currentRun.failed_items - previousRun.failed_items : undefined;
+    return { total, passed, failed };
+  }, [currentRun, previousRun]);
+
+  const previousMetrics = selectedShopId ? loadLastMetrics(selectedShopId) : null;
+
+  const failedItems = useMemo(
+    () => (runDetailQuery.data?.items ?? []).filter((item) => !item.passed),
+    [runDetailQuery.data],
+  );
+
   const safetyOk =
     metrics &&
     metrics.unsafe_action_count === 0 &&
     metrics.false_order_count === 0 &&
     metrics.false_payment_count === 0;
+
+  const runColumns: Column<SimulatorRunSummary>[] = [
+    {
+      key: 'label',
+      header: 'Run',
+      render: (run) => run.label ?? run.id,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (run) => <Badge tone={runStatusTone(run.status)}>{run.status}</Badge>,
+    },
+    { key: 'total', header: 'Total', render: (run) => String(run.total_items) },
+    { key: 'passed', header: 'Passed', render: (run) => String(run.passed_items) },
+    {
+      key: 'failed',
+      header: 'Failed',
+      render: (run) => (
+        <Badge tone={run.failed_items === 0 ? 'success' : 'danger'}>{run.failed_items}</Badge>
+      ),
+    },
+    {
+      key: 'started',
+      header: 'Started',
+      render: (run) => (
+        <time className="text-xs text-muted" dateTime={run.started_at}>
+          {new Date(run.started_at).toLocaleString()}
+        </time>
+      ),
+    },
+  ];
+
+  const failedColumns: Column<SimulatorRunItem>[] = [
+    { key: 'item', header: 'Scenario', render: (item) => item.item_key },
+    {
+      key: 'mismatches',
+      header: 'Mismatches',
+      render: (item) => {
+        const mismatches = item.diff_json?.mismatches ?? [];
+        const count = mismatches.length;
+        if (count === 0) return <span className="text-muted">—</span>;
+        return (
+          <Badge tone={count > 2 ? 'danger' : 'warning'}>{count}</Badge>
+        );
+      },
+    },
+    {
+      key: 'detail',
+      header: 'Detail',
+      render: (item) => {
+        const mismatches = item.diff_json?.mismatches ?? [];
+        return (
+          <span className="line-clamp-2 text-xs text-muted">
+            {mismatches.join(' · ') || 'Failed without mismatch detail'}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'trace',
+      header: '',
+      align: 'right',
+      render: (item) =>
+        item.trace_id && item.conversation_id ? (
+          <Link
+            className="text-xs text-accent hover:underline"
+            to={`/inbox/${item.conversation_id}/intelligence`}
+          >
+            Trace
+          </Link>
+        ) : (
+          <span className="text-xs text-muted">—</span>
+        ),
+    },
+  ];
 
   return (
     <Page
@@ -444,7 +601,7 @@ export function ScenarioSimulatorPage() {
           disabled={!selectedShopId || runMutation.isPending}
           onClick={() => runMutation.mutate()}
         >
-          {runMutation.isPending ? 'Running scenario pack…' : 'Run scenario pack'}
+          {runMutation.isPending ? 'Running scenario pack…' : 'Run regression suite'}
         </Button>
 
         {!selectedShopId ? (
@@ -531,6 +688,121 @@ export function ScenarioSimulatorPage() {
               </div>
             </div>
           </div>
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {/* Previous vs current comparison */}
+      {selectedShopId ? (
+        <Card>
+          <CardHeader
+            title="Previous vs current"
+            description="Compares the two most recent completed replay runs. Scenario-pack metric deltas use the last cached run."
+          />
+          <CardBody>
+            {!currentRun || !previousRun ? (
+              <EmptyState
+                title="Not enough history yet"
+                description="Run the regression suite at least twice (with replay runs recorded) to see a comparison."
+              />
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <KpiCard
+                  label="Total scenarios"
+                  value={deltaLabel(comparison?.total)}
+                  tone={deltaTone(comparison?.total)}
+                  hint={`current ${currentRun.total_items} · previous ${previousRun.total_items}`}
+                />
+                <KpiCard
+                  label="Passed"
+                  value={deltaLabel(comparison?.passed)}
+                  tone={deltaTone(comparison?.passed)}
+                  hint={`current ${currentRun.passed_items} · previous ${previousRun.passed_items}`}
+                />
+                <KpiCard
+                  label="Failed"
+                  value={deltaLabel(comparison?.failed)}
+                  tone={deltaTone(comparison?.failed)}
+                  hint={`current ${currentRun.failed_items} · previous ${previousRun.failed_items}`}
+                />
+              </div>
+            )}
+
+            {metrics && previousMetrics ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <KpiCard
+                  label="Scenario accuracy (Δ)"
+                  value={deltaLabel(
+                    Math.round((metrics.scenario_accuracy - previousMetrics.scenario_accuracy) * 100),
+                  )}
+                  tone={deltaTone(
+                    Math.round((metrics.scenario_accuracy - previousMetrics.scenario_accuracy) * 100),
+                  )}
+                />
+                <KpiCard
+                  label="Unsafe actions (Δ)"
+                  value={deltaLabel(metrics.unsafe_action_count - previousMetrics.unsafe_action_count)}
+                  tone={deltaTone(previousMetrics.unsafe_action_count - metrics.unsafe_action_count)}
+                />
+                <KpiCard
+                  label="False orders (Δ)"
+                  value={deltaLabel(metrics.false_order_count - previousMetrics.false_order_count)}
+                  tone={deltaTone(previousMetrics.false_order_count - metrics.false_order_count)}
+                />
+              </div>
+            ) : null}
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {/* Recent runs history */}
+      {selectedShopId ? (
+        <Card>
+          <CardHeader
+            title="Recent runs"
+            description="Replay runs recorded for this shop. Select a run to inspect failed scenarios."
+            actions={<Badge>{runs.length}</Badge>}
+          />
+          <CardBody className="flex flex-col gap-3">
+            <DataTable
+              columns={runColumns}
+              rows={runs}
+              rowKey={(run) => run.id}
+              onRowClick={(run) => setSelectedRunId(run.id)}
+              isLoading={runsQuery.isLoading}
+              error={runsQuery.error instanceof Error ? runsQuery.error.message : null}
+              emptyTitle="No replay runs recorded"
+              emptyDescription="Run the regression suite or replay a scenario pack to populate history."
+              rowClassName={(run) => (run.id === selectedRunId ? 'bg-accent-soft/40' : undefined)}
+            />
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {/* Failed scenarios for the selected run */}
+      {selectedShopId && selectedRunId ? (
+        <Card>
+          <CardHeader
+            title="Failed scenarios"
+            description={`Item-level failures for the selected replay run (${selectedRunId}).`}
+            actions={<Badge tone="danger">{failedItems.length}</Badge>}
+          />
+          <CardBody className="flex flex-col gap-3">
+            {runDetailQuery.isLoading ? <LoadingState label="Loading run detail…" /> : null}
+            {runDetailQuery.error ? (
+              <p className="text-sm text-danger" role="alert">
+                {runDetailQuery.error instanceof Error ? runDetailQuery.error.message : 'Failed to load run detail'}
+              </p>
+            ) : null}
+            {runDetailQuery.data ? (
+              <DataTable
+                columns={failedColumns}
+                rows={failedItems}
+                rowKey={(item) => item.id}
+                emptyTitle="No failed scenarios in this run"
+                emptyDescription="Every scenario in this replay run passed."
+              />
+            ) : null}
           </CardBody>
         </Card>
       ) : null}
@@ -974,6 +1246,52 @@ function suggestionTypeLabel(type: string | undefined): string {
   return 'Rule';
 }
 
+function suggestionConfidence(suggestion: AutomationSuggestion): 'high' | 'medium' | 'low' | '—' {
+  const rule = suggestion.suggested_rule_json;
+  // Deterministic: a fully-specified suggestion (rule + test) ranks highest;
+  // a partial one (rule or alias only) ranks medium; otherwise unknown.
+  const hasRule = Boolean(rule.rule && Object.keys(rule.rule).length > 0);
+  const hasTest = Boolean(rule.test && Object.keys(rule.test).length > 0);
+  const hasAlias = Boolean(rule.alias && Object.keys(rule.alias).length > 0);
+  if (hasRule && hasTest) return 'high';
+  if (hasRule || hasAlias) return 'medium';
+  if (hasTest) return 'low';
+  return '—';
+}
+
+function confidenceTone(conf: 'high' | 'medium' | 'low' | '—'): 'success' | 'warning' | 'neutral' {
+  if (conf === 'high') return 'success';
+  if (conf === 'medium') return 'warning';
+  return 'neutral';
+}
+
+function statusTone(status: string): 'success' | 'danger' | 'warning' | 'neutral' {
+  if (status === 'approved') return 'success';
+  if (status === 'rejected') return 'danger';
+  if (status === 'pending') return 'warning';
+  return 'neutral';
+}
+
+function SuggestionPreview({ suggestion }: { suggestion: AutomationSuggestion }) {
+  const [open, setOpen] = useState(false);
+  const rule = suggestion.suggested_rule_json;
+  return (
+    <div className="flex flex-col gap-1">
+      <Button type="button" variant="ghost" size="sm" onClick={() => setOpen((v) => !v)}>
+        {open ? 'Hide impact' : 'Preview impact'}
+      </Button>
+      {open ? (
+        <div className="rounded-lg border border-border bg-surface-sunken p-3 text-xs">
+          <p className="text-fg">{rule.summary ?? 'No summary provided.'}</p>
+          <pre className="mt-2 max-h-64 overflow-auto rounded bg-surface p-2 text-[11px] text-muted">
+            {JSON.stringify({ rule: rule.rule, alias: rule.alias, test: rule.test }, null, 2)}
+          </pre>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function AutomationSuggestionsPage() {
   const { selectedShopId } = useShop();
   const { showToast } = useToast();
@@ -990,28 +1308,140 @@ export function AutomationSuggestionsPage() {
     enabled: Boolean(selectedShopId),
   });
 
+  const queryKeyFor = (filter: 'all' | 'pending' | 'approved' | 'rejected') =>
+    ['automation-suggestions', selectedShopId, filter] as const;
+
+  // Optimistically flip a suggestion's status in every relevant cache entry,
+  // rolling back on error so the UI never lies about server state.
+  const optimisticallySetStatus = (suggestionId: string, nextStatus: string) => {
+    const filters: Array<'all' | 'pending' | 'approved' | 'rejected'> = ['all', 'pending', 'approved', 'rejected'];
+    const snapshots = new Map<string, AutomationSuggestion[] | undefined>();
+    for (const filter of filters) {
+      const key = queryKeyFor(filter);
+      const current = queryClient.getQueryData<AutomationSuggestion[]>(key);
+      snapshots.set(filter, current);
+      if (!current) continue;
+      queryClient.setQueryData<AutomationSuggestion[]>(key, current.map((s) => (s.id === suggestionId ? { ...s, status: nextStatus } : s)));
+    }
+    return () => {
+      for (const filter of filters) {
+        const snapshot = snapshots.get(filter);
+        if (snapshot !== undefined) {
+          queryClient.setQueryData(queryKeyFor(filter), snapshot);
+        }
+      }
+    };
+  };
+
   const approveMutation = useMutation({
     mutationFn: (suggestionId: string) =>
       apiClient.approveAutomationSuggestion(selectedShopId!, suggestionId),
+    onMutate: (suggestionId) => optimisticallySetStatus(suggestionId, 'approved'),
     onSuccess: () => {
       showToast('Suggestion approved', 'success');
       void queryClient.invalidateQueries({ queryKey: ['automation-suggestions', selectedShopId] });
     },
-    onError: (error: Error) => showToast(error.message, 'error'),
+    onError: (error: Error, _suggestionId, rollback) => {
+      rollback?.();
+      showToast(error.message, 'error');
+    },
   });
 
   const rejectMutation = useMutation({
     mutationFn: (suggestionId: string) =>
       apiClient.rejectAutomationSuggestion(selectedShopId!, suggestionId),
+    onMutate: (suggestionId) => optimisticallySetStatus(suggestionId, 'rejected'),
     onSuccess: () => {
       showToast('Suggestion rejected', 'info');
       void queryClient.invalidateQueries({ queryKey: ['automation-suggestions', selectedShopId] });
     },
-    onError: (error: Error) => showToast(error.message, 'error'),
+    onError: (error: Error, _suggestionId, rollback) => {
+      rollback?.();
+      showToast(error.message, 'error');
+    },
   });
 
   const suggestions = suggestionsQuery.data ?? [];
   const actionsDisabled = approveMutation.isPending || rejectMutation.isPending;
+
+  const columns: Column<AutomationSuggestion>[] = [
+    {
+      key: 'intent',
+      header: 'Intent',
+      render: (suggestion) => (
+        <span className="font-medium text-fg">
+          {suggestionTypeLabel(suggestion.suggested_rule_json.type)}
+        </span>
+      ),
+    },
+    {
+      key: 'confidence',
+      header: 'Confidence',
+      render: (suggestion) => {
+        const conf = suggestionConfidence(suggestion);
+        return conf === '—' ? (
+          <span className="text-muted">—</span>
+        ) : (
+          <Badge tone={confidenceTone(conf)}>{conf}</Badge>
+        );
+      },
+    },
+    {
+      key: 'reason',
+      header: 'Reason',
+      render: (suggestion) => (
+        <span className="line-clamp-2 text-muted">
+          {suggestion.suggested_rule_json.summary ?? suggestion.suggested_rule_json.title ?? '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'created',
+      header: 'Created',
+      render: (suggestion) => (
+        <time className="text-xs text-muted" dateTime={suggestion.created_at}>
+          {new Date(suggestion.created_at).toLocaleString()}
+        </time>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (suggestion) => <Badge tone={statusTone(suggestion.status)}>{suggestion.status}</Badge>,
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      render: (suggestion) => (
+        <div className="flex flex-wrap justify-end gap-2">
+          {suggestion.status === 'pending' ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                disabled={actionsDisabled}
+                onClick={() => approveMutation.mutate(suggestion.id)}
+              >
+                Approve
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={actionsDisabled}
+                onClick={() => rejectMutation.mutate(suggestion.id)}
+              >
+                Reject
+              </Button>
+            </>
+          ) : (
+            <span className="text-xs text-muted">—</span>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   return (
     <Page
@@ -1046,6 +1476,7 @@ export function AutomationSuggestionsPage() {
         <CardHeader
           title="Suggestion inbox"
           description="Approve or reject generated improvements before they affect automation."
+          actions={<Badge>{suggestions.length}</Badge>}
         />
         <CardBody className="flex flex-col gap-4">
 
@@ -1057,88 +1488,51 @@ export function AutomationSuggestionsPage() {
           ))}
         </div>
 
-        {suggestionsQuery.isLoading ? <LoadingState label="Loading suggestions…" /> : null}
-        {suggestionsQuery.error ? (
-          <p className="text-sm text-danger" role="alert">
-            {suggestionsQuery.error instanceof Error
-              ? suggestionsQuery.error.message
-              : 'Failed to load suggestions'}
-          </p>
-        ) : null}
-
-        {suggestions.length === 0 && !suggestionsQuery.isLoading ? (
-          <EmptyState
-            title="No suggestions yet"
-            description={
-              <>
-                Suggestions appear here once operators capture corrections in{' '}
-                <Link className="font-medium text-accent hover:underline" to="/operator-corrections">
-                  Operator Corrections
-                </Link>
-                .
-              </>
-            }
-          />
+        {!selectedShopId ? (
+          <EmptyState title="Select a shop" description="Use the shop switcher in the top bar to load suggestions." />
         ) : null}
 
         {suggestions.length > 0 ? (
-          <div className="grid gap-4">
-            {suggestions.map((suggestion: AutomationSuggestion) => (
-              <article
-                key={suggestion.id}
-                className="grid gap-3 rounded-lg border border-border border-l-[3px] border-l-accent bg-surface p-4"
-              >
-                <div className="grid gap-2">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 className="font-semibold capitalize text-fg">
-                      {suggestion.suggested_rule_json.title ?? 'Automation suggestion'}
-                    </h3>
-                    <time className="text-xs text-muted" dateTime={suggestion.created_at}>
-                      {new Date(suggestion.created_at).toLocaleString()}
-                    </time>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge tone="neutral">
-                      {suggestionTypeLabel(suggestion.suggested_rule_json.type)}
-                    </Badge>
-                    <Badge
-                      tone={
-                        suggestion.status === 'approved'
-                          ? 'success'
-                          : suggestion.status === 'rejected'
-                            ? 'danger'
-                            : 'warning'
-                      }
-                    >
-                      {suggestion.status}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="rounded-lg border border-border bg-surface-sunken px-3 py-2">
-                  <p className="text-sm text-fg">
-                    {suggestion.suggested_rule_json.summary ?? 'No summary provided.'}
-                  </p>
-                </div>
-                {suggestion.status === 'pending' ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      disabled={actionsDisabled}
-                      onClick={() => approveMutation.mutate(suggestion.id)}
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={actionsDisabled}
-                      onClick={() => rejectMutation.mutate(suggestion.id)}
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                ) : null}
-              </article>
+          <DataTable
+            columns={columns}
+            rows={suggestions}
+            rowKey={(suggestion) => suggestion.id}
+            isLoading={suggestionsQuery.isLoading}
+            error={suggestionsQuery.error instanceof Error ? suggestionsQuery.error.message : null}
+            emptyTitle="No suggestions match this filter"
+          />
+        ) : (
+          <>
+            {suggestionsQuery.isLoading ? <LoadingState label="Loading suggestions…" /> : null}
+            {suggestionsQuery.error ? (
+              <p className="text-sm text-danger" role="alert">
+                {suggestionsQuery.error instanceof Error
+                  ? suggestionsQuery.error.message
+                  : 'Failed to load suggestions'}
+              </p>
+            ) : null}
+            {suggestions.length === 0 && !suggestionsQuery.isLoading ? (
+              <EmptyState
+                title="No suggestions yet"
+                description={
+                  <>
+                    Suggestions appear here once operators capture corrections in{' '}
+                    <Link className="font-medium text-accent hover:underline" to="/operator-corrections">
+                      Operator Corrections
+                    </Link>
+                    .
+                  </>
+                }
+              />
+            ) : null}
+          </>
+        )}
+
+        {suggestions.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            <h3 className="text-sm font-semibold text-fg">Preview impact</h3>
+            {suggestions.map((suggestion) => (
+              <SuggestionPreview key={suggestion.id} suggestion={suggestion} />
             ))}
           </div>
         ) : null}

@@ -10,6 +10,7 @@ import { HubPage } from '../components/shell/HubPage';
 import { Badge, Button, Card, CardBody, CardHeader, Field, Input } from '../components/ui';
 import { DataTable, FilterBar } from '../components/data';
 import type { Column } from '../components/data';
+import { CatalogCompletenessPanel } from '../components/catalog/CatalogCompletenessPanel';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { queryKeys } from '../lib/queryClient';
@@ -125,6 +126,7 @@ export function ProductsPage() {
       title="Products"
       description="Manage your shop catalog and monitor low-stock variants."
     >
+      <CatalogCompletenessPanel shopId={selectedShopId} />
       <Card>
         <CardHeader title="Add product" description="Create a new catalog item for this shop." />
         <CardBody>

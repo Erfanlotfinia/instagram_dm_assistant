@@ -4,28 +4,22 @@ import { EmptyState } from '../data';
 import { Badge, Button, Field, Input, type BadgeTone } from '../ui';
 import type { CustomerProfile, CustomerUpdate, PreviousOrderSummary } from '../../types/conversation';
 import { cn } from '../../lib/cn';
+import { safeSwatchBackground } from '../../lib/productColors';
 
 /*
  * Catalog product color swatches below use dynamic `style.background` from customer
- * profile data — a narrow, documented exception to the Modira-only UI palette rule.
+ * profile / catalog data — a narrow, documented exception to the Modira-only UI
+ * palette rule. Values are sanitized via `safeSwatchBackground`, which only accepts
+ * hex colors (#RGB / #RRGGBB / #RRGGBBAA) and a fixed set of safe CSS color names.
+ * Unsafe input (url, var, rgb, hsl, semicolons, parentheses, …) is rejected
+ * and the swatch falls back to the theme border token. The color label text always
+ * remains visible regardless of swatch validity.
  */
 
 interface CustomerProfilePanelProps {
   profile: CustomerProfile | null | undefined;
   onSave: (values: CustomerUpdate) => void;
   isSaving?: boolean;
-}
-
-const KNOWN_CSS_COLORS = new Set([
-  'black', 'white', 'red', 'green', 'blue', 'navy', 'gray', 'grey', 'silver',
-  'maroon', 'olive', 'lime', 'aqua', 'teal', 'fuchsia', 'purple', 'pink',
-  'orange', 'yellow', 'brown', 'beige', 'gold', 'ivory', 'khaki', 'coral',
-  'crimson', 'cyan', 'magenta', 'indigo', 'violet', 'tan', 'turquoise',
-]);
-
-function swatchColor(name: string): string | undefined {
-  const normalized = name.trim().toLowerCase();
-  return KNOWN_CSS_COLORS.has(normalized) ? normalized : undefined;
 }
 
 function customerInitial(profile: CustomerProfile): string {
@@ -121,7 +115,7 @@ export function CustomerProfilePanel({ profile, onSave, isSaving }: CustomerProf
                       <span
                         key={`${color}-${index}`}
                         className="h-4 w-4 rounded-full border border-border"
-                        style={{ background: swatchColor(color) ?? 'var(--c-border)' }}
+                        style={{ background: safeSwatchBackground(color) ?? 'var(--c-border)' }}
                       />
                     ))}
                   </span>

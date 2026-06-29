@@ -8,6 +8,7 @@ import { Badge, Button, Card, CardBody, CardHeader, Field } from '../components/
 import type { BadgeTone } from '../components/ui';
 import { DataTable, EmptyState, KpiCard, LoadingState } from '../components/data';
 import type { Column } from '../components/data';
+import { PilotChecklistPanel } from '../components/rollout/PilotChecklistPanel';
 import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { cn } from '../lib/cn';
@@ -304,6 +305,8 @@ export function PilotReadinessPage() {
 
       {selectedShopId ? (
         <>
+          <PilotChecklistPanel shopId={selectedShopId} />
+
           <Card>
             <CardHeader
               title="Pilot safeguards"
