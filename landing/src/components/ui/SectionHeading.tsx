@@ -21,15 +21,15 @@ export function SectionHeading({
   return (
     <div className={`flex max-w-3xl flex-col ${alignment} ${className}`}>
       {eyebrow ? (
-        <span className="ltr mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-500/5 px-3 py-1 text-xs font-medium tracking-wide text-cyan-400">
+        <span className="ltr mb-4 inline-flex items-center gap-2 rounded-full border border-modira-cyan/25 bg-modira-cyan/5 px-3 py-1 text-xs font-medium tracking-wide text-modira-cyan">
           {eyebrow}
         </span>
       ) : null}
-      <h2 className="text-balance text-2xl font-extrabold leading-tight text-mist-50 sm:text-3xl md:text-4xl">
+      <h2 className="text-balance text-2xl font-extrabold leading-tight text-fg sm:text-3xl md:text-4xl">
         {title}
       </h2>
       {subtitle ? (
-        <p className="mt-4 text-base leading-relaxed text-mist-400 sm:text-lg">{subtitle}</p>
+        <p className="mt-4 text-base leading-relaxed text-muted sm:text-lg">{subtitle}</p>
       ) : null}
     </div>
   );

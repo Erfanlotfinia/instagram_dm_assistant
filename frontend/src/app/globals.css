@@ -1,18 +1,32 @@
 @import 'tailwindcss';
+@import '../../../brand/04_brand_tokens/modira-brand-tokens.css';
 
 /*
  * Modira Command Center design tokens.
  *
- * Light and dark palettes are exposed as CSS variables and mapped into
- * Tailwind's @theme so utilities like `bg-surface` or `text-muted` resolve to
- * the active theme. Theme switching is driven by `data-theme` on <html>.
+ * Brand primitives (--modira-*) are imported from the canonical
+ * brand/04_brand_tokens/modira-brand-tokens.css file. Light and dark semantic
+ * tokens are exposed as CSS variables and mapped into Tailwind's @theme so
+ * utilities like `bg-surface` or `text-muted` resolve to the active theme.
+ * Theme switching is driven by `data-theme` on <html>.
  */
 
 @theme {
+  --color-modira-teal: var(--modira-teal);
+  --color-modira-teal-dark: var(--modira-teal-dark);
+  --color-modira-navy: var(--modira-navy);
+  --color-modira-navy-deep: var(--modira-navy-deep);
+  --color-modira-cyan: var(--modira-cyan);
+  --color-modira-cream: var(--modira-cream);
+  --color-modira-graphite: var(--modira-graphite);
+  --color-modira-white: var(--modira-white);
+  --color-modira-black: var(--modira-black);
+
   --color-canvas: var(--c-canvas);
   --color-surface: var(--c-surface);
   --color-surface-raised: var(--c-surface-raised);
   --color-surface-sunken: var(--c-surface-sunken);
+  --color-surface-elevated: var(--c-surface-raised);
   --color-overlay: var(--c-overlay);
   --color-border: var(--c-border);
   --color-border-strong: var(--c-border-strong);
@@ -22,6 +36,7 @@
   --color-accent: var(--c-accent);
   --color-accent-fg: var(--c-accent-fg);
   --color-accent-soft: var(--c-accent-soft);
+  --color-accent-hover: var(--c-accent-hover);
   --color-success: var(--c-success);
   --color-success-soft: var(--c-success-soft);
   --color-warning: var(--c-warning);
@@ -30,63 +45,108 @@
   --color-danger-soft: var(--c-danger-soft);
   --color-info: var(--c-info);
   --color-info-soft: var(--c-info-soft);
+  --color-shadow: var(--c-shadow);
+  --color-focus: var(--modira-cyan);
 
   --radius-card: 0.75rem;
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 }
 
+/*
+ * LIGHT MODE
+ * Warm cream canvas, crisp white surfaces, navy ink. Elevation is expressed
+ * with white surfaces + soft navy shadows rather than competing fills.
+ * Text hierarchy steps down in lightness: navy -> graphite blend -> muted slate.
+ */
 :root,
 [data-theme='light'] {
-  --c-canvas: #f6f7fb;
-  --c-surface: #ffffff;
-  --c-surface-raised: #ffffff;
-  --c-surface-sunken: #f1f3f9;
-  --c-overlay: rgba(15, 23, 42, 0.45);
-  --c-border: #e3e8f0;
-  --c-border-strong: #cdd5e3;
-  --c-fg: #172033;
-  --c-muted: #5b6679;
-  --c-subtle: #8a93a6;
-  --c-accent: #4f6bed;
-  --c-accent-fg: #ffffff;
-  --c-accent-soft: #eaeefe;
-  --c-success: #0f9d6b;
-  --c-success-soft: #e3f7ee;
-  --c-warning: #c2850c;
-  --c-warning-soft: #fcf2dc;
-  --c-danger: #d6453b;
-  --c-danger-soft: #fdecea;
-  --c-info: #2b7fd4;
-  --c-info-soft: #e7f1fb;
+  --c-canvas: var(--modira-cream);
+  --c-surface: var(--modira-white);
+  --c-surface-raised: var(--modira-white);
+  --c-surface-sunken: color-mix(in srgb, var(--modira-cream) 90%, var(--modira-navy) 10%);
+  --c-overlay: color-mix(in srgb, var(--modira-navy-deep) 50%, transparent);
+  --c-border: color-mix(in srgb, var(--modira-navy) 12%, transparent);
+  --c-border-strong: color-mix(in srgb, var(--modira-navy) 22%, transparent);
+  --c-fg: var(--modira-navy);
+  --c-muted: color-mix(in srgb, var(--modira-graphite) 72%, var(--modira-white) 28%);
+  --c-subtle: color-mix(in srgb, var(--modira-graphite) 45%, var(--modira-white) 55%);
+  --c-accent: var(--modira-teal);
+  --c-accent-fg: var(--modira-white);
+  --c-accent-hover: var(--modira-teal-dark);
+  --c-accent-soft: color-mix(in srgb, var(--modira-teal) 10%, var(--modira-white) 90%);
+  --c-success: var(--modira-teal);
+  --c-success-soft: color-mix(in srgb, var(--modira-teal) 12%, var(--modira-white) 88%);
+  --c-warning: color-mix(in srgb, var(--modira-cyan) 70%, var(--modira-navy) 30%);
+  --c-warning-soft: color-mix(in srgb, var(--modira-cyan) 20%, var(--modira-white) 80%);
+  --c-danger: color-mix(in srgb, var(--modira-navy) 78%, var(--modira-graphite) 22%);
+  --c-danger-soft: color-mix(in srgb, var(--modira-navy) 9%, var(--modira-white) 91%);
+  --c-info: color-mix(in srgb, var(--modira-cyan) 72%, var(--modira-navy) 28%);
+  --c-info-soft: color-mix(in srgb, var(--modira-cyan) 13%, var(--modira-white) 87%);
+  --c-shadow: color-mix(in srgb, var(--modira-navy) 12%, transparent);
+
+  /* Documentation aliases (do not collide with @theme color tokens) */
+  --color-background: var(--c-canvas);
+  --color-text-primary: var(--c-fg);
+  --color-text-secondary: var(--c-muted);
+  --color-primary: var(--c-accent);
+  --color-primary-hover: var(--c-accent-hover);
 
   color-scheme: light;
 }
 
+/*
+ * DARK MODE — premium cool-navy dashboard.
+ * Navy-deep base with a clear elevation ladder (canvas -> navy surface ->
+ * lightened navy popovers). Text uses cool white-based tiers (crisp, no warm
+ * cast) stepped down with navy. Teal stays the action color; cyan is the
+ * bright accent/focus/hover that ties back to the landing site.
+ */
 [data-theme='dark'] {
-  --c-canvas: #0b0f1a;
-  --c-surface: #131a29;
-  --c-surface-raised: #1a2333;
-  --c-surface-sunken: #0e1422;
-  --c-overlay: rgba(0, 0, 0, 0.6);
-  --c-border: #243049;
-  --c-border-strong: #33415c;
-  --c-fg: #e6ebf4;
-  --c-muted: #9aa6bd;
-  --c-subtle: #6b7790;
-  --c-accent: #7a93ff;
-  --c-accent-fg: #0b0f1a;
-  --c-accent-soft: #1d2742;
-  --c-success: #3ad29f;
-  --c-success-soft: #11271f;
-  --c-warning: #e6b35a;
-  --c-warning-soft: #2b2110;
-  --c-danger: #ff6b61;
-  --c-danger-soft: #2c1513;
-  --c-info: #5aa9f0;
-  --c-info-soft: #11243a;
+  --c-canvas: var(--modira-navy-deep);
+  --c-surface: var(--modira-navy);
+  --c-surface-raised: color-mix(in srgb, var(--modira-navy) 76%, var(--modira-white) 24%);
+  --c-surface-sunken: color-mix(in srgb, var(--modira-navy-deep) 72%, var(--modira-black) 28%);
+  --c-overlay: color-mix(in srgb, var(--modira-black) 68%, transparent);
+  --c-border: color-mix(in srgb, var(--modira-white) 12%, transparent);
+  --c-border-strong: color-mix(in srgb, var(--modira-white) 24%, transparent);
+  --c-fg: color-mix(in srgb, var(--modira-white) 93%, var(--modira-navy) 7%);
+  --c-muted: color-mix(in srgb, var(--modira-white) 62%, var(--modira-navy) 38%);
+  --c-subtle: color-mix(in srgb, var(--modira-white) 40%, var(--modira-navy) 60%);
+  --c-accent: var(--modira-teal);
+  --c-accent-fg: var(--modira-white);
+  --c-accent-hover: var(--modira-cyan);
+  --c-accent-soft: color-mix(in srgb, var(--modira-teal) 28%, var(--modira-navy) 72%);
+  --c-success: color-mix(in srgb, var(--modira-teal) 62%, var(--modira-white) 38%);
+  --c-success-soft: color-mix(in srgb, var(--modira-teal) 26%, var(--modira-navy) 74%);
+  --c-warning: var(--modira-cyan);
+  --c-warning-soft: color-mix(in srgb, var(--modira-cyan) 24%, var(--modira-navy) 76%);
+  --c-danger: color-mix(in srgb, var(--modira-white) 82%, var(--modira-cyan) 18%);
+  --c-danger-soft: color-mix(in srgb, var(--modira-graphite) 62%, var(--modira-navy) 38%);
+  --c-info: var(--modira-cyan);
+  --c-info-soft: color-mix(in srgb, var(--modira-cyan) 20%, var(--modira-navy) 80%);
+  --c-shadow: color-mix(in srgb, var(--modira-black) 50%, transparent);
+
+  --color-background: var(--c-canvas);
+  --color-text-primary: var(--c-fg);
+  --color-text-secondary: var(--c-muted);
+  --color-primary: var(--c-accent);
+  --color-primary-hover: var(--c-accent-hover);
 
   color-scheme: dark;
+}
+
+/* Approved brand-only gradients */
+.bg-gradient-modira-deep {
+  background-image: linear-gradient(180deg, var(--modira-navy-deep) 0%, var(--modira-navy) 100%);
+}
+
+.bg-gradient-modira-primary {
+  background-image: linear-gradient(180deg, var(--modira-teal-dark) 0%, var(--modira-teal) 100%);
+}
+
+.bg-gradient-modira-accent {
+  background-image: linear-gradient(105deg, var(--modira-teal) 0%, var(--modira-cyan) 100%);
 }
 
 html,
@@ -129,6 +189,6 @@ body,
 
 /* Focus ring for keyboard users. */
 :focus-visible {
-  outline: 2px solid var(--c-accent);
+  outline: 2px solid var(--modira-cyan);
   outline-offset: 2px;
 }

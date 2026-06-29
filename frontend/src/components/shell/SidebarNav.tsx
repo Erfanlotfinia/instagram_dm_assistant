@@ -55,7 +55,7 @@ export function SidebarNav({ collapsed, onNavigate }: SidebarNavProps) {
             {count > 0 ? (
               <span
                 className={cn(
-                  'inline-flex min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-semibold text-white',
+                  'inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-semibold text-accent-fg',
                   collapsed && 'absolute right-1 top-1 min-w-4 px-1 text-[10px]',
                 )}
               >

@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { brand, cta, nav } from '../../content/site';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
+import { Logo } from '../brand/Logo';
+import { ThemeToggle } from '../ui/ThemeToggle';
 import { Container } from './Container';
 
 export function Navbar() {
@@ -37,10 +39,10 @@ export function Navbar() {
           }`}
         >
           <a href="/" className="flex items-center gap-2" aria-label={`${brand.name} — خانه`}>
-            <span className="grid size-9 place-items-center rounded-xl accent-gradient text-ink-950">
-              <Icon name="Sparkles" size={18} />
+            <span className="grid size-9 place-items-center rounded-xl accent-gradient">
+              <Logo variant="mark" reversed alt="" className="h-5 w-auto" />
             </span>
-            <span className="ltr text-lg font-extrabold tracking-tight text-mist-50">
+            <span className="ltr text-lg font-extrabold tracking-tight text-fg">
               {brand.name}
             </span>
           </a>
@@ -50,7 +52,7 @@ export function Navbar() {
               <li key={link.href}>
                 <a
                   href={link.href}
-                  className="rounded-xl px-3 py-2 text-sm text-mist-300 transition-colors hover:text-mist-50"
+                  className="rounded-xl px-3 py-2 text-sm text-fg/80 transition-colors hover:text-fg"
                 >
                   {link.label}
                 </a>
@@ -59,6 +61,7 @@ export function Navbar() {
           </ul>
 
           <div className="hidden items-center gap-2 lg:flex">
+            <ThemeToggle />
             <Button href={cta.panel.href} variant="secondary" className="px-5 py-2.5">
               <Icon name="LogIn" size={16} />
               {cta.panel.label}
@@ -68,15 +71,18 @@ export function Navbar() {
             </Button>
           </div>
 
-          <button
-            type="button"
-            className="grid size-10 place-items-center rounded-xl text-mist-100 lg:hidden"
-            aria-label={open ? 'بستن منو' : 'باز کردن منو'}
-            aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
-          >
-            <Icon name={open ? 'X' : 'Menu'} size={22} />
-          </button>
+          <div className="flex items-center gap-1 lg:hidden">
+            <ThemeToggle />
+            <button
+              type="button"
+              className="grid size-10 place-items-center rounded-xl text-fg"
+              aria-label={open ? 'بستن منو' : 'باز کردن منو'}
+              aria-expanded={open}
+              onClick={() => setOpen((v) => !v)}
+            >
+              <Icon name={open ? 'X' : 'Menu'} size={22} />
+            </button>
+          </div>
         </nav>
       </Container>
 
@@ -91,7 +97,7 @@ export function Navbar() {
                     <a
                       href={link.href}
                       onClick={() => setOpen(false)}
-                      className="block rounded-xl px-3 py-3 text-mist-200 transition-colors hover:bg-white/5 hover:text-mist-50"
+                      className="block rounded-xl px-3 py-3 text-fg transition-colors hover:bg-surface-sunken hover:text-fg"
                     >
                       {link.label}
                     </a>

@@ -5,6 +5,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { z } from 'zod';
 
 import { Icons } from '../components/icons';
+import { Logo } from '../components/brand/Logo';
 import { ThemeToggle } from '../components/shell/ThemeToggle';
 import { Button, Card, CardBody, Field, Input, StatusBanner } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
@@ -79,16 +80,16 @@ export function LoginPage() {
 
       <div className="relative z-10 flex flex-1 items-center justify-center px-4 pb-12 sm:px-6">
         <Card
-          className="w-full max-w-[420px] overflow-hidden shadow-[0_20px_45px_rgba(15,23,42,0.08)] dark:shadow-[0_20px_45px_rgba(0,0,0,0.35)]"
+          className="w-full max-w-[420px] overflow-hidden shadow-[0_20px_45px_var(--c-shadow)]"
           aria-labelledby="login-heading"
         >
           <div className="border-b border-border bg-gradient-to-br from-accent-soft/80 to-surface px-5 py-6 sm:px-6">
             <div className="flex items-center gap-3">
               <div
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-fg shadow-sm"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent shadow-sm"
                 aria-hidden="true"
               >
-                <Icons.overview size={22} />
+                <Logo variant="mark" alt="" className="h-6 w-auto" />
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-wide text-accent">Modira Command Center</p>

@@ -105,9 +105,32 @@ If you change `FRONTEND_HOST_PORT`, set `VITE_FRONTEND_URL` to match (e.g. `http
 
 ### Colors & visual style
 
-**File:** [`src/index.css`](src/index.css)
+**Files:** [`src/index.css`](src/index.css) and the canonical [`../brand/04_brand_tokens/modira-brand-tokens.css`](../brand/04_brand_tokens/modira-brand-tokens.css).
 
-Edit the `@theme` block for palette tokens (`--color-ink-900`, `--color-cyan-500`, etc.) and component utilities (`.glass`, `.text-gradient`, `.accent-gradient`).
+Brand primitives (`--modira-*`) are imported from the central tokens file — never duplicated. `src/index.css` maps them into Tailwind's `@theme` (`--color-modira-*`) and adds a theme-aware semantic layer (`--c-*` → `--color-canvas`, `--color-fg`, `--color-surface`, `--color-border`, `--color-accent`, ...). Prefer semantic utilities (`text-fg`, `bg-canvas`, `border-border`, `text-muted`) in components so they adapt to the active theme; reserve `modira-*` brand classes for deliberate accents (teal/cyan, gradients, glows, text on `accent-gradient`).
+
+Approved brand colors only:
+
+| Token | Hex |
+|-------|-----|
+| modira-teal | `#147A81` |
+| modira-teal-dark | `#0F5F66` |
+| modira-navy | `#102A43` |
+| modira-navy-deep | `#07182B` |
+| modira-cyan | `#38BDF8` |
+| modira-cream | `#F8F5EA` |
+| modira-graphite | `#1F2937` |
+| modira-white | `#FFFFFF` |
+| modira-black | `#000000` |
+
+### Theme (light / dark / system)
+
+The landing site supports light and dark themes driven by `data-theme` on `<html>`.
+
+- **Store:** [`src/stores/themeStore.ts`](src/stores/themeStore.ts) — `light` / `dark` / `system`, persisted to `localStorage` under the shared `modira:theme` key (same key as the admin frontend, so preferences sync across apps). Defaults to `dark` on first visit.
+- **Toggle:** [`src/components/ui/ThemeToggle.tsx`](src/components/ui/ThemeToggle.tsx) — wired into the `Navbar` (desktop action row + mobile drawer). Cycles light → dark → system.
+- **FOUC:** [`index.html`](index.html) sets `data-theme` from `localStorage` before first paint.
+- **Tokens:** dark values (`:root, [data-theme='dark']`) and light values (`[data-theme='light']`) are defined in `src/index.css`. Brand accents (`modira-teal`, `modira-cyan`, `.accent-gradient`, `.text-gradient`) are theme-independent.
 
 ### SEO
 
@@ -128,7 +151,7 @@ Edit the `@theme` block for palette tokens (`--color-ink-900`, `--color-cyan-500
 - **CTAs** point to `#demo` / `#features` anchors; swap `href` in `site.ts` for real forms or contact URLs.
 - **No external paid assets** — Vazirmatn (self-hosted) + lucide-react icons + CSS mockups.
 - **Single-page** — no React Router; smooth anchor navigation.
-- **Logo** — text/SVG wordmark; no image asset provided.
+- **Logo** — vector brand mark from the canonical pack at [`../brand/`](../brand/README.md); production copies live in [`public/brand/`](public/brand/) and are rendered via [`src/components/brand/Logo.tsx`](src/components/brand/Logo.tsx). Favicon, apple-touch-icon, and PWA manifest are wired in [`index.html`](index.html) and [`public/site.webmanifest`](public/site.webmanifest).
 
 ## Stack
 

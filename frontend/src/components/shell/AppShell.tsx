@@ -6,6 +6,7 @@ import { CommandPalette } from './CommandPalette';
 import { SidebarNav } from './SidebarNav';
 import { TopBar } from './TopBar';
 import { Icons } from '../icons';
+import { Logo } from '../brand/Logo';
 import { useCommandPaletteStore } from '../../stores/commandPaletteStore';
 import { useRealtime } from '../../hooks/useRealtime';
 import { cn } from '../../lib/cn';
@@ -73,8 +74,8 @@ export function AppShell({ children }: PropsWithChildren) {
         aria-label="Sidebar"
       >
         <div className={cn('flex h-14 items-center gap-2 border-b border-border px-4', collapsed && 'justify-center px-0')}>
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-sm font-bold text-accent-fg">
-            M
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent">
+            <Logo variant="mark" alt="" className="h-5 w-auto" />
           </span>
           {!collapsed ? (
             <div className="leading-tight">

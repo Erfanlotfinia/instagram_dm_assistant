@@ -10,21 +10,21 @@ type ProductCardProps = {
 
 export function ProductCard({ name, price, meta, inStock = true, compact = false }: ProductCardProps) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-mist-200/10 bg-white/5 p-3">
-      <div className="grid size-12 shrink-0 place-items-center rounded-xl accent-gradient text-ink-950">
+    <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface-sunken p-3">
+      <div className="grid size-12 shrink-0 place-items-center rounded-xl accent-gradient text-modira-navy-deep">
         <Icon name="Package" size={20} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-mist-50">{name}</p>
-        {meta ? <p className="truncate text-xs text-mist-400">{meta}</p> : null}
+        <p className="truncate text-sm font-semibold text-fg">{name}</p>
+        {meta ? <p className="truncate text-xs text-muted">{meta}</p> : null}
         {!compact ? (
           <div className="mt-1.5 flex items-center gap-2">
-            <span className="ltr text-sm font-bold text-cyan-400">{price}</span>
+            <span className="ltr text-sm font-bold text-modira-cyan">{price}</span>
             <span
               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
                 inStock
-                  ? 'bg-emerald-500/15 text-emerald-300'
-                  : 'bg-rose-500/15 text-rose-300'
+                  ? 'bg-modira-teal/15 text-modira-teal'
+                  : 'border border-border-strong bg-surface-sunken text-fg'
               }`}
             >
               <Icon name={inStock ? 'Check' : 'X'} size={10} />
@@ -32,7 +32,7 @@ export function ProductCard({ name, price, meta, inStock = true, compact = false
             </span>
           </div>
         ) : (
-          <span className="ltr mt-1 block text-sm font-bold text-cyan-400">{price}</span>
+          <span className="ltr mt-1 block text-sm font-bold text-modira-cyan">{price}</span>
         )}
       </div>
     </div>

@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 960" role="img" aria-label="Modira rebuilt vector brand board">
+<rect width="1400" height="960" fill="#F8F5EA"/>
+<text x="40" y="60" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="800" fill="#111827">Modira Rebuilt Vector Identity</text>
+<text x="40" y="96" font-family="Inter, Arial, sans-serif" font-size="16" fill="#6B7280">Editable SVG brand system rebuilt from the provided raster reference.</text>
+<line x1="40" y1="125" x2="1360" y2="125" stroke="#D8D3C3"/>
+<g transform="translate(140 180) scale(0.9)">
+
+<defs>
+  <linearGradient id="m_grad_left" x1="0" y1="0" x2="256" y2="192" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#147A81"/>
+    <stop offset="0.58" stop-color="#0F5F66"/>
+    <stop offset="1" stop-color="#102A43"/>
+  </linearGradient>
+  <linearGradient id="m_grad_right" x1="256" y1="0" x2="0" y2="192" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#147A81"/>
+    <stop offset="0.62" stop-color="#0F5F66"/>
+    <stop offset="1" stop-color="#102A43"/>
+  </linearGradient>
+  <mask id="m_cuts" maskUnits="userSpaceOnUse">
+    <rect width="256" height="192" fill="white"/>
+    <g fill="none" stroke="black" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="14">
+      <path d="M90 43 L111 61"/>
+      <path d="M166 43 L145 61"/>
+      <path d="M90 149 L111 131"/>
+      <path d="M166 149 L145 131"/>
+    </g>
+  </mask>
+</defs>
+
+<g mask="url(#m_cuts)">
+  <g fill="none" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="24">
+    <path d="M104 32 L40 88 L40 104 L104 160" stroke="url(#m_grad_left)"/>
+    <path d="M152 32 L216 88 L216 104 L152 160" stroke="url(#m_grad_right)"/>
+    <path d="M72 68 L128 120 L184 68" stroke="url(#m_grad_left)"/>
+    <path d="M72 124 L128 72 L184 124" stroke="url(#m_grad_right)"/>
+  </g>
+</g>
+</g>
+<text x="420" y="310" font-family="Inter, Arial, sans-serif" font-size="116" font-weight="800" letter-spacing="-6" fill="#102A43">Modira</text>
+<text x="60" y="470" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">Core Lockups</text>
+<line x1="60" y1="488" x2="1340" y2="488" stroke="#D8D3C3"/>
+<g transform="translate(80 535) scale(0.36)">
+<g mask="url(#m_cuts)">
+  <g fill="none" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="24">
+    <path d="M104 32 L40 88 L40 104 L104 160" stroke="url(#m_grad_left)"/>
+    <path d="M152 32 L216 88 L216 104 L152 160" stroke="url(#m_grad_right)"/>
+    <path d="M72 68 L128 120 L184 68" stroke="url(#m_grad_left)"/>
+    <path d="M72 124 L128 72 L184 124" stroke="url(#m_grad_right)"/>
+  </g>
+</g></g>
+<text x="180" y="600" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="800" letter-spacing="-2" fill="#102A43">Modira</text>
+<g transform="translate(490 518) scale(0.32)">
+<g mask="url(#m_cuts)">
+  <g fill="none" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="24">
+    <path d="M104 32 L40 88 L40 104 L104 160" stroke="url(#m_grad_left)"/>
+    <path d="M152 32 L216 88 L216 104 L152 160" stroke="url(#m_grad_right)"/>
+    <path d="M72 68 L128 120 L184 68" stroke="url(#m_grad_left)"/>
+    <path d="M72 124 L128 72 L184 124" stroke="url(#m_grad_right)"/>
+  </g>
+</g></g>
+<text x="536" y="690" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="800" letter-spacing="-2" fill="#102A43">Modira</text>
+<rect x="720" y="548" width="280" height="86" fill="black"/>
+<g transform="translate(740 566) scale(0.22)">
+<defs>
+  <mask id="w_cuts" maskUnits="userSpaceOnUse">
+    <rect width="256" height="192" fill="white"/>
+    <g fill="none" stroke="black" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="14">
+      <path d="M90 43 L111 61"/>
+      <path d="M166 43 L145 61"/>
+      <path d="M90 149 L111 131"/>
+      <path d="M166 149 L145 131"/>
+    </g>
+  </mask>
+</defs>
+<g mask="url(#w_cuts)">
+  <g fill="none" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="24">
+    <path d="M104 32 L40 88 L40 104 L104 160" stroke="#FFFFFF"/>
+    <path d="M152 32 L216 88 L216 104 L152 160" stroke="#FFFFFF"/>
+    <path d="M72 68 L128 120 L184 68" stroke="#FFFFFF"/>
+    <path d="M72 124 L128 72 L184 124" stroke="#FFFFFF"/>
+  </g>
+</g></g>
+<text x="825" y="605" font-family="Inter, Arial, sans-serif" font-size="40" font-weight="800" fill="white" letter-spacing="-1.5">Modira</text>
+<rect x="1080" y="530" width="130" height="130" rx="28" fill="#147A81"/>
+<g transform="translate(1098 563) scale(0.37)">
+<defs>
+  <mask id="i_cuts" maskUnits="userSpaceOnUse">
+    <rect width="256" height="192" fill="white"/>
+    <g fill="none" stroke="black" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="14">
+      <path d="M90 43 L111 61"/>
+      <path d="M166 43 L145 61"/>
+      <path d="M90 149 L111 131"/>
+      <path d="M166 149 L145 131"/>
+    </g>
+  </mask>
+</defs>
+<g mask="url(#i_cuts)">
+  <g fill="none" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="24">
+    <path d="M104 32 L40 88 L40 104 L104 160" stroke="#FFFFFF"/>
+    <path d="M152 32 L216 88 L216 104 L152 160" stroke="#FFFFFF"/>
+    <path d="M72 68 L128 120 L184 68" stroke="#FFFFFF"/>
+    <path d="M72 124 L128 72 L184 124" stroke="#FFFFFF"/>
+  </g>
+</g></g>
+<text x="80" y="790" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="800" fill="#111827">Palette</text>
+<rect x="80" y="820" width="120" height="70" rx="8" fill="#147A81"/><text x="80" y="914" font-family="Inter" font-size="16" fill="#111827">#147A81</text>
+<rect x="230" y="820" width="120" height="70" rx="8" fill="#102A43"/><text x="230" y="914" font-family="Inter" font-size="16" fill="#111827">#102A43</text>
+<rect x="380" y="820" width="120" height="70" rx="8" fill="#38BDF8"/><text x="380" y="914" font-family="Inter" font-size="16" fill="#111827">#38BDF8</text>
+<rect x="530" y="820" width="120" height="70" rx="8" fill="#F8F5EA" stroke="#D8D3C3"/><text x="530" y="914" font-family="Inter" font-size="16" fill="#111827">#F8F5EA</text>
+</svg>

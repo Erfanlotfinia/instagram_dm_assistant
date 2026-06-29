@@ -99,7 +99,7 @@ export function TopBar({ onToggleSidebar }: TopBarProps) {
       >
         <Icons.bell size={18} />
         {alerts > 0 ? (
-          <span className="absolute -right-1 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white">
+          <span className="absolute -right-1 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-fg">
             {alerts > 99 ? '99+' : alerts}
           </span>
         ) : null}
@@ -136,7 +136,7 @@ export function TopBar({ onToggleSidebar }: TopBarProps) {
           <div
             role="menu"
             aria-label="Account actions"
-            className="absolute right-0 top-[calc(100%+0.375rem)] z-40 min-w-[180px] overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-[0_12px_32px_rgba(15,23,42,0.12)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.45)]"
+            className="absolute right-0 top-[calc(100%+0.375rem)] z-40 min-w-[180px] overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-[0_12px_32px_var(--c-shadow)]"
           >
             <button
               type="button"

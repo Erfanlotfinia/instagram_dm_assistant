@@ -21,14 +21,14 @@ export function Philosophy() {
               {pillar.order}
             </span>
             <div className="relative">
-              <span className="grid size-12 place-items-center rounded-2xl accent-gradient text-ink-950">
+              <span className="grid size-12 place-items-center rounded-2xl accent-gradient text-modira-navy-deep">
                 <Icon name={pillar.icon} size={22} />
               </span>
               <div className="mt-4">
                 <Badge tone={i === 2 ? 'emerald' : 'cyan'}>{pillar.tag}</Badge>
               </div>
-              <h3 className="mt-3 text-lg font-bold text-mist-50">{pillar.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-mist-400">{pillar.text}</p>
+              <h3 className="mt-3 text-lg font-bold text-fg">{pillar.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">{pillar.text}</p>
             </div>
           </GlassCard>
         ))}

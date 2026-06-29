@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 220" role="img" aria-label="Modira logo horizontal lockup">
+
+<defs>
+  <mask id="m_cuts" maskUnits="userSpaceOnUse">
+    <rect width="256" height="192" fill="white"/>
+    <g fill="none" stroke="black" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="14">
+      <path d="M90 43 L111 61"/>
+      <path d="M166 43 L145 61"/>
+      <path d="M90 149 L111 131"/>
+      <path d="M166 149 L145 131"/>
+    </g>
+  </mask>
+</defs>
+<rect width="780" height="220" rx="0" fill="#07182B"/>
+<g transform="translate(24 24) scale(0.9)">
+
+<g mask="url(#m_cuts)">
+  <g fill="none" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="24">
+    <path d="M104 32 L40 88 L40 104 L104 160" stroke="#FFFFFF"/>
+    <path d="M152 32 L216 88 L216 104 L152 160" stroke="#FFFFFF"/>
+    <path d="M72 68 L128 120 L184 68" stroke="#FFFFFF"/>
+    <path d="M72 124 L128 72 L184 124" stroke="#FFFFFF"/>
+  </g>
+</g>
+</g>
+<text x="280" y="146" font-family="Inter, Arial, sans-serif" font-size="116" font-weight="800" letter-spacing="-6" fill="#FFFFFF">Modira</text>
+</svg>

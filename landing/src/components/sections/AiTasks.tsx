@@ -11,15 +11,15 @@ export function AiTasks() {
       <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {aiTasks.items.map((item) => (
           <GlassCard key={item.label} hover className="flex items-center gap-3 p-4">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-cyan-400/20 bg-cyan-500/10 text-cyan-300">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-modira-cyan/20 bg-modira-cyan/10 text-modira-cyan">
               <Icon name={item.icon} size={18} />
             </span>
-            <span className="text-sm font-medium text-mist-100">{item.label}</span>
+            <span className="text-sm font-medium text-fg">{item.label}</span>
           </GlassCard>
         ))}
       </div>
       <div className="mt-6 flex items-center justify-center">
-        <p className="flex items-center gap-2 rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+        <p className="flex items-center gap-2 rounded-2xl border border-modira-cyan/25 bg-modira-cyan/10 px-4 py-3 text-sm text-modira-cyan">
           <Icon name="ShieldCheck" size={16} />
           {aiTasks.note}
         </p>

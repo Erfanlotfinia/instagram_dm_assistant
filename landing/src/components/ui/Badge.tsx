@@ -7,9 +7,9 @@ type BadgeProps = {
 };
 
 const tones = {
-  cyan: 'border-cyan-400/30 bg-cyan-500/10 text-cyan-400',
-  emerald: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-400',
-  neutral: 'border-mist-200/15 bg-white/5 text-mist-200',
+  cyan: 'border-modira-cyan/30 bg-modira-cyan/10 text-modira-cyan',
+  emerald: 'border-modira-teal/30 bg-modira-teal/10 text-modira-teal',
+  neutral: 'border-border bg-surface-sunken text-fg',
 } as const;
 
 export function Badge({ children, tone = 'neutral', className = '' }: BadgeProps) {

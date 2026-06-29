@@ -17,7 +17,7 @@ export function GlassCard({
     <div
       className={`${strong ? 'glass-strong' : 'glass'} rounded-3xl ${
         hover
-          ? 'transition-all duration-300 hover:-translate-y-1 hover:border-cyan-400/30'
+          ? 'transition-all duration-300 hover:-translate-y-1 hover:border-modira-cyan/30'
           : ''
       } ${className}`}
       {...props}

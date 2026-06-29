@@ -12,10 +12,10 @@ const base =
 
 const variants: Record<Variant, string> = {
   primary:
-    'accent-gradient text-ink-950 shadow-[0_18px_45px_-15px_rgba(6,182,212,0.7)] hover:shadow-[0_22px_55px_-12px_rgba(16,185,129,0.7)] hover:-translate-y-0.5',
+    'accent-gradient text-modira-navy-deep shadow-[0_18px_45px_-15px_color-mix(in_srgb,var(--modira-cyan)_70%,transparent)] hover:shadow-[0_22px_55px_-12px_color-mix(in_srgb,var(--modira-teal)_70%,transparent)] hover:-translate-y-0.5',
   secondary:
-    'glass text-mist-50 hover:border-cyan-400/40 hover:-translate-y-0.5',
-  ghost: 'text-mist-200 hover:text-mist-50',
+    'glass text-fg hover:border-modira-cyan/40 hover:-translate-y-0.5',
+  ghost: 'text-fg hover:text-fg',
 };
 
 export function Button({ variant = 'primary', children, className = '', ...props }: ButtonProps) {

@@ -26,19 +26,19 @@ type ContactCardProps = {
 
 const toneStyles = {
   cyan: {
-    icon: 'border-cyan-400/25 bg-cyan-500/10 text-cyan-300',
-    glow: 'from-cyan-500/20 via-transparent to-transparent',
-    hover: 'hover:border-cyan-400/35 hover:shadow-[0_24px_60px_-28px_rgba(6,182,212,0.45)]',
+    icon: 'border-modira-cyan/25 bg-modira-cyan/10 text-modira-cyan',
+    glow: 'from-modira-cyan/20 via-transparent to-transparent',
+    hover: 'hover:border-modira-cyan/35 hover:shadow-[0_24px_60px_-28px_color-mix(in_srgb,var(--modira-cyan)_45%,transparent)]',
   },
   emerald: {
-    icon: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300',
-    glow: 'from-emerald-500/20 via-transparent to-transparent',
-    hover: 'hover:border-emerald-400/35 hover:shadow-[0_24px_60px_-28px_rgba(16,185,129,0.45)]',
+    icon: 'border-modira-teal/25 bg-modira-teal/10 text-modira-teal',
+    glow: 'from-modira-teal/20 via-transparent to-transparent',
+    hover: 'hover:border-modira-teal/35 hover:shadow-[0_24px_60px_-28px_color-mix(in_srgb,var(--modira-teal)_45%,transparent)]',
   },
   violet: {
-    icon: 'border-violet-400/25 bg-violet-500/10 text-violet-300',
-    glow: 'from-violet-500/20 via-transparent to-transparent',
-    hover: 'hover:border-violet-400/35 hover:shadow-[0_24px_60px_-28px_rgba(139,92,246,0.45)]',
+    icon: 'border-border-strong bg-surface-sunken text-fg',
+    glow: 'from-modira-navy/20 via-transparent to-transparent',
+    hover: 'hover:border-modira-teal/35 hover:shadow-[0_24px_60px_-28px_color-mix(in_srgb,var(--modira-teal)_45%,transparent)]',
   },
 } as const;
 
@@ -61,7 +61,7 @@ function ContactCard({
       href={href}
       target={external ? '_blank' : undefined}
       rel={external ? 'noopener noreferrer' : undefined}
-      className={`group relative block overflow-hidden rounded-3xl border border-mist-200/10 bg-white/[0.02] p-6 transition-all duration-300 hover:-translate-y-1 ${tone.hover}`}
+      className={`group relative block overflow-hidden rounded-3xl border border-border bg-surface-sunken p-6 transition-all duration-300 hover:-translate-y-1 ${tone.hover}`}
     >
       <div
         aria-hidden
@@ -74,10 +74,10 @@ function ContactCard({
           <Icon name={icon} size={22} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-mist-500">{label}</p>
-          <p className={`mt-1 text-lg font-bold text-mist-50 ${ltr ? 'ltr' : ''}`}>{title}</p>
-          <p className="mt-2 text-sm leading-relaxed text-mist-400">{hint}</p>
-          <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-cyan-300 transition-colors group-hover:text-cyan-200">
+          <p className="text-xs font-medium text-subtle">{label}</p>
+          <p className={`mt-1 text-lg font-bold text-fg ${ltr ? 'ltr' : ''}`}>{title}</p>
+          <p className="mt-2 text-sm leading-relaxed text-muted">{hint}</p>
+          <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-modira-cyan transition-colors group-hover:text-modira-cyan">
             {actionLabel}
             <Icon
               name={actionIcon}
@@ -106,10 +106,10 @@ export function ContactPage() {
       <Navbar />
       <main className="relative overflow-hidden pb-20 pt-28 sm:pt-36">
         <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute -top-24 start-1/2 size-[640px] -translate-x-1/2 rounded-full bg-cyan-500/12 blur-[130px]" />
-          <div className="absolute -end-24 top-40 size-[420px] rounded-full bg-emerald-500/8 blur-[120px]" />
-          <div className="absolute -start-24 top-72 size-[380px] rounded-full bg-violet-500/10 blur-[120px]" />
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/30 to-transparent" />
+          <div className="absolute -top-24 start-1/2 size-[640px] -translate-x-1/2 rounded-full bg-modira-cyan/12 blur-[130px]" />
+          <div className="absolute -end-24 top-40 size-[420px] rounded-full bg-modira-teal/8 blur-[120px]" />
+          <div className="absolute -start-24 top-72 size-[380px] rounded-full bg-modira-teal/10 blur-[120px]" />
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-modira-cyan/30 to-transparent" />
         </div>
 
         <Container>
@@ -168,12 +168,12 @@ export function ContactPage() {
 
               <GlassCard className="mt-2 flex flex-wrap items-center justify-between gap-4 p-5">
                 <div className="flex items-center gap-3">
-                  <span className="grid size-10 place-items-center rounded-2xl border border-mist-200/15 bg-white/5 text-mist-300">
+                  <span className="grid size-10 place-items-center rounded-2xl border border-border bg-surface-sunken text-fg/80">
                     <Icon name="Clock3" size={18} />
                   </span>
                   <div>
-                    <p className="text-sm font-semibold text-mist-100">{contact.hours}</p>
-                    <p className="text-xs text-mist-500">{contact.responseNote}</p>
+                    <p className="text-sm font-semibold text-fg">{contact.hours}</p>
+                    <p className="text-xs text-subtle">{contact.responseNote}</p>
                   </div>
                 </div>
                 <Button href={cta.primary.href} variant="primary" className="shrink-0 px-5 py-2.5">
@@ -184,20 +184,20 @@ export function ContactPage() {
             </div>
 
             <GlassCard strong className="overflow-hidden p-0">
-              <div className="border-b border-mist-200/10 p-6">
+              <div className="border-b border-border p-6">
                 <div className="flex items-start gap-3">
-                  <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-cyan-400/25 bg-cyan-500/10 text-cyan-300">
+                  <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-modira-cyan/25 bg-modira-cyan/10 text-modira-cyan">
                     <Icon name="MapPin" size={20} />
                   </span>
                   <div>
-                    <p className="text-xs font-medium text-mist-500">{contact.location.label}</p>
-                    <h3 className="mt-1 text-xl font-bold text-mist-50">{contact.location.address}</h3>
-                    <p className="mt-2 text-sm text-mist-400">{contact.location.hint}</p>
+                    <p className="text-xs font-medium text-subtle">{contact.location.label}</p>
+                    <h3 className="mt-1 text-xl font-bold text-fg">{contact.location.address}</h3>
+                    <p className="mt-2 text-sm text-muted">{contact.location.hint}</p>
                     <a
                       href={contact.location.mapLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-cyan-300 transition-colors hover:text-cyan-200"
+                      className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-modira-cyan transition-colors hover:text-modira-cyan"
                     >
                       مشاهده در نقشه
                       <Icon name="ExternalLink" size={14} />
@@ -205,7 +205,7 @@ export function ContactPage() {
                   </div>
                 </div>
               </div>
-              <div className="relative aspect-[4/3] min-h-[300px] w-full bg-ink-900 sm:aspect-auto sm:min-h-[420px]">
+              <div className="relative aspect-[4/3] min-h-[300px] w-full bg-surface sm:aspect-auto sm:min-h-[420px]">
                 <iframe
                   title={`موقعیت ${brand.nameFa} روی نقشه`}
                   src={contact.location.mapEmbed}
@@ -215,7 +215,7 @@ export function ContactPage() {
                 />
                 <div
                   aria-hidden
-                  className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-ink-900/70 to-transparent"
+                  className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-modira-navy/70 to-transparent"
                 />
               </div>
             </GlassCard>

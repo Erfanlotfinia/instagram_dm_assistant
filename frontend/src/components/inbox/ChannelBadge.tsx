@@ -3,11 +3,11 @@ import { cn } from '../../lib/cn';
 type Channel = 'instagram' | 'whatsapp' | 'telegram' | 'bale' | 'rubika' | 'web_chat';
 
 const CHANNEL_META: Record<Channel, { short: string; label: string; className: string }> = {
-  instagram: { short: 'IG', label: 'Instagram', className: 'bg-[#e1306c]/12 text-[#c13584]' },
-  whatsapp: { short: 'WA', label: 'WhatsApp', className: 'bg-[#25d366]/14 text-[#128c4a]' },
-  telegram: { short: 'TG', label: 'Telegram', className: 'bg-[#229ed9]/14 text-[#1c84b4]' },
-  bale: { short: 'BA', label: 'Bale', className: 'bg-[#3b82f6]/14 text-[#2563eb]' },
-  rubika: { short: 'RU', label: 'Rubika', className: 'bg-[#8b5cf6]/14 text-[#7c3aed]' },
+  instagram: { short: 'IG', label: 'Instagram', className: 'bg-accent-soft text-accent' },
+  whatsapp: { short: 'WA', label: 'WhatsApp', className: 'bg-success-soft text-success' },
+  telegram: { short: 'TG', label: 'Telegram', className: 'bg-info-soft text-info' },
+  bale: { short: 'BA', label: 'Bale', className: 'bg-warning-soft text-warning' },
+  rubika: { short: 'RU', label: 'Rubika', className: 'border border-border-strong bg-surface-sunken text-muted' },
   web_chat: { short: 'WB', label: 'Web Chat', className: 'bg-surface-sunken text-muted' },
 };
 

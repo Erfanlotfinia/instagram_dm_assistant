@@ -16,13 +16,13 @@ const defaultSteps: Step[] = [
 
 export function OrderStatusCard({ orderId, steps = defaultSteps }: OrderStatusCardProps) {
   return (
-    <div className="rounded-2xl border border-mist-200/10 bg-white/5 p-3">
+    <div className="rounded-2xl border border-border bg-surface-sunken p-3">
       <div className="mb-3 flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-mist-200">
-          <Icon name="Receipt" size={14} className="text-cyan-400" />
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-fg">
+          <Icon name="Receipt" size={14} className="text-modira-cyan" />
           سفارش
         </span>
-        <span className="ltr rounded-md bg-ink-700/60 px-2 py-0.5 text-[11px] text-mist-300">
+        <span className="ltr rounded-md bg-surface px-2 py-0.5 text-[11px] text-fg/80">
           {orderId}
         </span>
       </div>
@@ -33,20 +33,20 @@ export function OrderStatusCard({ orderId, steps = defaultSteps }: OrderStatusCa
               <span
                 className={`grid size-6 place-items-center rounded-full text-[10px] ${
                   step.done
-                    ? 'accent-gradient text-ink-950'
+                    ? 'accent-gradient text-modira-navy-deep'
                     : step.active
-                      ? 'border border-cyan-400/50 bg-cyan-500/15 text-cyan-300 animate-pulse-dot'
-                      : 'border border-mist-200/15 bg-white/5 text-mist-500'
+                      ? 'border border-modira-cyan/50 bg-modira-cyan/15 text-modira-cyan animate-pulse-dot'
+                      : 'border border-border bg-surface-sunken text-subtle'
                 }`}
               >
                 {step.done ? <Icon name="Check" size={12} /> : i + 1}
               </span>
-              <span className="text-[10px] text-mist-400">{step.label}</span>
+              <span className="text-[10px] text-muted">{step.label}</span>
             </div>
             {i < steps.length - 1 ? (
               <span
                 className={`mx-1 h-px flex-1 ${
-                  step.done ? 'bg-cyan-400/40' : 'bg-mist-200/10'
+                  step.done ? 'bg-modira-cyan/40' : 'bg-border'
                 }`}
               />
             ) : null}

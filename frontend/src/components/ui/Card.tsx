@@ -12,7 +12,7 @@ export function Card({ children, className, as: Tag = 'section', ...props }: Car
   return (
     <Tag
       className={cn(
-        'cc-themed rounded-[var(--radius-card)] border border-border bg-surface shadow-[0_1px_2px_rgba(15,23,42,0.04)]',
+        'cc-themed rounded-[var(--radius-card)] border border-border bg-surface shadow-[0_1px_2px_var(--c-shadow)]',
         className,
       )}
       {...props}

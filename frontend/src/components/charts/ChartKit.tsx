@@ -19,11 +19,11 @@ const AXIS = 'var(--c-subtle)';
 const GRID = 'var(--c-border)';
 
 const SERIES_COLORS = [
-  'var(--c-accent)',
-  'var(--c-success)',
-  'var(--c-warning)',
-  'var(--c-info)',
-  'var(--c-danger)',
+  'var(--modira-teal)',
+  'var(--modira-cyan)',
+  'var(--modira-navy)',
+  'var(--modira-graphite)',
+  'var(--modira-cream)',
 ];
 
 interface SeriesDef {

@@ -3,10 +3,14 @@ import { useShop } from '../../contexts/ShopContext';
 
 /** Compact shop selector for the top bar. */
 export function ShopSwitcher() {
-  const { shops, selectedShopId, setSelectedShopId, isLoading } = useShop();
+  const { shops, selectedShopId, setSelectedShopId, isLoading, error } = useShop();
 
   if (isLoading) {
     return <span className="text-xs text-muted">Loading shops…</span>;
+  }
+
+  if (error) {
+    return <span className="text-xs text-danger" title={error}>Shops unavailable</span>;
   }
 
   if (shops.length === 0) {

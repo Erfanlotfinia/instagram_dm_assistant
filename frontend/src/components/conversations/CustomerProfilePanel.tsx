@@ -5,6 +5,11 @@ import { Badge, Button, Field, Input, type BadgeTone } from '../ui';
 import type { CustomerProfile, CustomerUpdate, PreviousOrderSummary } from '../../types/conversation';
 import { cn } from '../../lib/cn';
 
+/*
+ * Catalog product color swatches below use dynamic `style.background` from customer
+ * profile data — a narrow, documented exception to the Modira-only UI palette rule.
+ */
+
 interface CustomerProfilePanelProps {
   profile: CustomerProfile | null | undefined;
   onSave: (values: CustomerUpdate) => void;
@@ -116,7 +121,7 @@ export function CustomerProfilePanel({ profile, onSave, isSaving }: CustomerProf
                       <span
                         key={`${color}-${index}`}
                         className="h-4 w-4 rounded-full border border-border"
-                        style={{ background: swatchColor(color) ?? '#cbd2e0' }}
+                        style={{ background: swatchColor(color) ?? 'var(--c-border)' }}
                       />
                     ))}
                   </span>

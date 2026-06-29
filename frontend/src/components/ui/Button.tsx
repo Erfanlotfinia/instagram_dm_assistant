@@ -12,13 +12,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const base =
-  'inline-flex items-center justify-center gap-2 rounded-lg font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+  'inline-flex items-center justify-center gap-2 rounded-lg font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--modira-cyan)]';
 
 const variants: Record<Variant, string> = {
-  primary: 'bg-accent text-accent-fg hover:opacity-90',
+  primary: 'bg-accent text-accent-fg hover:bg-accent-hover',
   secondary: 'bg-surface text-fg border border-border hover:bg-surface-sunken',
   ghost: 'bg-transparent text-muted hover:bg-surface-sunken hover:text-fg',
-  danger: 'bg-danger text-white hover:opacity-90',
+  danger: 'border border-danger bg-danger-soft text-danger hover:border-danger hover:bg-danger/10',
 };
 
 const sizes: Record<Size, string> = {

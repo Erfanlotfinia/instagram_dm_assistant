@@ -1,0 +1,33 @@
+/* Modira Brand Tokens
+ *
+ * Canonical brand color primitives derived from the rebuilt vector brand board
+ * (see brand/00_source_svg/modira_brand_board.svg and brand/05_docs/README.md).
+ *
+ * These tokens are the single source of truth for the Modira palette. The live
+ * consumers are the Tailwind v4 `@theme` blocks in:
+ *   - landing/src/index.css
+ *   - frontend/src/app/globals.css
+ *
+ * Keep those files in sync with the hex values declared here.
+ */
+
+:root {
+  /* Primary */
+  --modira-teal: #147A81;
+  --modira-teal-dark: #0F5F66;
+
+  /* Neutral */
+  --modira-navy: #102A43;
+  --modira-navy-deep: #07182B; /* project extension for the dark canvas */
+
+  /* Accent */
+  --modira-cyan: #38BDF8;
+
+  /* Surface */
+  --modira-cream: #F8F5EA;
+  --modira-graphite: #1F2937;
+
+  /* Base */
+  --modira-white: #FFFFFF;
+  --modira-black: #000000;
+}

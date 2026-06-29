@@ -6,10 +6,10 @@ type TraceStep = {
 };
 
 const kindStyle: Record<TraceStep['kind'], { dot: string; tag: string; tagText: string }> = {
-  automation: { dot: 'bg-cyan-400', tag: 'bg-cyan-500/10 text-cyan-300', tagText: 'Automation' },
-  data: { dot: 'bg-teal-400', tag: 'bg-teal-500/10 text-teal-200', tagText: 'Data' },
-  llm: { dot: 'bg-emerald-400', tag: 'bg-emerald-500/10 text-emerald-300', tagText: 'LLM' },
-  human: { dot: 'bg-amber-400', tag: 'bg-amber-500/10 text-amber-300', tagText: 'Human' },
+  automation: { dot: 'bg-modira-cyan', tag: 'bg-modira-cyan/10 text-modira-cyan', tagText: 'Automation' },
+  data: { dot: 'bg-modira-teal', tag: 'bg-modira-teal/10 text-modira-teal', tagText: 'Data' },
+  llm: { dot: 'bg-modira-teal-dark', tag: 'bg-modira-teal/10 text-modira-teal', tagText: 'LLM' },
+  human: { dot: 'bg-fg', tag: 'border border-border-strong bg-surface-sunken text-fg', tagText: 'Human' },
 };
 
 const defaultSteps: TraceStep[] = [
@@ -24,19 +24,19 @@ export function DecisionTrace({ steps = defaultSteps, title = 'ردگیری تص
   title?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-mist-200/10 bg-ink-900/50 p-3">
-      <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-mist-200">
-        <Icon name="GitBranch" size={14} className="text-cyan-400" />
+    <div className="rounded-2xl border border-border bg-surface/50 p-3">
+      <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-fg">
+        <Icon name="GitBranch" size={14} className="text-modira-cyan" />
         {title}
       </div>
       <ol className="relative space-y-2.5 ps-4">
-        <span className="absolute inset-y-1 start-[5px] w-px bg-mist-200/10" />
+        <span className="absolute inset-y-1 start-[5px] w-px bg-border" />
         {steps.map((step) => {
           const s = kindStyle[step.kind];
           return (
             <li key={step.label} className="relative flex items-center justify-between gap-2">
               <span className={`absolute -start-4 top-1.5 size-2.5 rounded-full ${s.dot}`} />
-              <span className="text-xs text-mist-200">{step.label}</span>
+              <span className="text-xs text-fg">{step.label}</span>
               <span className={`ltr shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${s.tag}`}>
                 {s.tagText}
               </span>

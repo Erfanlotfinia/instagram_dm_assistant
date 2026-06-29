@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Modira favicon">
+<rect width="64" height="64" rx="14" fill="#147A81"/>
+<g transform="translate(7.5 13.5) scale(0.19)">
+
+<defs>
+  <mask id="m_cuts" maskUnits="userSpaceOnUse">
+    <rect width="256" height="192" fill="white"/>
+    <g fill="none" stroke="black" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="14">
+      <path d="M90 43 L111 61"/>
+      <path d="M166 43 L145 61"/>
+      <path d="M90 149 L111 131"/>
+      <path d="M166 149 L145 131"/>
+    </g>
+  </mask>
+</defs>
+
+<g mask="url(#m_cuts)">
+  <g fill="none" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="24">
+    <path d="M104 32 L40 88 L40 104 L104 160" stroke="#FFFFFF"/>
+    <path d="M152 32 L216 88 L216 104 L152 160" stroke="#FFFFFF"/>
+    <path d="M72 68 L128 120 L184 68" stroke="#FFFFFF"/>
+    <path d="M72 124 L128 72 L184 124" stroke="#FFFFFF"/>
+  </g>
+</g>
+</g>
+</svg>

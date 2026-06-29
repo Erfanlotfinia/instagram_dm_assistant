@@ -11,11 +11,11 @@ export function Problem() {
       <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {problem.items.map((item) => (
           <GlassCard key={item.title} hover className="p-6">
-            <span className="grid size-11 place-items-center rounded-2xl border border-rose-400/20 bg-rose-500/10 text-rose-300">
+            <span className="grid size-11 place-items-center rounded-2xl border border-border-strong bg-surface-sunken text-fg">
               <Icon name={item.icon} size={20} />
             </span>
-            <h3 className="mt-4 text-base font-bold text-mist-50">{item.title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-mist-400">{item.text}</p>
+            <h3 className="mt-4 text-base font-bold text-fg">{item.title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted">{item.text}</p>
           </GlassCard>
         ))}
       </div>

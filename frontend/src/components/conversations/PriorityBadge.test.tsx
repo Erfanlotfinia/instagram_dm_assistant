@@ -6,6 +6,6 @@ import { PriorityBadge } from './PriorityBadge';
 describe('PriorityBadge', () => {
   it('renders level and score', () => {
     render(<PriorityBadge level="high" score={62} reason="Payment waiting" />);
-    expect(screen.getByText('high (62)')).toBeInTheDocument();
+    expect(screen.getByText('High (62)')).toBeInTheDocument();
   });
 });

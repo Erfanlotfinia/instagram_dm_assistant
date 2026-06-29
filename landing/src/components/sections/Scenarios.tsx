@@ -15,14 +15,14 @@ export function Scenarios() {
           <GlassCard key={item.title} strong hover className="flex flex-col p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <span className="grid size-10 place-items-center rounded-2xl border border-cyan-400/20 bg-cyan-500/10 text-cyan-300">
+                <span className="grid size-10 place-items-center rounded-2xl border border-modira-cyan/20 bg-modira-cyan/10 text-modira-cyan">
                   <Icon name={item.icon} size={18} />
                 </span>
-                <h3 className="text-sm font-bold text-mist-50">{item.title}</h3>
+                <h3 className="text-sm font-bold text-fg">{item.title}</h3>
               </div>
               <Badge tone="cyan">{item.tag}</Badge>
             </div>
-            <div className="flex flex-1 flex-col gap-3 rounded-2xl bg-ink-900/40 p-4">
+            <div className="flex flex-1 flex-col gap-3 rounded-2xl bg-surface p-4">
               {item.bubbles.map((bubble, i) => (
                 <ChatBubble key={i} {...bubble} />
               ))}

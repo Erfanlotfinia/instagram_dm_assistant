@@ -30,9 +30,9 @@ export function DashboardMockup() {
   return (
     <div className="glass-strong overflow-hidden rounded-3xl">
       {/* Top bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-mist-200/10 px-4 py-3">
-        <span className="flex items-center gap-2 text-sm font-semibold text-mist-50">
-          <Icon name="LayoutDashboard" size={16} className="text-cyan-400" />
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <span className="flex items-center gap-2 text-sm font-semibold text-fg">
+          <Icon name="LayoutDashboard" size={16} className="text-modira-cyan" />
           داشبورد عملیاتی
         </span>
         <div className="flex items-center gap-1.5">
@@ -47,13 +47,13 @@ export function DashboardMockup() {
 
       <div className="grid lg:grid-cols-[180px_1fr]">
         {/* Side modules */}
-        <nav className="hidden flex-col gap-1 border-e border-mist-200/10 p-3 lg:flex" aria-label="ماژول‌ها">
+        <nav className="hidden flex-col gap-1 border-e border-border p-3 lg:flex" aria-label="ماژول‌ها">
           {dashboard.modules.map((m) => (
             <span
               key={m.label}
-              className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-mist-300 transition-colors hover:bg-white/5 hover:text-mist-100"
+              className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-xs text-fg/80 transition-colors hover:bg-surface-sunken hover:text-fg"
             >
-              <Icon name={m.icon} size={14} className="text-cyan-400/80" />
+              <Icon name={m.icon} size={14} className="text-modira-cyan/80" />
               {m.label}
             </span>
           ))}
@@ -71,8 +71,8 @@ export function DashboardMockup() {
                 onClick={() => setActive(tab.id)}
                 className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
                   active === tab.id
-                    ? 'accent-gradient text-ink-950'
-                    : 'border border-mist-200/10 bg-white/5 text-mist-300 hover:text-mist-100'
+                    ? 'accent-gradient text-modira-navy-deep'
+                    : 'border border-border bg-surface-sunken text-fg/80 hover:text-fg'
                 }`}
               >
                 <Icon name={tab.icon} size={13} />
@@ -83,9 +83,9 @@ export function DashboardMockup() {
 
           {active === 'inbox' ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2.5 rounded-2xl border border-mist-200/10 bg-ink-900/40 p-3">
-                <p className="text-xs font-semibold text-mist-100">جزئیات مکالمه</p>
-                <div className="rounded-xl bg-white/5 p-2 text-xs text-mist-300">
+              <div className="space-y-2.5 rounded-2xl border border-border bg-surface p-3">
+                <p className="text-xs font-semibold text-fg">جزئیات مکالمه</p>
+                <div className="rounded-xl bg-surface-sunken p-2 text-xs text-fg/80">
                   «همه چکش‌های برند بوش زیر ۵ میلیون رو بفرست»
                 </div>
                 <ProductCard name="چکش بوش GBH" price="۳٬۸۰۰٬۰۰۰ تومان" meta="ابزار برقی" compact />
@@ -108,29 +108,29 @@ export function DashboardMockup() {
 
           {active === 'context' ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2.5 rounded-2xl border border-mist-200/10 bg-ink-900/40 p-3">
-                <p className="text-xs font-semibold text-mist-100">پیش‌نویس سفارش</p>
+              <div className="space-y-2.5 rounded-2xl border border-border bg-surface p-3">
+                <p className="text-xs font-semibold text-fg">پیش‌نویس سفارش</p>
                 <ProductCard name="کفش رانینگ Aero — سایز ۴۲" price="۲٬۴۵۰٬۰۰۰ تومان" meta="۱ عدد" />
-                <div className="flex items-center justify-between rounded-xl bg-white/5 p-2 text-xs">
-                  <span className="text-mist-400">جمع کل</span>
-                  <span className="ltr font-bold text-cyan-400">۲٬۴۵۰٬۰۰۰ تومان</span>
+                <div className="flex items-center justify-between rounded-xl bg-surface-sunken p-2 text-xs">
+                  <span className="text-muted">جمع کل</span>
+                  <span className="ltr font-bold text-modira-cyan">۲٬۴۵۰٬۰۰۰ تومان</span>
                 </div>
-                <div className="flex items-center gap-1.5 rounded-xl border border-amber-400/25 bg-amber-500/10 p-2 text-[11px] text-amber-200">
+                <div className="flex items-center gap-1.5 rounded-xl border border-modira-cyan/25 bg-modira-cyan/10 p-2 text-[11px] text-modira-cyan">
                   <Icon name="ClipboardCheck" size={13} />
                   در انتظار تأیید نهایی ادمین
                 </div>
               </div>
-              <div className="space-y-2.5 rounded-2xl border border-mist-200/10 bg-ink-900/40 p-3">
-                <p className="text-xs font-semibold text-mist-100">بستهٔ تحویل به انسان</p>
-                <ul className="space-y-1.5 text-[11px] text-mist-300">
+              <div className="space-y-2.5 rounded-2xl border border-border bg-surface p-3">
+                <p className="text-xs font-semibold text-fg">بستهٔ تحویل به انسان</p>
+                <ul className="space-y-1.5 text-[11px] text-fg/80">
                   {['خلاصهٔ مکالمه', 'محصول و سفارش مرتبط', 'سطح ریسک: متوسط', 'پیشنهاد پاسخ آماده'].map((x) => (
                     <li key={x} className="flex items-center gap-1.5">
-                      <Icon name="Check" size={12} className="text-emerald-400" />
+                      <Icon name="Check" size={12} className="text-modira-teal" />
                       {x}
                     </li>
                   ))}
                 </ul>
-                <div className="flex items-center gap-1.5 rounded-xl border border-rose-400/25 bg-rose-500/10 p-2 text-[11px] text-rose-200">
+                <div className="flex items-center gap-1.5 rounded-xl border border-border-strong bg-surface-sunken p-2 text-[11px] text-fg">
                   <Icon name="AlertTriangle" size={13} />
                   کارهای ناموفق: ۰ مورد در صف
                 </div>
@@ -142,15 +142,15 @@ export function DashboardMockup() {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                 {analytics.map((a) => (
-                  <div key={a.label} className="rounded-2xl border border-mist-200/10 bg-ink-900/40 p-3">
-                    <Icon name={a.icon} size={16} className="text-cyan-400" />
-                    <p className="ltr mt-2 text-xl font-extrabold text-mist-50">{a.value}</p>
-                    <p className="text-[11px] text-mist-400">{a.label}</p>
+                  <div key={a.label} className="rounded-2xl border border-border bg-surface p-3">
+                    <Icon name={a.icon} size={16} className="text-modira-cyan" />
+                    <p className="ltr mt-2 text-xl font-extrabold text-fg">{a.value}</p>
+                    <p className="text-[11px] text-muted">{a.label}</p>
                   </div>
                 ))}
               </div>
-              <div className="rounded-2xl border border-mist-200/10 bg-ink-900/40 p-3">
-                <p className="mb-3 text-xs font-semibold text-mist-100">عملکرد کانال‌ها در هفته</p>
+              <div className="rounded-2xl border border-border bg-surface p-3">
+                <p className="mb-3 text-xs font-semibold text-fg">عملکرد کانال‌ها در هفته</p>
                 <div className="flex h-28 items-end gap-2">
                   {bars.map((h, i) => (
                     <div key={i} className="flex flex-1 flex-col items-center gap-1">

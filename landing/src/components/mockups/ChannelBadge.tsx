@@ -15,8 +15,8 @@ export function ChannelBadge({ icon, name, size = 'md', active = false }: Channe
       title={name}
       className={`grid ${dim} place-items-center rounded-xl border transition-colors ${
         active
-          ? 'border-cyan-400/40 bg-cyan-500/15 text-cyan-300'
-          : 'border-mist-200/10 bg-white/5 text-mist-300'
+          ? 'border-modira-cyan/40 bg-modira-cyan/15 text-modira-cyan'
+          : 'border-border bg-surface-sunken text-fg/80'
       }`}
     >
       <Icon name={icon} size={iconSize} />

@@ -3,7 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#07111F" />
+    <meta name="theme-color" content="#07182B" />
+
+    <!-- Set theme before first paint to avoid FOUC. Defaults to dark. -->
+    <script>
+      (function () {
+        try {
+          var p = localStorage.getItem('modira:theme') || 'dark';
+          var t =
+            p === 'system'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : p;
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+
+    <!-- Favicon / PWA -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
 
     <title>مدیرا | ادمین هوشمند فروش اجتماعی</title>
     <meta
@@ -20,6 +44,7 @@
       property="og:description"
       content="ادمین هوشمند فروش اجتماعی شما. مدیرا پیام‌ها را در اینستاگرام، واتساپ، تلگرام، بله و روبیکا مدیریت می‌کند؛ پاسخ می‌دهد، سفارش می‌سازد و در صورت نیاز به ادمین انسانی تحویل می‌دهد."
     />
+    <meta property="og:image" content="/og/modira_symbol_full_color_1024.png" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
@@ -28,6 +53,7 @@
       name="twitter:description"
       content="ادمین هوشمند فروش اجتماعی شما؛ یک سیستم‌عامل عملیاتی برای مدیریت پیام، فروش و پشتیبانی در شبکه‌های اجتماعی."
     />
+    <meta name="twitter:image" content="/og/modira_symbol_full_color_1024.png" />
   </head>
   <body>
     <div id="root"></div>

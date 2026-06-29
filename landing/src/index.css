@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '../../brand/04_brand_tokens/modira-brand-tokens.css';
 @import '@fontsource/vazirmatn/400.css';
 @import '@fontsource/vazirmatn/500.css';
 @import '@fontsource/vazirmatn/600.css';
@@ -6,25 +7,34 @@
 @import '@fontsource/vazirmatn/800.css';
 
 /*
-  Brand design tokens. Edit colors here to re-theme the whole site.
-  Palette: deep navy base + cyan / teal / emerald accents.
+  Official Modira brand design tokens for the landing site.
+  Brand primitives (--modira-*) are imported from the canonical
+  brand/04_brand_tokens/modira-brand-tokens.css file. Semantic tokens
+  (--c-*) are theme-aware and driven by `data-theme` on <html>.
+  Palette: navy base + teal / cyan accents + cream highlights.
 */
 @theme {
-  --color-ink-950: #050d18;
-  --color-ink-900: #07111f;
-  --color-ink-800: #10243f;
-  --color-ink-700: #16314f;
+  --color-modira-teal: var(--modira-teal);
+  --color-modira-teal-dark: var(--modira-teal-dark);
+  --color-modira-navy: var(--modira-navy);
+  --color-modira-navy-deep: var(--modira-navy-deep);
+  --color-modira-cyan: var(--modira-cyan);
+  --color-modira-cream: var(--modira-cream);
+  --color-modira-graphite: var(--modira-graphite);
+  --color-modira-white: var(--modira-white);
+  --color-modira-black: var(--modira-black);
 
-  --color-teal-700: #0e7490;
-  --color-cyan-500: #06b6d4;
-  --color-cyan-400: #22d3ee;
-  --color-emerald-500: #10b981;
-  --color-emerald-400: #34d399;
-
-  --color-mist-50: #f8fafc;
-  --color-mist-200: #e2e8f0;
-  --color-mist-400: #94a3b8;
-  --color-mist-500: #64748b;
+  --color-canvas: var(--c-canvas);
+  --color-surface: var(--c-surface);
+  --color-surface-sunken: var(--c-surface-sunken);
+  --color-fg: var(--c-fg);
+  --color-muted: var(--c-muted);
+  --color-subtle: var(--c-subtle);
+  --color-border: var(--c-border);
+  --color-border-strong: var(--c-border-strong);
+  --color-accent: var(--c-accent);
+  --color-accent-fg: var(--c-accent-fg);
+  --color-accent-soft: var(--c-accent-soft);
 
   --font-sans: 'Vazirmatn', ui-sans-serif, system-ui, sans-serif;
 
@@ -38,37 +48,69 @@
     scroll-behavior: smooth;
   }
 
-  :root {
+  /*
+   * DARK MODE (default) — premium cool-navy canvas with cream ink.
+   */
+  :root,
+  [data-theme='dark'] {
+    --c-canvas: var(--modira-navy-deep);
+    --c-surface: color-mix(in srgb, var(--modira-navy) 40%, transparent);
+    --c-surface-sunken: color-mix(in srgb, var(--modira-white) 5%, transparent);
+    --c-fg: var(--modira-cream);
+    --c-muted: color-mix(in srgb, var(--modira-cream) 65%, transparent);
+    --c-subtle: color-mix(in srgb, var(--modira-cream) 50%, transparent);
+    --c-border: color-mix(in srgb, var(--modira-cream) 10%, transparent);
+    --c-border-strong: color-mix(in srgb, var(--modira-cream) 25%, transparent);
+    --c-accent: var(--modira-teal);
+    --c-accent-fg: var(--modira-navy-deep);
+    --c-accent-soft: color-mix(in srgb, var(--modira-teal) 28%, var(--modira-navy) 72%);
     color-scheme: dark;
+  }
+
+  /*
+   * LIGHT MODE — warm cream canvas, crisp white surfaces, navy ink.
+   */
+  [data-theme='light'] {
+    --c-canvas: var(--modira-cream);
+    --c-surface: var(--modira-white);
+    --c-surface-sunken: color-mix(in srgb, var(--modira-navy) 5%, transparent);
+    --c-fg: var(--modira-navy);
+    --c-muted: color-mix(in srgb, var(--modira-graphite) 72%, var(--modira-white) 28%);
+    --c-subtle: color-mix(in srgb, var(--modira-graphite) 45%, var(--modira-white) 55%);
+    --c-border: color-mix(in srgb, var(--modira-navy) 12%, transparent);
+    --c-border-strong: color-mix(in srgb, var(--modira-navy) 22%, transparent);
+    --c-accent: var(--modira-teal);
+    --c-accent-fg: var(--modira-white);
+    --c-accent-soft: color-mix(in srgb, var(--modira-teal) 10%, var(--modira-white) 90%);
+    color-scheme: light;
   }
 
   body {
     margin: 0;
     font-family: var(--font-sans);
-    background-color: var(--color-ink-950);
-    color: var(--color-mist-200);
+    background-color: var(--c-canvas);
+    color: var(--c-fg);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     overflow-x: hidden;
+    transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
   }
 
-  /* Offset anchor targets so the sticky navbar doesn't cover headings. */
   section[id] {
     scroll-margin-top: 5.5rem;
   }
 
   ::selection {
-    background-color: color-mix(in srgb, var(--color-cyan-500) 35%, transparent);
-    color: var(--color-mist-50);
+    background-color: color-mix(in srgb, var(--modira-cyan) 35%, transparent);
+    color: var(--c-fg);
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-cyan-400);
+    outline: 2px solid var(--modira-cyan);
     outline-offset: 2px;
     border-radius: 4px;
   }
 
-  /* Numerals and Latin product terms read better with western digits in RTL. */
   .ltr {
     direction: ltr;
     unicode-bidi: isolate;
@@ -76,43 +118,36 @@
 }
 
 @layer components {
-  /* Glassmorphism surface used across cards and panels. */
   .glass {
     background: linear-gradient(
       160deg,
-      color-mix(in srgb, var(--color-ink-800) 70%, transparent),
-      color-mix(in srgb, var(--color-ink-900) 80%, transparent)
+      var(--c-surface),
+      color-mix(in srgb, var(--c-canvas) 80%, transparent)
     );
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid color-mix(in srgb, var(--color-mist-200) 12%, transparent);
+    border: 1px solid var(--c-border);
     box-shadow:
-      0 1px 0 0 color-mix(in srgb, var(--color-mist-50) 8%, transparent) inset,
-      0 24px 60px -28px rgba(0, 0, 0, 0.85);
+      0 1px 0 0 color-mix(in srgb, var(--modira-white) 8%, transparent) inset,
+      0 24px 60px -28px color-mix(in srgb, var(--modira-black) 85%, transparent);
   }
 
   .glass-strong {
     background: linear-gradient(
       160deg,
-      color-mix(in srgb, var(--color-ink-700) 78%, transparent),
-      color-mix(in srgb, var(--color-ink-900) 92%, transparent)
+      color-mix(in srgb, var(--modira-graphite) 78%, transparent),
+      color-mix(in srgb, var(--c-canvas) 92%, transparent)
     );
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid color-mix(in srgb, var(--color-mist-200) 14%, transparent);
+    border: 1px solid var(--c-border-strong);
     box-shadow:
-      0 1px 0 0 color-mix(in srgb, var(--color-mist-50) 10%, transparent) inset,
-      0 30px 70px -30px rgba(0, 0, 0, 0.9);
+      0 1px 0 0 color-mix(in srgb, var(--modira-white) 10%, transparent) inset,
+      0 30px 70px -30px color-mix(in srgb, var(--modira-black) 90%, transparent);
   }
 
-  /* Accent gradient text (cyan -> teal -> emerald). */
   .text-gradient {
-    background-image: linear-gradient(
-      105deg,
-      var(--color-cyan-400),
-      var(--color-cyan-500) 45%,
-      var(--color-emerald-400)
-    );
+    background-image: linear-gradient(105deg, var(--modira-teal), var(--modira-cyan));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -121,22 +156,20 @@
   .accent-gradient {
     background-image: linear-gradient(
       105deg,
-      var(--color-cyan-500),
-      var(--color-teal-700) 50%,
-      var(--color-emerald-500)
+      var(--modira-teal-dark),
+      var(--modira-teal) 50%,
+      var(--modira-cyan)
     );
   }
 
-  /* Hairline gradient border helper used on premium cards. */
   .ring-glow {
     box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--color-cyan-500) 30%, transparent),
-      0 0 40px -10px color-mix(in srgb, var(--color-cyan-500) 45%, transparent);
+      0 0 0 1px color-mix(in srgb, var(--modira-cyan) 30%, transparent),
+      0 0 40px -10px color-mix(in srgb, var(--modira-cyan) 45%, transparent);
   }
 }
 
 @layer utilities {
-  /* Scroll-reveal: hidden -> visible. Controlled by useReveal hook. */
   .reveal {
     opacity: 0;
     transform: translateY(24px);
@@ -178,11 +211,11 @@
   0%,
   100% {
     opacity: 1;
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-emerald-400) 60%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--modira-teal) 60%, transparent);
   }
   50% {
     opacity: 0.7;
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-emerald-400) 0%, transparent);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--modira-teal) 0%, transparent);
   }
 }
 

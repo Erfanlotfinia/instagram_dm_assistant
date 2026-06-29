@@ -22,15 +22,15 @@ export function Channels() {
               <span
                 className={`grid size-12 place-items-center rounded-2xl ${
                   future
-                    ? 'border border-dashed border-mist-200/25 text-mist-400'
-                    : 'accent-gradient text-ink-950'
+                    ? 'border border-dashed border-border-strong text-muted'
+                    : 'accent-gradient text-modira-navy-deep'
                 }`}
               >
                 <Icon name={channel.icon} size={22} />
               </span>
               <div>
-                <p className="ltr text-sm font-bold text-mist-50">{channel.name}</p>
-                <p className="mt-0.5 text-xs text-mist-400">{channel.nameFa}</p>
+                <p className="ltr text-sm font-bold text-fg">{channel.name}</p>
+                <p className="mt-0.5 text-xs text-muted">{channel.nameFa}</p>
               </div>
             </GlassCard>
           );

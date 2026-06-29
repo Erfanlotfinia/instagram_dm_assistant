@@ -49,6 +49,9 @@ export function ShopProvider({ children }: PropsWithChildren) {
     }
 
     if (shops.length === 0) {
+      if (selectedShopId) {
+        setSelectedShopId('');
+      }
       return;
     }
     const exists = shops.some((shop) => shop.id === selectedShopId);

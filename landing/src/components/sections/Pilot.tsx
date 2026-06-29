@@ -22,15 +22,15 @@ export function Pilot() {
                 className={`h-full p-5 ${highlight ? 'ring-glow' : ''}`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="grid size-11 place-items-center rounded-2xl border border-cyan-400/20 bg-cyan-500/10 text-cyan-300">
+                  <span className="grid size-11 place-items-center rounded-2xl border border-modira-cyan/20 bg-modira-cyan/10 text-modira-cyan">
                     <Icon name={stage.icon} size={20} />
                   </span>
                   <span className="ltr text-2xl font-black text-white/10">
                     {persianNumber(i + 1)}
                   </span>
                 </div>
-                <h3 className="mt-4 text-base font-bold text-mist-50">{stage.title}</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-mist-400">{stage.text}</p>
+                <h3 className="mt-4 text-base font-bold text-fg">{stage.title}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted">{stage.text}</p>
               </GlassCard>
             </li>
           );
