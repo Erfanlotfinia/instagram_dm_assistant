@@ -2,21 +2,27 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
+import bcrypt
 import jwt
 from cryptography.fernet import Fernet, InvalidToken
-from passlib.context import CryptContext
 
 from app.core.config import get_settings
 
-password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_BCRYPT_ROUNDS = 12
 
 
 def hash_secret(secret: str) -> str:
-    return password_context.hash(secret)
+    return bcrypt.hashpw(
+        secret.encode("utf-8"),
+        bcrypt.gensalt(rounds=_BCRYPT_ROUNDS),
+    ).decode("utf-8")
 
 
 def verify_secret(secret: str, hashed_secret: str) -> bool:
-    return password_context.verify(secret, hashed_secret)
+    try:
+        return bcrypt.checkpw(secret.encode("utf-8"), hashed_secret.encode("utf-8"))
+    except (TypeError, ValueError):
+        return False
 
 
 def _fernet() -> Fernet:
