@@ -8,7 +8,7 @@ from app.core.config import get_settings
 from app.core.security import create_access_token
 from app.db.session import get_db_session
 from app.domain.models import User
-from app.schemas.auth import ChangePasswordRequest, LoginRequest, LoginResponse, UserProfileUpdate, UserRead
+from app.schemas.auth import ChangePasswordRequest, CsrfTokenResponse, LoginRequest, LoginResponse, UserProfileUpdate, UserRead
 from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
 from app.services.session_service import SessionService
@@ -37,9 +37,12 @@ def _set_refresh(response: Response, token: str) -> None:
     response.set_cookie(REFRESH_COOKIE, token, httponly=True, secure=_secure(), samesite="lax", path="/", max_age=get_settings().refresh_token_expire_days * 86400)
 
 
-def _set_csrf(response: Response) -> None:
+def _set_csrf(response: Response, token: str | None = None) -> str:
     import secrets
-    response.set_cookie(CSRF_COOKIE, secrets.token_urlsafe(32), httponly=False, secure=_secure(), samesite="lax", path="/")
+
+    value = token or secrets.token_urlsafe(32)
+    response.set_cookie(CSRF_COOKIE, value, httponly=False, secure=_secure(), samesite="lax", path="/")
+    return value
 
 
 def _clear(response: Response) -> None:
@@ -83,7 +86,7 @@ def login(
     )
     _set_access(response, str(user.id))
     _set_refresh(response, refresh_token)
-    _set_csrf(response)
+    csrf_token = _set_csrf(response)
     AuditService(db).log(
         action="login",
         entity_type="user",
@@ -96,6 +99,7 @@ def login(
         user=UserRead.model_validate(user),
         session_id=session.session_id,
         access_token=access_token,
+        csrf_token=csrf_token,
     )
 
 
@@ -110,11 +114,14 @@ def refresh(request: Request, response: Response, db: Annotated[Session, Depends
     user = AuthService(db).users.get_by_id(session.user_id)
     if user is None or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found or inactive")
-    _set_access(response, str(user.id)); _set_refresh(response, refresh_token); _set_csrf(response)
+    _set_access(response, str(user.id))
+    _set_refresh(response, refresh_token)
+    csrf_token = _set_csrf(response)
     return LoginResponse(
         user=UserRead.model_validate(user),
         session_id=session.session_id,
         access_token=create_access_token(str(user.id)),
+        csrf_token=csrf_token,
     )
 
 
@@ -123,6 +130,16 @@ def logout(request: Request, response: Response, db: Annotated[Session, Depends(
     SessionService(db).revoke_by_token(request.cookies.get(REFRESH_COOKIE))
     _clear(response)
     return Response(status_code=204)
+
+
+@router.get("/csrf", response_model=CsrfTokenResponse)
+def csrf_token(request: Request, response: Response) -> CsrfTokenResponse:
+    if not request.cookies.get(ACCESS_COOKIE):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    token = request.cookies.get(CSRF_COOKIE)
+    if not token:
+        token = _set_csrf(response)
+    return CsrfTokenResponse(csrf_token=token)
 
 
 @router.get("/me", response_model=UserRead)

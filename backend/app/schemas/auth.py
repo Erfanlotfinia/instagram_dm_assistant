@@ -30,6 +30,11 @@ class LoginResponse(BaseModel):
     session_id: str
     access_token: str
     token_type: str = "bearer"
+    csrf_token: str | None = None
+
+
+class CsrfTokenResponse(BaseModel):
+    csrf_token: str
 
 
 class UserProfileUpdate(BaseModel):

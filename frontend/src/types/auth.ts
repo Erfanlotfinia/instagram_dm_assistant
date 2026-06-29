@@ -16,6 +16,7 @@ export interface LoginRequest {
 export interface LoginResponse {
   user: User;
   session_id: string;
+  csrf_token?: string;
 }
 
 export interface UserProfileUpdate {

@@ -7,6 +7,48 @@ def test_login_success(client, admin_user) -> None:
     body = response.json()
     assert body["access_token"]
     assert body["token_type"] == "bearer"
+    assert body["csrf_token"]
+
+
+def test_cookie_session_requires_csrf_header(client, admin_user) -> None:
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@test.com", "password": "password123"},
+    )
+    assert login.status_code == 200
+    csrf_token = login.json()["csrf_token"]
+    cookies = login.cookies
+
+    blocked = client.patch(
+        "/api/v1/auth/me",
+        cookies=cookies,
+        json={"full_name": "Blocked Update"},
+    )
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"] == "CSRF validation failed"
+
+    allowed = client.patch(
+        "/api/v1/auth/me",
+        cookies=cookies,
+        headers={"X-CSRF-Token": csrf_token},
+        json={"full_name": "Allowed Update"},
+    )
+    assert allowed.status_code == 200
+    assert allowed.json()["full_name"] == "Allowed Update"
+
+
+def test_csrf_bootstrap_endpoint(client, admin_user) -> None:
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@test.com", "password": "password123"},
+    )
+    assert login.status_code == 200
+    cookies = login.cookies
+    csrf_token = login.json()["csrf_token"]
+
+    response = client.get("/api/v1/auth/csrf", cookies=cookies)
+    assert response.status_code == 200
+    assert response.json()["csrf_token"] == csrf_token
 
 
 def test_login_invalid_credentials(client, admin_user) -> None:

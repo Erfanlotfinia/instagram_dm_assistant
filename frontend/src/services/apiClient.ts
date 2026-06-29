@@ -126,10 +126,51 @@ export class ApiError extends Error {
   }
 }
 
+const CSRF_COOKIE = 'modira_csrf';
+let storedCsrfToken: string | null = null;
+
 function readCookie(name: string): string | null {
   if (typeof document === 'undefined') return null;
   const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
   return match ? decodeURIComponent(match[1]) : null;
+}
+
+function rememberCsrfToken(token: string | null | undefined): void {
+  storedCsrfToken = token ?? null;
+}
+
+function resolveCsrfToken(): string | null {
+  return storedCsrfToken ?? readCookie(CSRF_COOKIE);
+}
+
+async function fetchCsrfToken(): Promise<string | null> {
+  const response = await fetch(apiUrl('/api/v1/auth/csrf'), {
+    credentials: 'include',
+  }).catch(() => null);
+  if (!response?.ok) {
+    return null;
+  }
+  try {
+    const body = (await response.json()) as { csrf_token?: string };
+    if (body.csrf_token) {
+      rememberCsrfToken(body.csrf_token);
+      return body.csrf_token;
+    }
+  } catch {
+    // ignore JSON parse errors
+  }
+  return null;
+}
+
+async function ensureCsrfToken(method: string): Promise<string | null> {
+  const existing = resolveCsrfToken();
+  if (existing) {
+    return existing;
+  }
+  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    return null;
+  }
+  return fetchCsrfToken();
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -139,7 +180,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   };
 
   const method = (init?.method ?? 'GET').toUpperCase();
-  const csrf = readCookie('modira_csrf');
+  const csrf = await ensureCsrfToken(method);
   if (csrf && !['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     headers['X-CSRF-Token'] = csrf;
   }
@@ -196,14 +237,30 @@ function buildQuery(params: Record<string, string | number | undefined>): string
 export const apiClient = {
   getHealth: () => request<HealthResponse>('/api/v1/health'),
   getReady: () => request<ReadinessResponse>('/api/v1/ready'),
-  login: (payload: LoginRequest) =>
-    request<LoginResponse>('/api/v1/auth/login', {
+  login: async (payload: LoginRequest) => {
+    const response = await request<LoginResponse>('/api/v1/auth/login', {
       method: 'POST',
       body: JSON.stringify(payload),
-    }),
+    });
+    rememberCsrfToken(response.csrf_token);
+    return response;
+  },
   getMe: () => request<User>('/api/v1/auth/me'),
-  refresh: () => request<LoginResponse>('/api/v1/auth/refresh', { method: 'POST', body: JSON.stringify({}) }),
-  logout: () => request<void>('/api/v1/auth/logout', { method: 'POST', body: JSON.stringify({}) }),
+  refresh: async () => {
+    const response = await request<LoginResponse>('/api/v1/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    rememberCsrfToken(response.csrf_token);
+    return response;
+  },
+  logout: async () => {
+    try {
+      await request<void>('/api/v1/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+    } finally {
+      rememberCsrfToken(null);
+    }
+  },
   updateMe: (payload: UserProfileUpdate) =>
     request<User>('/api/v1/auth/me', {
       method: 'PATCH',
