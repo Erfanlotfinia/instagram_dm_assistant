@@ -447,6 +447,6 @@ Full list: [api-documentation.md](./api-documentation.md).
 |-------|-----|
 | Order state machine | [order-correctness-architecture.md](./order-correctness-architecture.md) |
 | Catalog + resolver | [catalog-intelligence-architecture.md](./catalog-intelligence-architecture.md) |
-| Channel adapters | [channels/channel_architecture.md](./channels/channel_architecture.md) |
+| Channel adapters | [channels-guide.md](./channels-guide.md) |
 | Scenario automation | [scenarios/social_admin_automation.md](./scenarios/social_admin_automation.md) |
 | DM simulator | [simulator-guide.md](./simulator-guide.md) |

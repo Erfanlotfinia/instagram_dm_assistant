@@ -535,7 +535,7 @@ Supported `provider` values: `instagram`, `whatsapp`, `telegram`, `bale`, `rubik
 3. Enqueue `channel.message.received` for automation pipeline.
 4. Return `WebhookAckResponse` or `WebhookIgnoredResponse`.
 
-See [channels/channel_architecture.md](./channels/channel_architecture.md) and [channels/webhook_security.md](./channels/webhook_security.md).
+See [channels-guide.md](./channels-guide.md).
 
 ### Telegram webhook admin
 
@@ -807,9 +807,7 @@ See [failed-jobs-runbook.md](./failed-jobs-runbook.md).
 | Documentation index | [README.md](./README.md) |
 | Catalog indexing & resolver design | [catalog-intelligence-architecture.md](./catalog-intelligence-architecture.md) |
 | Order state machine | [order-correctness-architecture.md](./order-correctness-architecture.md) |
-| Channel adapters & webhooks | [channels/channel_architecture.md](./channels/channel_architecture.md) |
-| Provider setup | [channels/provider_onboarding.md](./channels/provider_onboarding.md) |
-| Webhook security | [channels/webhook_security.md](./channels/webhook_security.md) |
+| Channels (architecture, onboarding, security) | [channels-guide.md](./channels-guide.md) |
 | Environment variables | [environment-variables.md](./environment-variables.md) |
 | Local setup | [setup.md](./setup.md) |
 | Operator workflows | [operator-guide.md](./operator-guide.md) |

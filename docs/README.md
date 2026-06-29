@@ -36,29 +36,22 @@ Start here when onboarding or redesigning the product.
 |----------|----------|
 | [order-correctness-architecture.md](./order-correctness-architecture.md) | Order state machine |
 | [catalog-intelligence-architecture.md](./catalog-intelligence-architecture.md) | Import, Qdrant, resolver |
-| [channels/channel_architecture.md](./channels/channel_architecture.md) | Webhook → worker flow |
+| [channels-guide.md](./channels-guide.md) | Webhook → worker flow, provider matrix, onboarding |
 | [scenarios/social_admin_automation.md](./scenarios/social_admin_automation.md) | Scenario router & handlers |
 
-## Channels (per provider)
+## Channels
 
-| Document |
-|----------|
-| [channels/instagram.md](./channels/instagram.md) |
-| [channels/whatsapp.md](./channels/whatsapp.md) |
-| [channels/telegram.md](./channels/telegram.md) |
-| [channels/bale.md](./channels/bale.md) |
-| [channels/rubika.md](./channels/rubika.md) |
-| [channels/provider_onboarding.md](./channels/provider_onboarding.md) |
-| [channels/webhook_security.md](./channels/webhook_security.md) |
-| [meta-webhook-setup.md](./meta-webhook-setup.md) |
+| Document | Use when |
+|----------|----------|
+| **[channels-guide.md](./channels-guide.md)** | Architecture, security, onboarding, provider matrix |
+| [meta-webhook-setup.md](./meta-webhook-setup.md) | Meta/Instagram webhook setup |
 
 ## Catalog
 
-| Document |
-|----------|
-| [catalog/attribute_dictionary.md](./catalog/attribute_dictionary.md) |
-| [catalog/product_import.md](./catalog/product_import.md) |
-| [catalog/generic_catalog_model.md](./catalog/generic_catalog_model.md) |
+| Document | Use when |
+|----------|----------|
+| **[catalog-guide.md](./catalog-guide.md)** | Data model, presets, import, resolver, quality checks |
+| [catalog-intelligence-architecture.md](./catalog-intelligence-architecture.md) | Qdrant, hybrid search, traces, benchmarks |
 
 ## Pilot & validation
 
@@ -88,4 +81,4 @@ Design tokens and logos live in [`../brand/`](../brand/README.md). Admin app imp
 
 ---
 
-**Removed / consolidated (2026-06):** duplicate stubs (`analytics_guide.md`, `simulator_guide.md`, `migration_guide.md`, scenario module stubs, sprint notes, point-in-time QA reports) were merged into the guides above or deleted as deprecated.
+**Removed / consolidated (2026-06):** duplicate stubs (`analytics_guide.md`, `simulator_guide.md`, `migration_guide.md`, scenario module stubs, sprint notes, point-in-time QA reports) were merged into the guides above or deleted as deprecated. The `docs/channels/` directory was consolidated into [channels-guide.md](./channels-guide.md). The `docs/catalog/` directory was consolidated into [catalog-guide.md](./catalog-guide.md).
