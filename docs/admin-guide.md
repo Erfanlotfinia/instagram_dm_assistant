@@ -1,45 +1,60 @@
 # Admin Guide
 
-Admins configure shops, catalog, Instagram integration, and agent behavior.
+Configuration and security responsibilities for shop admins. Screen map: [ui-design-guide.md](./ui-design-guide.md).
 
-## Shop setup
+## Shop setup checklist
 
-1. Create shop and invite members with appropriate roles (`owner`, `admin`, `operator`).
-2. Set default currency and agent settings under **Settings**.
-3. Connect Instagram account with encrypted access token.
-4. Map Instagram post URLs to products.
+| Step | UI location |
+|------|-------------|
+| Create shop, invite members | **System → Shops** |
+| Currency, language, agent defaults | **System → Settings** |
+| Connect channels | **System → Channels** (Instagram OAuth, Telegram bot) |
+| Import / create catalog | **Catalog → Products**; optional `/api/v1/catalog/import` |
+| Map Instagram posts | **Catalog → Mapping** |
+| Set risk thresholds | **Automation → Risk** |
+| Pilot readiness | **System → Rollout → Readiness** |
 
-## Agent settings
+## Agent & risk settings
 
-| Setting | Purpose |
-|---------|---------|
-| Auto reply | Enable/disable automated responses |
-| Intent confidence threshold | Handoff when intent confidence is low |
-| Slot confidence threshold | Handoff when extracted slots are uncertain |
-| Handoff mode | Policy for human escalation |
-| Default language | Persian (`fa`) recommended for Iranian pilots |
+| Setting | Location | Effect |
+|---------|----------|--------|
+| Auto reply | Settings / agent studio | Enable automation |
+| Intent / slot confidence | Automation → Risk | Handoff when below threshold |
+| High-value preview | Risk settings | Require operator approval |
+| Handoff mode | Agent settings | Escalation policy |
+| Default language | Shop settings | `fa` recommended for Iranian pilots |
 
 ## Catalog management
 
-- Create products and variants with accurate stock.
-- Use **Instagram mapping** for known post URLs.
-- Run semantic resolve test for unmapped posts.
-
-## Security responsibilities
-
-- Rotate `JWT_SECRET_KEY` and `TOKEN_ENCRYPTION_KEY` on compromise.
-- Keep `META_APP_SECRET` confidential.
-- Review audit logs for login and admin actions.
-- Limit production CORS origins to the admin domain.
+- Products and variants with accurate stock (**Catalog → Products**).
+- Attribute dictionary for normalization (**Catalog → Attributes**).
+- Resolver test bench before go-live (**Catalog → Resolver**).
+- Reindex after bulk import: `POST /api/v1/catalog/reindex`.
 
 ## Monitoring
 
-- `/api/v1/ready` — dependency health
-- `/api/v1/metrics` — Prometheus counters and histograms:
-  - `modira_channel_inbound_messages_total`, `modira_channel_processed_messages_total` (by `provider`)
-  - `modira_webhook_events_total` (by `provider`, `result`)
-  - `modira_queue_lag_messages`, `modira_queue_retries_total`, `modira_queue_dlq_total` (by `queue_name`, `reason`)
-  - `modira_handoffs_total`, `modira_orders_created_total`, `modira_orders_paid_total`, `modira_agent_failed_runs_total`
-  - `http_request_duration_seconds` uses FastAPI route templates in the `path` label (not raw UUIDs)
-  - Legacy `instagram_*` metric names are deprecated aliases and will be removed in the next release
-- RabbitMQ DLQ `channel.message.received.dlq` — failed jobs
+| Signal | Where |
+|--------|-------|
+| Dependency health | **System → Health** (`/api/v1/ready`) |
+| Failed workers | **System → Failed Jobs** (sidebar badge) |
+| Prometheus | `/api/v1/metrics` (ops; not in UI) |
+| Pilot metrics | **System → Rollout → Pilot Control** |
+
+Key metrics: inbound/processed messages by provider, handoffs, orders created/paid, queue DLQ depth.
+
+## Security (admin responsibilities)
+
+- Rotate `JWT_SECRET_KEY` and `TOKEN_ENCRYPTION_KEY` on compromise.
+- Keep `META_APP_SECRET` and channel tokens confidential (encrypted at rest; never in API responses).
+- Production: `WEBHOOK_SIGNATURE_BYPASS=false`, strict `CORS_ORIGINS`.
+- Review audit logs for login and admin actions.
+
+Details: [security_configuration.md](./security_configuration.md).
+
+## Pilot & incidents
+
+- **Emergency stop:** Rollout → Pilot Control halts automated outbound.
+- **Incidents:** Rollout → Incidents or `/incidents`.
+- **TRL validation:** Rollout → TRL Validation before expanding scope.
+
+See [pilot_test_script.md](./pilot_test_script.md) and [trl/pilot_plan.md](./trl/pilot_plan.md).

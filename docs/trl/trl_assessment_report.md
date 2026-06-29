@@ -129,9 +129,9 @@ Highlights:
 | TRL validation tests (7 tests) | `backend/app/tests/test_trl_validation.py` | Present |
 | Pilot readiness service + API | `backend/app/services/pilot_service.py`, `backend/app/api/v1/pilot.py` | Present |
 | Pilot readiness tests (7 tests) | `backend/app/tests/test_pilot_readiness.py` | Present |
-| Prior TRL assessment | `docs/trl-readiness-assessment.md` (2026-06-08) | Present |
+| Prior TRL assessment | Consolidated into [ui-design-guide.md](../ui-design-guide.md) (2026-06) | Archived |
 | Pilot test script | `docs/pilot_test_script.md` | Present |
-| Sprint F pilot guide | `docs/sprint-f-pilot-readiness.md` | Present |
+| Sprint F pilot guide | [pilot_test_script.md](../pilot_test_script.md), [pilot_plan.md](./pilot_plan.md) | Present |
 | Backend test suite | `backend/app/tests/` (~190 `def test_` functions across 45 files) | Present |
 | Frontend component tests | `frontend/src/**/*.test.tsx` (21 files, ~33 test cases) | Present |
 | Sprint 7 E2E flow tests | `backend/app/tests/test_sprint7_e2e.py` | Present |
@@ -298,4 +298,4 @@ TRL 7 requires sustained operational use with defined SLOs, support processes, a
 - [Operational Readiness Checklist](./operational_readiness_checklist.md)
 - [Pilot Plan](./pilot_plan.md)
 - [Validation Run Template](./validation_run_template.md)
-- Prior assessment: [docs/trl-readiness-assessment.md](../trl-readiness-assessment.md)
+- Prior assessment: consolidated into [ui-design-guide.md](../ui-design-guide.md) (June 2026 doc cleanup)

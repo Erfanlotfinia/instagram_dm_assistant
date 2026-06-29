@@ -68,8 +68,10 @@ docker compose exec backend python -m app.scripts.seed_demo_data
 
 ## Related docs
 
+- [Documentation index](README.md)
+- [UI design guide](ui-design-guide.md)
 - [Production deployment](production-deployment.md)
 - [Security configuration](security_configuration.md)
-- [Migration guide](migration_guide.md)
+- [Migration guide](migration-guide.md)
 - [Troubleshooting](troubleshooting.md)
 - [Operator guide](operator-guide.md)

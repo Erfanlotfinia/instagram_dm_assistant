@@ -33,7 +33,7 @@ Catalog attributes are generic key/value facts scoped by shop, category, and ali
 | `backend/` | FastAPI API, workers, migrations, tests |
 | `frontend/` | React admin app (Vite) |
 | `landing/` | Standalone RTL marketing site |
-| `docs/` | Operator, migration, TRL, channel docs |
+| `docs/` | Operator, UI design, migration, TRL, channel docs — start at `docs/README.md` |
 | `docker/` | Docker-related assets |
 | `infra/` | Infrastructure config |
 | `scripts/` | Local verify, migration check, Docker smoke |
