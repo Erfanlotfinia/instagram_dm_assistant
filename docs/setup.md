@@ -6,7 +6,7 @@ This guide covers local development setup for the Multi-channel Catalog Commerce
 
 - Docker Desktop (recommended) or local PostgreSQL 16, Redis 7, RabbitMQ 3, and Qdrant 1.12+
 - Node.js 20+ for frontend development outside Docker
-- Python 3.12+ for backend development outside Docker
+- Python 3.13+ for backend development outside Docker
 
 ## Quick start (Docker Compose)
 
@@ -37,7 +37,7 @@ curl http://localhost:8800/ready
 cd backend
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements-dev.txt
+pip install -e ".[dev]"
 export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/modira
 export REDIS_URL=redis://localhost:6379/0
 export RABBITMQ_URL=amqp://guest:guest@localhost:5672/

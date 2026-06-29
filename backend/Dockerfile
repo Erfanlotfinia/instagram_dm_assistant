@@ -10,10 +10,10 @@ RUN groupadd --gid 1000 app \
 
 RUN pip install --no-cache-dir --upgrade pip
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-
+COPY pyproject.toml ./
 COPY app ./app
+RUN pip install --no-cache-dir .
+
 COPY alembic.ini ./
 
 RUN chown -R app:app /app

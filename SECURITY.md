@@ -43,7 +43,7 @@ Repository administrators should set **Settings → Actions → General → Work
 
 ## Dependency hygiene
 
-- Python dependencies are declared in `backend/pyproject.toml` and `backend/requirements.txt`.
+- Python dependencies are declared in `backend/pyproject.toml`.
 - Frontend and landing npm dependencies must use pinned semver ranges; `"latest"` is not allowed in `package.json`.
 - Production must keep `WEBHOOK_SIGNATURE_BYPASS=false`, use a strong `TOKEN_ENCRYPTION_KEY`, and restrict `CORS_ORIGINS`.
 

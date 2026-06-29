@@ -44,7 +44,7 @@ Catalog attributes are generic key/value facts scoped by shop, category, and ali
 
 ### Stack
 
-- Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, Pydantic Settings
+- Python 3.13+, FastAPI, SQLAlchemy 2, Alembic, Pydantic Settings
 - PostgreSQL (`psycopg`), Redis, RabbitMQ (`pika`), Qdrant
 - OpenAI / Gemini adapters for LLM and embeddings
 - Tooling: pytest, pytest-asyncio, ruff
@@ -188,7 +188,7 @@ Further setup: `docs/migration-guide.md`, `docs/troubleshooting.md`, `landing/RE
 
 ### Backend
 
-- Ruff: line length 100, target py312; rules E, F, I, UP, B (`backend/pyproject.toml`)
+- Ruff: line length 100, target py313; rules E, F, I, UP, B (`backend/pyproject.toml`)
 - Layering: API → services → repositories; provider logic in `integrations/` and `channels/`
 - Pydantic schemas in `schemas/`; enums and models in `domain/`
 - Async pytest with `pytest-asyncio`

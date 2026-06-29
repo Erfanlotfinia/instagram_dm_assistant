@@ -70,9 +70,7 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: |
-            backend/pyproject.toml
-            backend/requirements*.txt
+          cache-dependency-path: backend/pyproject.toml
 
       - name: Install backend dependencies
         working-directory: backend
