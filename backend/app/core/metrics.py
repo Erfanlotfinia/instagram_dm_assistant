@@ -10,6 +10,7 @@ from app.core.metric_labels import (
     WorkerDlqReason,
     WorkerRetryReason,
     normalize_handoff_reason,
+    normalize_processed_message_status,
     normalize_provider,
 )
 
@@ -133,7 +134,7 @@ LLM_LATENCY = Histogram(
 AUTOMATION_SUCCESS = Counter(
     "soc_automation_success_total",
     "Successful automation executions",
-    ["tenant_id", "automation"],
+    ["automation"],
 )
 CHANNEL_FAILURES = Counter(
     "soc_channel_failures_total",
@@ -163,9 +164,7 @@ def record_processed_message(
     status: ProcessedMessageStatus | str = ProcessedMessageStatus.SUCCESS,
 ) -> None:
     provider_label = normalize_provider(provider)
-    status_label = status.value if isinstance(status, ProcessedMessageStatus) else str(status)
-    if status_label != ProcessedMessageStatus.SUCCESS.value:
-        status_label = ProcessedMessageStatus.SUCCESS.value
+    status_label = normalize_processed_message_status(status).value
     CHANNEL_PROCESSED_MESSAGES.labels(provider=provider_label, status=status_label).inc()
     _LEGACY_PROCESSED_MESSAGES.inc()
 

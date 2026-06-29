@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
@@ -32,6 +32,8 @@ class SessionService:
             expires_at=datetime.now(UTC) + timedelta(days=get_settings().refresh_token_expire_days),
             user_agent_hash=fingerprint(user_agent),
             ip_hash=fingerprint(ip),
+            family_id=uuid4(),
+            parent_session_id=None,
         )
         self.db.add(session)
         self.db.commit()
@@ -44,7 +46,7 @@ class SessionService:
         if session is None:
             return None
         if session.revoked_at is not None:
-            self.revoke_family(session.session_id)
+            self.revoke_family(session.family_id)
             return None
         if session.expires_at <= now:
             session.revoked_at = now
@@ -59,6 +61,8 @@ class SessionService:
             expires_at=now + timedelta(days=get_settings().refresh_token_expire_days),
             user_agent_hash=fingerprint(user_agent),
             ip_hash=fingerprint(ip),
+            family_id=session.family_id,
+            parent_session_id=session.session_id,
         )
         self.db.add(new_session)
         self.db.commit()
@@ -73,7 +77,7 @@ class SessionService:
             session.revoked_at = datetime.now(UTC)
             self.db.commit()
 
-    def revoke_family(self, session_id: str) -> None:
+    def revoke_family(self, family_id: UUID) -> None:
         now = datetime.now(UTC)
-        self.db.query(RefreshSession).filter_by(session_id=session_id, revoked_at=None).update({"revoked_at": now})
+        self.db.query(RefreshSession).filter_by(family_id=family_id, revoked_at=None).update({"revoked_at": now})
         self.db.commit()

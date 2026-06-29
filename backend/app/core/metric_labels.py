@@ -36,12 +36,14 @@ class HandoffMetricReason(StrEnum):
 
 class ProcessedMessageStatus(StrEnum):
     SUCCESS = "success"
+    FAILURE = "failure"
+    UNKNOWN = "unknown"
 
 
 _UNKNOWN_PROVIDER = "unknown"
 
 
-def normalize_provider(provider: str | Enum | None) -> str:
+def normalize_provider(provider: object | None) -> str:
     if provider is None:
         return _UNKNOWN_PROVIDER
     value = provider.value if isinstance(provider, Enum) else str(provider)
@@ -62,3 +64,33 @@ def normalize_handoff_reason(reason: str | HandoffMetricReason | None) -> Handof
     if any(token in lowered for token in ("policy", "handoff", "confidence", "intent", "pilot")):
         return HandoffMetricReason.POLICY
     return HandoffMetricReason.OTHER
+
+
+def normalize_processed_message_status(
+    status: ProcessedMessageStatus | str | None,
+) -> ProcessedMessageStatus:
+    if isinstance(status, ProcessedMessageStatus):
+        return status
+    if status is None:
+        return ProcessedMessageStatus.SUCCESS
+    lowered = str(status).lower()
+    if lowered == ProcessedMessageStatus.SUCCESS.value:
+        return ProcessedMessageStatus.SUCCESS
+    if lowered in {"failure", "error", "failed"}:
+        return ProcessedMessageStatus.FAILURE
+    return ProcessedMessageStatus.UNKNOWN
+
+
+_ALLOWED_AUTOMATIONS = {
+    "catalog_resolver",
+    "order_state",
+    "handoff_gate",
+    "social_admin",
+}
+
+
+def normalize_automation(automation: str | None) -> str:
+    if automation is None:
+        return "unknown"
+    lowered = automation.lower()
+    return lowered if lowered in _ALLOWED_AUTOMATIONS else "unknown"

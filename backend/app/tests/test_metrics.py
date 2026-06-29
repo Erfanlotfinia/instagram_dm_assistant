@@ -4,15 +4,21 @@ import json
 
 from app.core.metric_labels import (
     HandoffMetricReason,
+    ProcessedMessageStatus,
     WebhookMetricResult,
     WorkerDlqReason,
     WorkerRetryReason,
 )
 from app.core.metrics import (
+    AUTOMATION_SUCCESS,
+    CHANNEL_INBOUND_MESSAGES,
+    CHANNEL_PROCESSED_MESSAGES,
+    HANDOFFS,
     metrics_response,
     record_agent_failure,
     record_handoff,
     record_inbound_message,
+    record_processed_message,
     record_webhook_event,
 )
 from app.core.security import encrypt_secret
@@ -158,3 +164,84 @@ def test_metric_helpers_use_controlled_provider_and_reason_labels() -> None:
     assert _sample_value(after, "instagram_inbound_messages_total") >= _sample_value(
         before, "instagram_inbound_messages_total"
     )
+
+
+def test_processed_message_status_records_success() -> None:
+    before = _metrics_text()
+    record_processed_message("instagram", ProcessedMessageStatus.SUCCESS)
+    after = _metrics_text()
+    assert (
+        _sample_value(
+            after,
+            "modira_channel_processed_messages_total",
+            provider="instagram",
+            status="success",
+        )
+        > _sample_value(
+            before,
+            "modira_channel_processed_messages_total",
+            provider="instagram",
+            status="success",
+        )
+    )
+
+
+def test_processed_message_status_records_failure() -> None:
+    before = _metrics_text()
+    record_processed_message("instagram", "failure")
+    after = _metrics_text()
+    assert (
+        _sample_value(
+            after,
+            "modira_channel_processed_messages_total",
+            provider="instagram",
+            status="failure",
+        )
+        >= 1
+    )
+    assert (
+        _sample_value(
+            after,
+            "modira_channel_processed_messages_total",
+            provider="instagram",
+            status="success",
+        )
+        == _sample_value(
+            before,
+            "modira_channel_processed_messages_total",
+            provider="instagram",
+            status="success",
+        )
+    )
+
+
+def test_processed_message_unknown_status_maps_to_unknown() -> None:
+    before = _metrics_text()
+    record_processed_message("instagram", "garbage")
+    after = _metrics_text()
+    assert (
+        _sample_value(
+            after,
+            "modira_channel_processed_messages_total",
+            provider="instagram",
+            status="unknown",
+        )
+        >= 1
+    )
+
+
+def test_no_tenant_id_label_in_prometheus_metric_definitions() -> None:
+    metric_objects = [
+        CHANNEL_INBOUND_MESSAGES,
+        CHANNEL_PROCESSED_MESSAGES,
+        HANDOFFS,
+        AUTOMATION_SUCCESS,
+    ]
+    for metric in metric_objects:
+        assert "tenant_id" not in metric._labelnames
+
+    body = _metrics_text()
+    assert 'tenant_id="' not in body
+    assert "shop_id=" not in body
+    assert "customer_id=" not in body
+    assert "conversation_id=" not in body

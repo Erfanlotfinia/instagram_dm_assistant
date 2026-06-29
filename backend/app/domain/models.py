@@ -139,6 +139,8 @@ class RefreshSession(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     user_agent_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     ip_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    family_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, index=True)
+    parent_session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     user: Mapped[User] = relationship()
 

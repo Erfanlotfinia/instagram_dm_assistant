@@ -9,6 +9,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.core.config import Settings, get_settings
+from app.core.client_ip import resolve_client_ip
 from app.core.metrics import HTTP_REQUEST_DURATION
 from app.core.request_context import new_request_id, set_request_context
 
@@ -25,11 +26,7 @@ def _metric_path(request: Request) -> str:
 class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         request_id = request.headers.get("X-Request-ID") or new_request_id()
-        ip_address = request.headers.get("X-Forwarded-For")
-        if ip_address:
-            ip_address = ip_address.split(",")[0].strip()
-        elif request.client:
-            ip_address = request.client.host
+        ip_address = resolve_client_ip(request, get_settings())
 
         ctx = set_request_context(
             request_id=request_id,
