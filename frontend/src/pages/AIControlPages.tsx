@@ -10,7 +10,9 @@ import { AutomationCoachPanel } from '../components/ai/AutomationCoachPanel';
 import { useShop } from '../contexts/ShopContext';
 import { queryKeys } from '../lib/queryClient';
 import { apiClient } from '../services/apiClient';
+import { loadCachedTrustRun } from '../lib/trustEvaluation';
 import type { AgentDecisionTrace } from '../types/conversation';
+import type { TrustEvaluationResult } from '../types/sprint6Trust';
 
 function useDecisionTraces() {
   const { selectedShopId } = useShop();
@@ -230,9 +232,19 @@ export function AIFallbacksPage() {
 
 export function AISafetyPage() {
   const tracesQuery = useDecisionTraces();
+  const { selectedShopId } = useShop();
   const blocked = (tracesQuery.data ?? []).filter(
     (trace) => !trace.auto_send_allowed || ['high', 'critical'].includes(trace.risk_score?.risk_level ?? ''),
   );
+
+  const trustRun = loadCachedTrustRun(selectedShopId);
+  const trustFailures: TrustEvaluationResult[] = (trustRun?.results ?? []).filter(
+    (r) => r.status === 'failed' || r.status === 'warning',
+  );
+  const failuresByCategory = trustFailures.reduce<Record<string, TrustEvaluationResult[]>>((acc, r) => {
+    (acc[r.category] ??= []).push(r);
+    return acc;
+  }, {});
 
   return (
     <div className="flex flex-col gap-4">
@@ -270,6 +282,50 @@ export function AISafetyPage() {
             ))}
           </CardBody>
         )}
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Red-team failures related to blocked decisions"
+          description="Trust test failures grouped by category from the latest red-team evaluation."
+          actions={
+            <Link className="text-xs text-accent hover:underline" to="/ai/trust">
+              Open Trust Center →
+            </Link>
+          }
+        />
+        <CardBody>
+          {trustFailures.length === 0 ? (
+            <EmptyState
+              title="No red-team evaluation has been run yet."
+              description="Run a built-in pack in the Trust Center to surface red-team failures here."
+              action={
+                <Link className="text-xs text-accent hover:underline" to="/ai/trust">
+                  Open Trust Center →
+                </Link>
+              }
+            />
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {Object.entries(failuresByCategory).map(([category, items]) => (
+                <li
+                  key={category}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="danger">{category}</Badge>
+                    <span className="text-sm text-fg">{items.length} failure(s)</span>
+                  </div>
+                  <ul className="text-xs text-muted">
+                    {items.slice(0, 3).map((r) => (
+                      <li key={r.testCaseId}>{r.title}</li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardBody>
       </Card>
     </div>
   );

@@ -15,6 +15,19 @@ export const ConversationIntelligencePage = lazyPage(
   'ConversationIntelligencePage',
 );
 export const HandoffQueuePage = lazyPage(() => import('../pages/HandoffQueuePage'), 'HandoffQueuePage');
+export const OperatorWorkspacePage = lazyPage(
+  () => import('../pages/OperatorWorkspacePage'),
+  'OperatorWorkspacePage',
+);
+export const OperatorMyQueuePage = lazyPage(
+  () => import('../pages/OperatorWorkspacePage'),
+  'OperatorMyQueuePage',
+);
+export const QuickRepliesPage = lazyPage(() => import('../pages/QuickRepliesPage'), 'QuickRepliesPage');
+export const OperatorWorkloadPage = lazyPage(
+  () => import('../pages/OperatorWorkloadPage'),
+  'OperatorWorkloadPage',
+);
 export const OrdersHubPage = lazyPage(() => import('../pages/OrdersHubPage'), 'OrdersHubPage');
 export const AnalyticsOverviewPage = lazyPage(
   () => import('../pages/AnalyticsOverviewPage'),
@@ -34,6 +47,7 @@ export const AIControlOverviewPage = lazyPage(
 export const LLMLogsPage = lazyPage(() => import('../pages/AIControlPages'), 'LLMLogsPage');
 export const AIFallbacksPage = lazyPage(() => import('../pages/AIControlPages'), 'AIFallbacksPage');
 export const AISafetyPage = lazyPage(() => import('../pages/AIControlPages'), 'AISafetyPage');
+export const TrustCenterPage = lazyPage(() => import('../pages/TrustCenterPage'), 'TrustCenterPage');
 
 // Existing pages
 export const CatalogCopilotPage = lazyPage(() => import('../pages/CatalogCopilotPage'), 'CatalogCopilotPage');

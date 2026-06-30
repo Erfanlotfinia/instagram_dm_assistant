@@ -3,6 +3,7 @@ import type { ScenarioRegressionMetrics } from './socialAdmin';
 import type { AgentRiskSettings } from './conversation';
 import type { ChannelAccount } from './channel';
 import type { PilotSettings } from './pilot';
+import type { TrustEvaluationSummary } from './sprint6Trust';
 
 /**
  * Sprint 3 — Automation Adoption
@@ -60,7 +61,9 @@ export type PilotGateCheckKey =
   | 'risk_threshold_ok'
   | 'channel_connected'
   | 'policy_configured'
-  | 'no_active_failed_jobs';
+  | 'no_active_failed_jobs'
+  | 'red_team_tests_passed'
+  | 'red_team_warnings';
 
 export type GateSeverity = 'blocker' | 'warning';
 
@@ -88,4 +91,11 @@ export interface RolloutGateInput {
   channels: ChannelAccount[];
   pilot?: PilotSettings | null;
   failedJobsCount: number;
+  /**
+   * Sprint 6 — optional red-team evaluation summary. When provided, the gate
+   * appends a `red_team_tests_passed` blocker (and a `red_team_warnings`
+   * warning when there are warnings). When null/undefined, behavior is
+   * unchanged from Sprint 3.
+   */
+  trustEvaluationSummary?: TrustEvaluationSummary | null;
 }

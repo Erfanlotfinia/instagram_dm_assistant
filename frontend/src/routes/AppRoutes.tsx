@@ -9,6 +9,7 @@ import {
   AIFallbacksPage,
   AIControlOverviewPage,
   AISafetyPage,
+  TrustCenterPage,
   AnalyticsOverviewPage,
   AutomationRulesPage,
   AutomationSuggestionsPage,
@@ -29,12 +30,16 @@ import {
   LoginPage,
   ProfilePage,
   OperatorCorrectionsPage,
+  OperatorMyQueuePage,
+  OperatorWorkspacePage,
+  OperatorWorkloadPage,
   OrderDetailPage,
   OrdersHubPage,
   OverviewPage,
   PostRevenueAnalyticsPage,
   ProductDetailPage,
   ProductsPage,
+  QuickRepliesPage,
   RecoveryRulesPage,
   RevenueRecoveryPage,
   RiskSettingsPage,
@@ -98,6 +103,16 @@ export function AppRoutes() {
         {/* Handoffs */}
         <Route path="/handoffs" element={<HandoffQueuePage />} />
 
+        {/* Operator (Sprint 5) */}
+        <Route path="/operator" element={<HubLayout tabs={tabsFor('operator')} />}>
+          <Route index element={<Navigate to="/operator/workspace" replace />} />
+          <Route path="workspace" element={<OperatorWorkspacePage />} />
+          <Route path="my-queue" element={<OperatorMyQueuePage />} />
+          <Route path="handoffs" element={<HandoffQueuePage />} />
+          <Route path="quick-replies" element={<QuickRepliesPage />} />
+          <Route path="workload" element={<OperatorWorkloadPage />} />
+        </Route>
+
         {/* Orders */}
         <Route path="/orders" element={<OrdersHubPage />} />
         <Route path="/orders/:orderId" element={<OrderDetailPage />} />
@@ -130,6 +145,7 @@ export function AppRoutes() {
         <Route path="/ai" element={<HubLayout tabs={tabsFor('ai')} />}>
           <Route index element={<Navigate to="/ai/overview" replace />} />
           <Route path="overview" element={<AIControlOverviewPage />} />
+          <Route path="trust" element={<TrustCenterPage />} />
           <Route path="logs" element={<LLMLogsPage />} />
           <Route path="fallbacks" element={<AIFallbacksPage />} />
           <Route path="safety" element={<AISafetyPage />} />

@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom';
 
-import { Badge, Button, Card, CardBody, CardHeader } from '../ui';
+import { Badge, Button, Callout, Card, CardBody, CardHeader } from '../ui';
 import { EmptyState } from '../data';
 import type { BadgeTone } from '../ui';
 import type { PilotGateCheck, RolloutGateState } from '../../types/sprint3Automation';
 import type { ShopReadinessScore } from '../../types/sprint2Readiness';
+import type { TrustEvaluationSummary } from '../../types/sprint6Trust';
 
 function checkTone(check: PilotGateCheck): BadgeTone {
   if (check.passed) return 'success';
@@ -35,6 +36,15 @@ export interface RolloutGateChecklistProps {
   shopReadiness?: ShopReadinessScore | null;
   /** True while `shopReadiness` is still loading (gate keeps Sprint 3 behavior until it loads). */
   shopReadinessLoading?: boolean;
+  /**
+   * Sprint 6 — optional red-team evaluation summary. The gate state already
+   * includes the red-team check when the caller passed this into
+   * `evaluateRolloutGate`; this prop only drives a non-blocking loading
+   * callout. When null/undefined, behavior is unchanged.
+   */
+  trustEvaluationSummary?: TrustEvaluationSummary | null;
+  /** True while the trust summary is being loaded. */
+  trustEvaluationLoading?: boolean;
 }
 
 /**
@@ -50,6 +60,8 @@ export function RolloutGateChecklist({
   automationEnabled,
   shopReadiness,
   shopReadinessLoading,
+  trustEvaluationSummary,
+  trustEvaluationLoading,
 }: RolloutGateChecklistProps) {
   if (loading) {
     return (
@@ -124,6 +136,24 @@ export function RolloutGateChecklist({
             </li>
           ))}
         </ul>
+
+        {trustEvaluationLoading ? (
+          <Callout title="Evaluating red-team tests…">
+            The Trust Center is grading the latest red-team run. The gate will update when results are ready.
+          </Callout>
+        ) : trustEvaluationSummary ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface-sunken px-3 py-2 text-xs text-muted">
+            <span>Red-team status:</span>
+            <Badge tone={trustEvaluationSummary.safeToRollout ? 'success' : 'danger'}>
+              {trustEvaluationSummary.safeToRollout
+                ? `${trustEvaluationSummary.passed}/${trustEvaluationSummary.total} passed`
+                : `${trustEvaluationSummary.criticalFailures + trustEvaluationSummary.highFailures} blocker(s)`}
+            </Badge>
+            <Link className="text-accent hover:underline" to="/ai/trust">
+              Open Trust Center →
+            </Link>
+          </div>
+        ) : null}
 
         {shopReadiness && !shopReadinessLoading ? (
           <div className="grid gap-2">

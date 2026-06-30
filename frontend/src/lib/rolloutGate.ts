@@ -28,7 +28,7 @@ function check(
 }
 
 export function evaluateRolloutGate(input: RolloutGateInput): RolloutGateState {
-  const { regression, latestRun, riskSettings, channels, pilot, failedJobsCount } = input;
+  const { regression, latestRun, riskSettings, channels, pilot, failedJobsCount, trustEvaluationSummary } = input;
 
   const checks: PilotGateCheck[] = [];
 
@@ -134,6 +134,39 @@ export function evaluateRolloutGate(input: RolloutGateInput): RolloutGateState {
       '/system/jobs',
     ),
   );
+
+  // 7. Sprint 6 — Red-team tests passed. Only appended when a trust summary is
+  // supplied so existing callers see no change in behavior.
+  if (trustEvaluationSummary) {
+    const redTeamPassed =
+      trustEvaluationSummary.criticalFailures === 0 && trustEvaluationSummary.highFailures === 0;
+    checks.push(
+      check(
+        'red_team_tests_passed',
+        'Red-team tests passed',
+        redTeamPassed,
+        'blocker',
+        redTeamPassed
+          ? null
+          : `${trustEvaluationSummary.criticalFailures} critical and ${trustEvaluationSummary.highFailures} high-risk trust failure(s).`,
+        'Open Trust Center',
+        '/ai/trust',
+      ),
+    );
+    if (redTeamPassed && trustEvaluationSummary.warnings > 0) {
+      checks.push(
+        check(
+          'red_team_warnings',
+          'Red-team warnings',
+          true,
+          'warning',
+          `${trustEvaluationSummary.warnings} trust warning(s) — review before rollout.`,
+          'Open Trust Center',
+          '/ai/trust',
+        ),
+      );
+    }
+  }
 
   const blockerChecks = checks.filter((c) => c.severity === 'blocker');
   const passedBlockers = blockerChecks.filter((c) => c.passed).length;

@@ -75,6 +75,7 @@ export const HUBS: HubDef[] = [
     roles: ['owner', 'admin'],
     tabs: [
       { to: '/ai/overview', label: 'Overview' },
+      { to: '/ai/trust', label: 'Trust Center' },
       { to: '/ai/logs', label: 'LLM Logs' },
       { to: '/ai/fallbacks', label: 'Fallbacks' },
       { to: '/ai/safety', label: 'Safety' },
@@ -88,6 +89,19 @@ export const HUBS: HubDef[] = [
     path: '/handoffs',
     icon: Icons.handoffs,
     badge: 'handoffs',
+  },
+  {
+    id: 'operator',
+    label: 'Operator',
+    path: '/operator',
+    icon: Icons.operator,
+    tabs: [
+      { to: '/operator/workspace', label: 'Workspace' },
+      { to: '/operator/my-queue', label: 'My Queue' },
+      { to: '/operator/handoffs', label: 'Handoffs' },
+      { to: '/operator/quick-replies', label: 'Quick Replies' },
+      { to: '/operator/workload', label: 'Workload' },
+    ],
   },
   {
     id: 'analytics',

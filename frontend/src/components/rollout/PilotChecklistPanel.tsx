@@ -6,6 +6,7 @@ import { Badge, Callout, Card, CardBody, CardHeader } from '../ui';
 import { EmptyState, ErrorState, KpiCard, LoadingState } from '../data';
 import { apiClient } from '../../services/apiClient';
 import { useShopReadiness } from '../../lib/useShopReadiness';
+import { loadCachedTrustSummary } from '../../lib/trustEvaluation';
 import type { PilotChecklistItem } from '../../types/pilot';
 
 /**
@@ -55,6 +56,10 @@ export function PilotChecklistPanel({ shopId }: PilotChecklistPanelProps) {
   // the existing pilot checklist. Fail-open: errors surface a non-blocking
   // callout and the pilot checklist below keeps working unchanged.
   const shopReadinessQuery = useShopReadiness(shopId);
+
+  // Sprint 6 — optional red-team summary from the Trust Center cache. Pure
+  // client-side; null when no trust run has been recorded. Non-blocking.
+  const trustSummary = loadCachedTrustSummary(shopId);
 
   const readiness = readinessQuery.data;
   const metrics = metricsQuery.data;
@@ -147,6 +152,22 @@ export function PilotChecklistPanel({ shopId }: PilotChecklistPanelProps) {
           <Callout title="Shop readiness unavailable">
             Sprint 2 readiness could not be loaded — showing pilot checklist only.
           </Callout>
+        ) : null}
+
+        {trustSummary ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-sunken p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-fg">Red-team status</span>
+              <Badge tone={trustSummary.safeToRollout ? 'success' : 'danger'}>
+                {trustSummary.safeToRollout
+                  ? `${trustSummary.passed}/${trustSummary.total} passed`
+                  : `${trustSummary.criticalFailures + trustSummary.highFailures} blocker(s)`}
+              </Badge>
+            </div>
+            <Link className="text-xs text-accent hover:underline" to="/ai/trust">
+              Open Trust Center →
+            </Link>
+          </div>
         ) : null}
 
         {shopReadinessQuery.shopReadiness ? (

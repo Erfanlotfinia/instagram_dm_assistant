@@ -67,6 +67,14 @@ export const Icons = {
       <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
     </Icon>
   ),
+  operator: (p: IconProps) => (
+    <Icon {...p}>
+      <path d="M3 3h7v7H3z" />
+      <path d="M14 3h7v7h-7z" />
+      <path d="M14 14h7v7h-7z" />
+      <path d="M3 14h7v7H3z" />
+    </Icon>
+  ),
   analytics: (p: IconProps) => (
     <Icon {...p}>
       <path d="M3 3v18h18" />

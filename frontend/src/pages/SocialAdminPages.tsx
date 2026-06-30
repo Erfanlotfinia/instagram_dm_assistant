@@ -17,7 +17,14 @@ import type {
   ScenarioCoverageRow,
   ScenarioRegressionMetrics,
 } from '../types/socialAdmin';
-import type { SimulatorRunItem, SimulatorRunSummary } from '../types/trust';
+import type { SimulatorRunItem, SimulatorRunSummary, ScenarioPack } from '../types/trust';
+import { BUILTIN_TRUST_TEST_PACKS } from '../lib/trustTestPacks';
+import {
+  evaluateRunResults,
+  mapTrustPackToScenarioPackInput,
+  summarizeTrustResults,
+} from '../lib/trustEvaluation';
+import type { TrustEvaluationResult } from '../types/sprint6Trust';
 
 const PROVIDER_LABELS = ['Instagram', 'WhatsApp', 'Telegram', 'Bale', 'Rubika'];
 
@@ -504,6 +511,70 @@ export function ScenarioSimulatorPage() {
     [runDetailQuery.data],
   );
 
+  // Sprint 6 — Trust & Red-Team Coverage. Lists built-in red-team packs and
+  // detects whether the latest replay run is a trust run (label prefix).
+  const scenarioPacksQuery = useQuery({
+    queryKey: ['scenario-packs', selectedShopId],
+    queryFn: () => apiClient.listScenarioPacks(selectedShopId!),
+    enabled: Boolean(selectedShopId),
+  });
+
+  const trustPacksLinked = useMemo(
+    () =>
+      BUILTIN_TRUST_TEST_PACKS.map((pack) => ({
+        pack,
+        linked: (scenarioPacksQuery.data ?? []).some((p) => p.name === `[Trust] ${pack.name}`),
+      })),
+    [scenarioPacksQuery.data],
+  );
+
+  const latestRunIsTrust = useMemo(() => {
+    const latest = completedRuns[0];
+    if (!latest) return false;
+    const label = latest.label ?? '';
+    return label.startsWith('[Trust]') || label.startsWith('Trust run —');
+  }, [completedRuns]);
+
+  const trustFailureResults: TrustEvaluationResult[] = useMemo(() => {
+    if (!latestRunIsTrust || !runDetailQuery.data) return [];
+    const latest = completedRuns[0];
+    if (!latest) return [];
+    // Match by label prefix to the built-in pack name.
+    const matchedPack = BUILTIN_TRUST_TEST_PACKS.find((pack) => {
+      const label = latest.label ?? '';
+      return label.includes(pack.name);
+    });
+    if (!matchedPack) return [];
+    return evaluateRunResults(matchedPack, runDetailQuery.data).filter(
+      (r) => r.status === 'failed' || r.status === 'warning',
+    );
+  }, [latestRunIsTrust, runDetailQuery, completedRuns]);
+
+  const trustSummary = useMemo(
+    () => (latestRunIsTrust && runDetailQuery.data ? summarizeTrustResults(
+      (() => {
+        const latest = completedRuns[0];
+        const matchedPack = BUILTIN_TRUST_TEST_PACKS.find((pack) =>
+          (latest?.label ?? '').includes(pack.name),
+        );
+        return matchedPack ? evaluateRunResults(matchedPack, runDetailQuery.data!) : [];
+      })(),
+    ) : null),
+    [latestRunIsTrust, runDetailQuery, completedRuns],
+  );
+
+  const createTrustPackMutation = useMutation({
+    mutationFn: (packId: string) => {
+      const builtin = BUILTIN_TRUST_TEST_PACKS.find((p) => p.id === packId)!;
+      return apiClient.createScenarioPack(selectedShopId!, mapTrustPackToScenarioPackInput(builtin));
+    },
+    onSuccess: (pack) => {
+      showToast(`Created ${pack.name} — run it from the Trust Center.`, 'success');
+      void scenarioPacksQuery.refetch();
+    },
+    onError: (error: Error) => showToast(error.message, 'error'),
+  });
+
   const safetyOk =
     metrics &&
     metrics.unsafe_action_count === 0 &&
@@ -802,6 +873,96 @@ export function ScenarioSimulatorPage() {
                 emptyTitle="No failed scenarios in this run"
                 emptyDescription="Every scenario in this replay run passed."
               />
+            ) : null}
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {/* Sprint 6 — Trust & Red-Team Coverage */}
+      {selectedShopId ? (
+        <Card>
+          <CardHeader
+            title="Trust & Red-Team Coverage"
+            description="Built-in red-team packs and whether the latest regression run includes trust scenarios."
+            actions={
+              <Link className="text-xs text-accent hover:underline" to="/ai/trust">
+                Open Trust Center
+              </Link>
+            }
+          />
+          <CardBody className="flex flex-col gap-4">
+            {scenarioPacksQuery.isLoading ? (
+              <LoadingState label="Loading red-team packs…" />
+            ) : scenarioPacksQuery.error ? (
+              <p className="text-sm text-danger" role="alert">
+                {scenarioPacksQuery.error instanceof Error
+                  ? scenarioPacksQuery.error.message
+                  : 'Failed to load scenario packs'}
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {trustPacksLinked.map(({ pack, linked }) => (
+                  <li
+                    key={pack.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-fg">{pack.name}</p>
+                      <p className="truncate text-xs text-muted">
+                        {pack.category} · {pack.testCases.length} tests
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge tone={linked ? 'success' : 'neutral'}>
+                        {linked ? 'Linked' : 'Not linked'}
+                      </Badge>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        type="button"
+                        disabled={linked || createTrustPackMutation.isPending}
+                        onClick={() => createTrustPackMutation.mutate(pack.id)}
+                      >
+                        {linked ? 'Created' : 'Create red-team scenario pack'}
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-xs font-semibold text-fg">Latest regression run</p>
+              {completedRuns.length === 0 ? (
+                <p className="mt-1 text-xs text-muted">No replay runs recorded yet.</p>
+              ) : (
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <Badge tone={latestRunIsTrust ? 'success' : 'warning'}>
+                    {latestRunIsTrust
+                      ? 'Latest regression includes trust scenarios'
+                      : 'Latest regression does not include trust scenarios'}
+                  </Badge>
+                  {trustSummary ? (
+                    <span className="text-xs text-muted">
+                      {trustSummary.passed}/{trustSummary.total} passed ·{' '}
+                      {trustSummary.criticalFailures + trustSummary.highFailures} blocker(s)
+                    </span>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
+            {trustFailureResults.length > 0 ? (
+              <div className="rounded-lg border border-danger/30 bg-danger-soft p-3">
+                <p className="text-xs font-semibold text-danger">Failed trust scenarios in latest run</p>
+                <ul className="mt-1 list-disc pl-4 text-xs text-danger">
+                  {trustFailureResults.map((r) => (
+                    <li key={r.testCaseId}>
+                      {r.title} — expected {r.expectedOutcome}, actual {r.actualOutcome ?? 'unknown'}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ) : null}
           </CardBody>
         </Card>

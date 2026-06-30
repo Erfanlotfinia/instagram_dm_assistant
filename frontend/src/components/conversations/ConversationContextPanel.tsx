@@ -10,8 +10,9 @@ import { apiClient } from '../../services/apiClient';
 import type { ConversationDetail, ConversationEvent, CustomerUpdate } from '../../types/conversation';
 import { ConversationEventsTimeline } from './ConversationEventsTimeline';
 import { CustomerProfilePanel } from './CustomerProfilePanel';
+import { OperatorConversationPanel } from '../operator/OperatorConversationPanel';
 
-type ContextTab = 'customer' | 'order' | 'agent' | 'activity';
+type ContextTab = 'customer' | 'order' | 'agent' | 'activity' | 'operator';
 
 interface ConversationContextPanelProps {
   conversation: ConversationDetail;
@@ -27,6 +28,7 @@ const TABS: { id: ContextTab; label: string }[] = [
   { id: 'order', label: 'Order' },
   { id: 'agent', label: 'Agent intel' },
   { id: 'activity', label: 'Activity' },
+  { id: 'operator', label: 'Operator' },
 ];
 
 function formatWorkflowLabel(value: string): string {
@@ -214,6 +216,18 @@ export function ConversationContextPanel({
           </span>
         </div>
         <ConversationEventsTimeline events={(conversation.events ?? []) as ConversationEvent[]} />
+      </div>
+
+      <div
+        id="context-panel-operator"
+        role="tabpanel"
+        aria-labelledby="context-tab-operator"
+        hidden={activeTab !== 'operator'}
+        className="flex flex-1 flex-col gap-4 overflow-y-auto p-4"
+      >
+        {activeTab === 'operator' ? (
+          <OperatorConversationPanel conversationId={conversation.id} shopId={shopId} />
+        ) : null}
       </div>
     </aside>
   );

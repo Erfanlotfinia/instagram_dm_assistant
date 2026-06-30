@@ -1,6 +1,13 @@
 import type { SuggestedReply } from '../../types/conversation';
-import { Badge, Button, Field } from '../ui';
+import { Badge, Button, Field, StatusBanner } from '../ui';
 import { cn } from '../../lib/cn';
+
+interface SuggestedReplyContextSummary {
+  productTitle?: string | null;
+  orderStatus?: string | null;
+  orderPaymentStatus?: string | null;
+  customerName?: string | null;
+}
 
 interface SuggestedReplyPanelProps {
   reply: SuggestedReply | undefined;
@@ -13,6 +20,12 @@ interface SuggestedReplyPanelProps {
   isApproving?: boolean;
   isEditing?: boolean;
   isRejecting?: boolean;
+  /** Sprint 5 — related order/product/customer context line. */
+  context?: SuggestedReplyContextSummary | null;
+  /** Sprint 5 — show a risk warning banner when true. */
+  riskWarning?: boolean | null;
+  /** Sprint 5 — risk warning detail text. */
+  riskWarningDetail?: string | null;
 }
 
 export function SuggestedReplyPanel({
@@ -26,12 +39,16 @@ export function SuggestedReplyPanel({
   isApproving,
   isEditing,
   isRejecting,
+  context = null,
+  riskWarning = false,
+  riskWarningDetail = null,
 }: SuggestedReplyPanelProps) {
   if (!reply) {
     return null;
   }
 
   const reason = reply.reason ?? previewReason ?? 'Preview required';
+  const sourceLabel = reply.generated_by === 'agent' ? 'AI agent' : 'Operator';
 
   return (
     <section
@@ -42,11 +59,35 @@ export function SuggestedReplyPanel({
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-warning">Agent suggestion</p>
           <p className="mt-0.5 text-sm text-fg">{reason}</p>
+          <p className="mt-0.5 text-xs text-muted">Source: {sourceLabel}</p>
         </div>
         <Badge tone="warning" dot>
           Needs review
         </Badge>
       </div>
+
+      {riskWarning ? (
+        <div className="mt-3">
+          <StatusBanner
+            tone="warning"
+            title="High-risk context"
+            description={
+              riskWarningDetail ??
+              'Latest AI decision flagged high risk, preview requirement, or human handoff. Review carefully before sending.'
+            }
+          />
+        </div>
+      ) : null}
+
+      {context && (context.productTitle || context.orderStatus || context.customerName) ? (
+        <p className="mt-3 text-xs text-muted">
+          Context:
+          {context.customerName ? ` ${context.customerName}` : ''}
+          {context.productTitle ? ` · ${context.productTitle}` : ''}
+          {context.orderStatus ? ` · order ${context.orderStatus}` : ''}
+          {context.orderPaymentStatus ? ` · ${context.orderPaymentStatus}` : ''}
+        </p>
+      ) : null}
 
       <blockquote className="mt-3 rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg" dir="auto">
         {reply.suggested_text}

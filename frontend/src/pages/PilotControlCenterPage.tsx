@@ -12,6 +12,7 @@ import { useShop } from '../contexts/ShopContext';
 import { useToast } from '../contexts/ToastContext';
 import { apiClient } from '../services/apiClient';
 import { evaluateRolloutGate } from '../lib/rolloutGate';
+import { loadCachedTrustSummary } from '../lib/trustEvaluation';
 import { useShopReadiness } from '../lib/useShopReadiness';
 import type { EmergencyStopScopePreview } from '../types/trust';
 
@@ -83,6 +84,9 @@ export function PilotControlCenterPage() {
       channels: channelsQuery.data ?? [],
       pilot: settingsQuery.data ?? null,
       failedJobsCount: failedJobsQuery.data?.total ?? 0,
+      // Sprint 6 — optional red-team summary from the Trust Center cache.
+      // Null when no trust run has been recorded; gate keeps Sprint 3 behavior.
+      trustEvaluationSummary: loadCachedTrustSummary(selectedShopId),
     });
   }, [
     selectedShopId,
@@ -150,6 +154,8 @@ export function PilotControlCenterPage() {
             automationEnabled={currentMode === 'autonomous_low_risk'}
             shopReadiness={shopReadinessQuery.shopReadiness}
             shopReadinessLoading={shopReadinessQuery.isLoading}
+            trustEvaluationSummary={loadCachedTrustSummary(selectedShopId)}
+            trustEvaluationLoading={false}
           />
 
           {shopReadinessQuery.error ? (

@@ -189,4 +189,54 @@ describe('evaluateRolloutGate', () => {
     const noFailures = state.checks.find((c) => c.key === 'no_critical_failures');
     expect(noFailures?.passed).toBe(true);
   });
+
+  it('does not add red-team checks when trust summary is absent (Sprint 3 behavior preserved)', () => {
+    const state = evaluateRolloutGate(allPassInput({ trustEvaluationSummary: null }));
+    expect(state.checks.find((c) => c.key === 'red_team_tests_passed')).toBeUndefined();
+    expect(state.checks.find((c) => c.key === 'red_team_warnings')).toBeUndefined();
+    expect(state.ready).toBe(true);
+  });
+
+  it('blocks when trust summary has critical failures', () => {
+    const state = evaluateRolloutGate(
+      allPassInput({
+        trustEvaluationSummary: {
+          total: 5,
+          passed: 3,
+          failed: 2,
+          warnings: 0,
+          criticalFailures: 1,
+          highFailures: 1,
+          safeToRollout: false,
+          blockingReasons: ['Case A', 'Case B'],
+        },
+      }),
+    );
+    const redTeam = state.checks.find((c) => c.key === 'red_team_tests_passed');
+    expect(redTeam?.severity).toBe('blocker');
+    expect(redTeam?.passed).toBe(false);
+    expect(state.ready).toBe(false);
+  });
+
+  it('passes with a warning-only trust summary and appends a red_team_warnings check', () => {
+    const state = evaluateRolloutGate(
+      allPassInput({
+        trustEvaluationSummary: {
+          total: 5,
+          passed: 4,
+          failed: 0,
+          warnings: 1,
+          criticalFailures: 0,
+          highFailures: 0,
+          safeToRollout: true,
+          blockingReasons: [],
+        },
+      }),
+    );
+    const redTeam = state.checks.find((c) => c.key === 'red_team_tests_passed');
+    expect(redTeam?.passed).toBe(true);
+    const warn = state.checks.find((c) => c.key === 'red_team_warnings');
+    expect(warn?.severity).toBe('warning');
+    expect(state.ready).toBe(true);
+  });
 });
